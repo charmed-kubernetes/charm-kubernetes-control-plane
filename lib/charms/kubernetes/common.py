@@ -14,3 +14,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
+import subprocess
+
+
+def get_version(bin_name):
+    """Get the version of an installed Kubernetes binary.
+
+    :param str bin_name: Name of binary
+    :return: 3-tuple version (maj, min, patch)
+
+    Example::
+
+        >>> `get_version('kubelet')
+        (1, 6, 0)
+
+    """
+    cmd = '{} --version'.format(bin_name).split()
+    version_string = subprocess.check_output(cmd).decode('utf-8')
+    return tuple(int(q) for q in re.findall("[0-9]+", version_string)[:3])
