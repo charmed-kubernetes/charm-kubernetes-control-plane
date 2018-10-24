@@ -1801,6 +1801,13 @@ def cloud_ready():
     remove_state('kubernetes-master.components.started')  # force restart
 
 
+@when('kubernetes-master.cloud.ready',
+      'endpoint.openstack.ready.changed')
+def update_openstack():
+    remove_state('kubernetes-master.cloud.ready')
+    remove_state('endpoint.openstack.ready.changed')
+
+
 def _cdk_addons_template_path():
     return Path('/snap/cdk-addons/current/templates')
 
