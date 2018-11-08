@@ -1050,8 +1050,10 @@ def create_rbac_resources():
     render('rbac-metrics.yaml', rbac_metrics_path, context)
 
     hookenv.log('Creating metric-related RBAC resources.')
-    kubectl_manifest('apply', rbac_metrics_path)
-    remove_state('kubernetes-master.create.rbac')
+    if kubectl_manifest('apply', rbac_metrics_path):
+        remove_state('kubernetes-master.create.rbac')
+    else:
+        hookenv.log('Failed to apply {}, will retry.'.format(rbac_metrics_path))
 
 
 @when('leadership.is_leader',
@@ -1061,9 +1063,14 @@ def remove_rbac_resources():
     rbac_metrics_path = '/root/cdk/rbac-metrics.yaml'
     if os.path.isfile(rbac_metrics_path):
         hookenv.log('Removing metric-related RBAC resources.')
-        kubectl_manifest('delete', rbac_metrics_path)
-        os.remove(rbac_metrics_path)
-    remove_state('kubernetes-master.remove.rbac')
+        if kubectl_manifest('delete', rbac_metrics_path):
+            os.remove(rbac_metrics_path)
+            remove_state('kubernetes-master.remove.rbac')
+        else:
+            hookenv.log('Failed to delete {}, will retry.'.format(rbac_metrics_path))
+    else:
+        # if we dont have the yaml, there's nothing for us to do
+        remove_state('kubernetes-master.remove.rbac')
 
 
 @when('kubernetes-master.components.started')
