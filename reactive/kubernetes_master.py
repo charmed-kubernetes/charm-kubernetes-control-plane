@@ -736,7 +736,7 @@ def send_data(tls, kube_api_endpoint):
     kubernetes_service_ip = get_kubernetes_service_ip()
 
     # Get ingress address
-    ingress_ip = get_ingress_address(kube_api_endpoint.relation_name)
+    ingress_ip = get_ingress_address(kube_api_endpoint.endpoint_name)
 
     domain = hookenv.config('dns_domain')
     # Create SANs that the tls layer will add to the server cert.
