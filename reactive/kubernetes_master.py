@@ -1021,7 +1021,28 @@ def initial_nrpe_config(nagios=None):
 def switch_auth_mode():
     config = hookenv.config()
     mode = config.get('authorization-mode')
+
     if data_changed('auth-mode', mode):
+        # ensure metrics can be scraped if rbac is enabled
+        rbac_metrics_path = '/root/cdk/rbac-metrics.yaml'
+        if mode and 'rbac' in mode.lower():
+            # NB: metrics are scraped by proxy, so the 'user' here is the
+            # common name of the cert used to authenticate the proxied request.
+            # The CN for /root/cdk/client.crt is 'client'.
+            metric_user = 'client'
+            context = {'juju_application': hookenv.service_name(),
+                       'metric_user': metric_user}
+            render('rbac-metrics.yaml', rbac_metrics_path, context)
+
+            hookenv.log('Enabling metric-related RBAC resources.')
+            kubectl_manifest('apply', rbac_metrics_path)
+        else:
+            if os.path.isfile(rbac_metrics_path):
+                hookenv.log('Removing metric-related RBAC resources.')
+                kubectl_manifest('delete', rbac_metrics_path)
+                os.remove(rbac_metrics_path)
+
+        # set ourselves up to restart since auth mode has changed
         remove_state('kubernetes-master.components.started')
 
 

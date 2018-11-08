@@ -1,0 +1,21 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metrics-clusterrole-{{ juju_application }}
+rules:
+- apiGroups: [""]
+  resources: ["nodes/metrics"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metrics-role-binding-{{ juju_application }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metrics-clusterrole-{{ juju_application }}
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: User
+  name: {{ metric_user }}
