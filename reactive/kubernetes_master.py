@@ -1016,8 +1016,7 @@ def initial_nrpe_config(nagios=None):
     update_nrpe_config(nagios)
 
 
-@when('config.changed.authorization-mode',
-      'kubernetes-master.components.started')
+@when('config.changed.authorization-mode')
 def switch_auth_mode():
     config = hookenv.config()
     mode = config.get('authorization-mode')
