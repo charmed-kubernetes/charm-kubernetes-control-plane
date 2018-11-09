@@ -521,7 +521,7 @@ def set_final_status():
                                'Waiting for CNI plugins to become available')
         return
 
-    # Note that after this point, kubernetes-master.components.started is 
+    # Note that after this point, kubernetes-master.components.started is
     # always True.
     is_leader = is_state('leadership.is_leader')
     authentication_setup = is_state('authentication.setup')
@@ -534,8 +534,14 @@ def set_final_status():
         hookenv.status_set('waiting', 'Waiting to retry addon deployment')
         return
 
-    if addons_configured and not all_kube_system_pods_running():
-        hookenv.status_set('waiting', 'Waiting for kube-system pods to start')
+    unready = get_kube_system_pods_not_running()
+    if addons_configured and (unready is None or len(unready) > 0):
+        if unready is None:
+            msg = 'Waiting for kube-system pods to start'
+        elif len(unready) > 0:
+            msg = 'Waiting for {} kube-system pod{} to start'
+            msg = msg.format(len(unready), "s"[len(unready) == 1:])
+        hookenv.status_set('waiting', msg)
         return
 
     if hookenv.config('service-cidr') != service_cidr():
@@ -1231,7 +1237,9 @@ def build_kubeconfig(server):
                        'port': ks.credentials_port(),
                        'version': ks.api_version()}
             render(script_filename, keystone_path, context)
-        else:
+        elif is_state('leadership.set.keystone-cdk-addons-configured'):
+            # if addons are configured, we're going to do keystone
+            # just not yet because we don't have creds
             hookenv.log('Keystone endpoint not found, will retry.')
 
         # Create an absolute path for the kubeconfig file.
@@ -1394,7 +1402,9 @@ def configure_apiserver(etcd_connection_string):
         admission_control.append('NodeRestriction')
 
     ks = endpoint_from_flag('keystone-credentials.available.auth')
-    ks_ip = get_service_ip('k8s-keystone-auth-service', errors_fatal=False)
+    ks_ip = None
+    if ks:
+        ks_ip = get_service_ip('k8s-keystone-auth-service', errors_fatal=False)
     if ks and ks_ip:
         os.makedirs(keystone_root, exist_ok=True)
 
@@ -1414,7 +1424,7 @@ def configure_apiserver(etcd_connection_string):
         if ks and not ks_ip:
             hookenv.log('Unable to find k8s-keystone-auth-service '
                         'service. Will retry')
-        else:
+        elif is_state('leadership.set.keystone-cdk-addons-configured'):
             hookenv.log('Unable to find keystone endpoint. Will retry')
         remove_state('keystone.apiserver.configured')
 
@@ -1617,32 +1627,36 @@ def token_generator(length=32):
 
 
 @retry(times=3, delay_secs=10)
-def all_kube_system_pods_running():
-    ''' Check pod status in the kube-system namespace. Returns True if all
-    pods are running, False otherwise. '''
-    cmd = ['kubectl', 'get', 'po', '-n', 'kube-system', '-o', 'json']
+def get_kube_system_pods_not_running():
+    ''' Check pod status in the kube-system namespace. Returns None if
+    unable to determine(api server isn't running), and array of pods
+    that are not currently running, or an empty list if all are running.'''
 
+    cmd = ['kubectl', 'get', 'po', '-n', 'kube-system', '-o', 'json']
     try:
         output = check_output(cmd).decode('utf-8')
         result = json.loads(output)
     except CalledProcessError:
         hookenv.log('failed to get kube-system pod status')
-        return False
+        return None
     hookenv.log('Checking system pods status: {}'.format(', '.join(
         '='.join([pod['metadata']['name'], pod['status']['phase']])
         for pod in result['items'])))
 
-    all_pending = all(pod['status']['phase'] == 'Pending'
-                      for pod in result['items'])
+    # Pods that are Running or Evicted (which should re-spawn) are
+    # considered running
+    not_running = [pod for pod in result['items']
+                   if pod['status']['phase'] != 'Running'
+                   and pod['status'].get('reason', '') != 'Evicted']
+
+    pending = [pod for pod in result['items']
+               if pod['status']['phase'] == 'Pending']
+    all_pending = len(pending) == len(result['items'])
     if is_state('endpoint.gcp.ready') and all_pending:
         poke_network_unavailable()
-        return False
+        return not_running
 
-    # All pods must be Running or Evicted (which should re-spawn)
-    all_running = all(pod['status']['phase'] == 'Running' or
-                      pod['status'].get('reason', '') == 'Evicted'
-                      for pod in result['items'])
-    return all_running
+    return not_running
 
 
 def poke_network_unavailable():
