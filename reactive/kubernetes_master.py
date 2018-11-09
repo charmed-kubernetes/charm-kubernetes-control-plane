@@ -24,6 +24,7 @@ import string
 import json
 import ipaddress
 import traceback
+import yaml
 
 from charms.leadership import leader_get, leader_set
 
@@ -37,14 +38,15 @@ from urllib.request import Request, urlopen
 from charms import layer
 from charms.layer import snap
 from charms.reactive import hook
-from charms.reactive import remove_state
-from charms.reactive import set_state
-from charms.reactive import is_state
+from charms.reactive import remove_state, clear_flag
+from charms.reactive import set_state, set_flag
+from charms.reactive import is_state, is_flag_set
 from charms.reactive import endpoint_from_flag
 from charms.reactive import when, when_any, when_not, when_none
 from charms.reactive.helpers import data_changed, any_file_changed
 
 from charms.layer import tls_client
+from charms.layer import vaultlocker
 
 from charmhelpers.core import hookenv
 from charmhelpers.core import host
@@ -65,6 +67,7 @@ from charms.layer.kubernetes_common import create_kubeconfig
 from charms.layer.kubernetes_common import get_service_ip
 from charms.layer.kubernetes_common import configure_kubernetes_service
 from charms.layer.kubernetes_common import cloud_config_path
+from charms.layer.kubernetes_common import encryption_config_path
 from charms.layer.kubernetes_common import write_gcp_snap_config
 from charms.layer.kubernetes_common import write_openstack_snap_config
 from charms.layer.kubernetes_common import write_azure_snap_config
@@ -464,6 +467,12 @@ def set_final_status():
     except NotImplementedError:
         goal_state = {}
 
+    if is_flag_set('kubernetes-master.secure-storage.failed'):
+        hookenv.status_set('blocked',
+                           'Failed to secure encryption keys; '
+                           'keys are in plaintext')
+        return
+
     vsphere_joined = is_state('endpoint.vsphere.joined')
     azure_joined = is_state('endpoint.azure.joined')
     cloud_blocked = is_state('kubernetes-master.cloud.blocked')
@@ -604,6 +613,7 @@ def add_systemd_restart_always():
 @when('etcd.available', 'tls_client.server.certificate.saved',
       'authentication.setup',
       'leadership.set.auto_storage_backend',
+      'leadership.set.encryption_key',
       'cni.available')
 @when_not('kubernetes-master.components.started',
           'kubernetes-master.cloud.pending',
@@ -1495,6 +1505,10 @@ def configure_apiserver(etcd_connection_string):
     else:
         remove_if_exists(audit_webhook_config_path)
 
+    _write_encryption_config()
+    api_opts['experimental-encryption-provider-config'] = \
+        str(encryption_config_path())
+
     configure_kubernetes_service(configure_prefix, 'kube-apiserver',
                                  api_opts, 'api-extra-args')
     service_restart('snap.kube-apiserver.daemon')
@@ -1951,14 +1965,19 @@ def setup_keystone_user():
     ks.request_credentials('k8s')
 
 
+def _kick_apiserver():
+    if is_flag_set('kubernetes-master.components.started'):
+        etcd = endpoint_from_flag('etcd.available')
+        configure_apiserver(etcd.get_connection_string())
+
+
 @when('keystone.credentials.configured',
       'leadership.set.keystone-cdk-addons-configured')
 @when_not('keystone.apiserver.configured')
 def keystone_kick_apiserver():
     # if we have run configure, but we haven't configured the api server
     # because the service wasn't up yet, we need to keep trying
-    etcd = endpoint_from_flag('etcd.available')
-    configure_apiserver(etcd.get_connection_string())
+    _kick_apiserver()
 
 
 @when('keystone-credentials.available.auth', 'certificates.ca.available',
@@ -1989,3 +2008,75 @@ def keystone_config():
             create_self_config(ca, client)
         generate_keystone_configmap()
         set_state('keystone.credentials.configured')
+
+
+@when('vault.available',
+      'layer.vaultlocker.ready')
+@when_not('kubernetes-master.secure-storage.created')
+def create_secure_storage():
+    encryption_conf_dir = encryption_config_path().parent
+    encryption_conf_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        device_name = unitdata.kv().get('kubernetes-master.loop-device')
+        if not device_name:
+            check_call(['modprobe', 'loop'])
+            crypt_file = '/root/cdk/encrypted-config'
+            check_call(['dd', 'if=/dev/urandom', 'of={}'.format(crypt_file),
+                        'bs=1M', 'count=20'])
+            check_call(['losetup', '-f', crypt_file])
+            losetup_output = check_output(['losetup', '--json'])
+            device_name = [d['name']
+                           for d in json.loads(losetup_output)['loopdevices']
+                           if d['back-file'] == crypt_file][0]
+            unitdata.kv().set('kubernetes-master.loop-device', device_name)
+        vaultlocker.encrypt_device(device_name, str(encryption_conf_dir))
+        set_flag('kubernetes-master.secure-storage.created')
+        _kick_apiserver()  # need to regen config
+    except CalledProcessError:
+        # One common cause of this would be deploying on lxd.
+        # Should this be more fatal? Data will still be encrypted
+        # in etcd, with keys only on k8s-master.
+        hookenv.log(
+            'Unable to create encrypted mount for storing encryption config. '
+            'Secrets are stored in plaintext.', level=hookenv.ERROR)
+        set_flag('kubernetes-master.secure-storage.failed')
+
+
+@when_not('vault.available')
+@when('kubernetes-master.secure-storage.created')
+def revert_secure_storage():
+    _kick_apiserver()  # need to regen config
+    clear_flag('kubernetes-master.secure-storage.created')
+    clear_flag('kubernetes-master.secure-storage.failed')
+
+
+@when('leadership.is_leader')
+@when_not('leadership.set.encryption_key')
+def generate_encryption_key():
+    leader_set(encryption_key=token_generator(32))
+
+
+def _write_encryption_config():
+    encryption_config_path().parent.mkdir(parents=True, exist_ok=True)
+    secret = leader_get('encryption_key')
+    secret = base64.b64encode(secret.encode('utf8')).decode('utf8')
+    host.write_file(
+        path=str(encryption_config_path()),
+        perms=0o600,
+        content=yaml.safe_dump({
+            'kind': 'EncryptionConfig',
+            'apiVersion': 'v1',
+            'resources': [{
+                'resources': ['secrets'],
+                'providers': [
+                    {'aescbc': {
+                        'keys': [{
+                            'name': 'key1',
+                            'secret': secret,
+                        }],
+                    }},
+                    {'identity': {}},
+                ]
+            }],
+        })
+    )

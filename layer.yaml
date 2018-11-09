@@ -9,6 +9,7 @@ includes:
   - 'layer:nagios'
   - 'layer:cdk-service-kicker'
   - 'layer:kubernetes-common'
+  - 'layer:vaultlocker'
   - 'interface:ceph-admin'
   - 'interface:etcd'
   - 'interface:http'
