@@ -534,13 +534,15 @@ def set_final_status():
         hookenv.status_set('waiting', 'Waiting to retry addon deployment')
         return
 
-    unready = get_kube_system_pods_not_running()
-    if addons_configured and (unready is None or len(unready) > 0):
-        if unready is None:
-            msg = 'Waiting for kube-system pods to start'
-        elif len(unready) > 0:
-            msg = 'Waiting for {} kube-system pod{} to start'
-            msg = msg.format(len(unready), "s"[len(unready) == 1:])
+    try:
+        unready = get_kube_system_pods_not_running()
+    except FailedToGetPodStatus:
+        hookenv.status_set('waiting', 'Waiting for kube-system pods to start')
+        return
+
+    if unready:
+        msg = 'Waiting for {} kube-system pod{} to start'
+        msg = msg.format(len(unready), "s"[len(unready) == 1:])
         hookenv.status_set('waiting', msg)
         return
 
@@ -1627,18 +1629,32 @@ def token_generator(length=32):
 
 
 @retry(times=3, delay_secs=10)
-def get_kube_system_pods_not_running():
-    ''' Check pod status in the kube-system namespace. Returns None if
-    unable to determine(api server isn't running), and array of pods
-    that are not currently running, or an empty list if all are running.'''
-
-    cmd = ['kubectl', 'get', 'po', '-n', 'kube-system', '-o', 'json']
+def get_pods(namespace='default'):
+    cmd = ['kubectl', 'get', 'po', '-n', namespace, '-o', 'json']
     try:
         output = check_output(cmd).decode('utf-8')
         result = json.loads(output)
     except CalledProcessError:
-        hookenv.log('failed to get kube-system pod status')
+        hookenv.log('failed to get {} pod status'.format(namespace))
         return None
+    return result
+
+
+class FailedToGetPodStatus(Exception):
+    pass
+
+
+def get_kube_system_pods_not_running():
+    ''' Check pod status in the kube-system namespace. Throws
+    FailedToGetPodStatus if unable to determine pod status. This can
+    occur when the api server is not currently running. On success,
+    returns a list of pods that are not currently running
+    or an empty list if all are running.'''
+
+    result = get_pods('kube-system')
+    if result is None:
+        raise FailedToGetPodStatus
+
     hookenv.log('Checking system pods status: {}'.format(', '.join(
         '='.join([pod['metadata']['name'], pod['status']['phase']])
         for pod in result['items'])))
