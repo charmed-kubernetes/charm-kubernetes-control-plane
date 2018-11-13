@@ -521,8 +521,8 @@ def set_final_status():
                                'Waiting for CNI plugins to become available')
         return
 
-    # Note that after this point, kubernetes-master.components.started is always
-    # True.
+    # Note that after this point, kubernetes-master.components.started is 
+    # always True.
     is_leader = is_state('leadership.is_leader')
     authentication_setup = is_state('authentication.setup')
     if not is_leader and not authentication_setup:
@@ -936,8 +936,9 @@ def ceph_storage():
     ceph_admin = endpoint_from_flag('ceph-storage.available')
 
     # deprecated in 1.12 in favor of using CSI instead of dumping the config
-    # to ceph. Also be sure to note that we don't set kubernetes-master.ceph.configured
-    # until ceph is up and has provided us a key.
+    # to ceph. Also be sure to note that we don't set
+    # kubernetes-master.ceph.configured until ceph is up and has provided
+    # us a key.
     if get_version('kube-apiserver') >= (1, 12):
         # this is actually false, but by setting this flag we won't keep
         # running this function for no reason. Also note that we watch this
@@ -1052,7 +1053,8 @@ def create_rbac_resources():
     if kubectl_manifest('apply', rbac_metrics_path):
         remove_state('kubernetes-master.create.rbac')
     else:
-        hookenv.log('Failed to apply {}, will retry.'.format(rbac_metrics_path))
+        msg = 'Failed to apply {}, will retry.'.format(rbac_metrics_path)
+        hookenv.log(msg)
 
 
 @when('leadership.is_leader',
@@ -1066,7 +1068,8 @@ def remove_rbac_resources():
             os.remove(rbac_metrics_path)
             remove_state('kubernetes-master.remove.rbac')
         else:
-            hookenv.log('Failed to delete {}, will retry.'.format(rbac_metrics_path))
+            msg = 'Failed to delete {}, will retry.'.format(rbac_metrics_path)
+            hookenv.log(msg)
     else:
         # if we dont have the yaml, there's nothing for us to do
         remove_state('kubernetes-master.remove.rbac')
@@ -1918,7 +1921,8 @@ def setup_keystone_user():
     ks.request_credentials('k8s')
 
 
-@when('keystone.credentials.configured', 'leadership.set.keystone-cdk-addons-configured')
+@when('keystone.credentials.configured',
+      'leadership.set.keystone-cdk-addons-configured')
 @when_not('keystone.apiserver.configured')
 def keystone_kick_apiserver():
     # if we have run configure, but we haven't configured the api server
