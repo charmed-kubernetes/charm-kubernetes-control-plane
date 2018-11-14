@@ -77,6 +77,15 @@ For more information on the possible values for `snapd_refresh`, see the
 This charm supports some configuration options to set up a Kubernetes cluster
 that works in your environment:
 
+#### authorization-mode
+
+Comma separated authorization modes. For example, enable RBAC and Node
+authorization:
+
+```sh
+juju config kubernetes-master authorization-mode="RBAC,Node"
+```
+
 #### dns_domain
 
 The domain name to use for the Kubernetes cluster for DNS.
@@ -85,10 +94,6 @@ The domain name to use for the Kubernetes cluster for DNS.
 
 Enables the installation of Kubernetes dashboard, Heapster, Grafana, and
 InfluxDB.
-
-#### enable-rbac
-
-Enable RBAC and Node authorisation.
 
 # DNS for the cluster
 

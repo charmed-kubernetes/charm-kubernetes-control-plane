@@ -1047,21 +1047,21 @@ def switch_auth_mode():
       'kubernetes-master.components.started',
       'kubernetes-master.create.rbac')
 def create_rbac_resources():
-    rbac_metrics_path = '/root/cdk/rbac-metrics.yaml'
+    rbac_proxy_path = '/root/cdk/rbac-proxy.yaml'
 
-    # NB: metrics are scraped by proxy, so the 'user' here is the
+    # NB: when metrics and logs are retrieved by proxy, the 'user' is the
     # common name of the cert used to authenticate the proxied request.
     # The CN for /root/cdk/client.crt is 'client'.
-    metric_user = 'client'
+    proxy_user = 'client'
     context = {'juju_application': hookenv.service_name(),
-               'metric_user': metric_user}
-    render('rbac-metrics.yaml', rbac_metrics_path, context)
+               'proxy_user': proxy_user}
+    render('rbac-proxy.yaml', rbac_proxy_path, context)
 
-    hookenv.log('Creating metric-related RBAC resources.')
-    if kubectl_manifest('apply', rbac_metrics_path):
+    hookenv.log('Creating proxy-related RBAC resources.')
+    if kubectl_manifest('apply', rbac_proxy_path):
         remove_state('kubernetes-master.create.rbac')
     else:
-        msg = 'Failed to apply {}, will retry.'.format(rbac_metrics_path)
+        msg = 'Failed to apply {}, will retry.'.format(rbac_proxy_path)
         hookenv.log(msg)
 
 
@@ -1069,14 +1069,14 @@ def create_rbac_resources():
       'kubernetes-master.components.started',
       'kubernetes-master.remove.rbac')
 def remove_rbac_resources():
-    rbac_metrics_path = '/root/cdk/rbac-metrics.yaml'
-    if os.path.isfile(rbac_metrics_path):
-        hookenv.log('Removing metric-related RBAC resources.')
-        if kubectl_manifest('delete', rbac_metrics_path):
-            os.remove(rbac_metrics_path)
+    rbac_proxy_path = '/root/cdk/rbac-proxy.yaml'
+    if os.path.isfile(rbac_proxy_path):
+        hookenv.log('Removing proxy-related RBAC resources.')
+        if kubectl_manifest('delete', rbac_proxy_path):
+            os.remove(rbac_proxy_path)
             remove_state('kubernetes-master.remove.rbac')
         else:
-            msg = 'Failed to delete {}, will retry.'.format(rbac_metrics_path)
+            msg = 'Failed to delete {}, will retry.'.format(rbac_proxy_path)
             hookenv.log(msg)
     else:
         # if we dont have the yaml, there's nothing for us to do
