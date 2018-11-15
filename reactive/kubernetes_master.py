@@ -77,7 +77,7 @@ from charms.layer.kubernetes_common import retry
 # Override the default nagios shortname regex to allow periods, which we
 # need because our bin names contain them (e.g. 'snap.foo.daemon'). The
 # default regex in charmhelpers doesn't allow periods, but nagios itself does.
-nrpe.Check.shortname_re = '[\.A-Za-z0-9-_]+$'
+nrpe.Check.shortname_re = r'[\.A-Za-z0-9-_]+$'
 
 snap_resources = ['kubectl', 'kube-apiserver', 'kube-controller-manager',
                   'kube-scheduler', 'cdk-addons', 'kube-proxy']
@@ -588,7 +588,7 @@ def add_systemd_restart_always():
         # Check for old version (for xenial support)
         if systemd_version < 230:
             template = 'templates/service-always-restart.systemd-229.conf'
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
         hookenv.log('Failed to detect systemd version, using latest template',
                     level='ERROR')
