@@ -47,6 +47,7 @@ from charms.reactive.helpers import data_changed, any_file_changed
 
 from charms.layer import tls_client
 from charms.layer import vaultlocker
+from charms.layer import vault_kv
 
 from charmhelpers.core import hookenv
 from charmhelpers.core import host
@@ -613,7 +614,6 @@ def add_systemd_restart_always():
 @when('etcd.available', 'tls_client.server.certificate.saved',
       'authentication.setup',
       'leadership.set.auto_storage_backend',
-      'leadership.set.encryption_key',
       'cni.available')
 @when_not('kubernetes-master.components.started',
           'kubernetes-master.cloud.pending',
@@ -1505,9 +1505,13 @@ def configure_apiserver(etcd_connection_string):
     else:
         remove_if_exists(audit_webhook_config_path)
 
-    _write_encryption_config()
-    api_opts['experimental-encryption-provider-config'] = \
-        str(encryption_config_path())
+    if is_flag_set('layer.vault-kv.app-kv.set.encryption_key'):
+        # TODO: If Vault isn't available, it's probably still better to encrypt
+        # anyway and store the key in plaintext and leadership than to just
+        # give up on encryption entirely.
+        _write_encryption_config()
+        api_opts['experimental-encryption-provider-config'] = \
+            str(encryption_config_path())
 
     configure_kubernetes_service(configure_prefix, 'kube-apiserver',
                                  api_opts, 'api-extra-args')
@@ -2050,15 +2054,18 @@ def revert_secure_storage():
     clear_flag('kubernetes-master.secure-storage.failed')
 
 
-@when('leadership.is_leader')
-@when_not('leadership.set.encryption_key')
+@when('leadership.is_leader',
+      'layer.vault-kv.ready')
+@when_not('layer.vault-kv.app-kv.set.encryption_key')
 def generate_encryption_key():
-    leader_set(encryption_key=token_generator(32))
+    app_kv = vault_kv.VaultAppKV()
+    app_kv['encryption_key'] = token_generator(32)
 
 
 def _write_encryption_config():
+    app_kv = vault_kv.VaultAppKV()
     encryption_config_path().parent.mkdir(parents=True, exist_ok=True)
-    secret = leader_get('encryption_key')
+    secret = app_kv['encryption_key']
     secret = base64.b64encode(secret.encode('utf8')).decode('utf8')
     host.write_file(
         path=str(encryption_config_path()),
