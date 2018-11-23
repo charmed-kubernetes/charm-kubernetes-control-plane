@@ -496,6 +496,12 @@ def set_final_status():
         hookenv.status_set(status, 'Waiting for workers.')
         return
 
+    ks = endpoint_from_flag('keystone-credentials.available.auth')
+    if ks and ks.api_version() == '2':
+        msg = 'Keystone auth v2 detected. v3 is required.'
+        hookenv.status_set(status, msg)
+        return
+
     upgrade_needed = is_state('kubernetes-master.upgrade-needed')
     upgrade_specified = is_state('kubernetes-master.upgrade-specified')
     if upgrade_needed and not upgrade_specified:
@@ -1429,6 +1435,17 @@ def configure_apiserver(etcd_connection_string):
         elif is_state('leadership.set.keystone-cdk-addons-configured'):
             hookenv.log('Unable to find keystone endpoint. Will retry')
         remove_state('keystone.apiserver.configured')
+        # Note that we can get into a nasty state here
+        # if the user has specified webhook and they're relying on
+        # keystone auth to handle that, the api server will fail to start
+        # because we push it Webhook and no webhook config. We can't generate
+        # the config because we can't talk to the apiserver to get the ip of
+        # the service to put into the webhook template. A chicken and egg
+        # problem. To fix this, remove Webhook if keystone is related and
+        # trying to come up until we can find the service IP.
+        if 'Webhook' in auth_mode:
+            auth_mode = ','.join([i for i in auth_mode.split(',')
+                                  if i != 'Webhook'])
 
     api_opts['authorization-mode'] = auth_mode
 
