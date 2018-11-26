@@ -1505,7 +1505,7 @@ def configure_apiserver(etcd_connection_string):
     else:
         remove_if_exists(audit_webhook_config_path)
 
-    if is_flag_set('layer.vault-kv.app-kv.set.encryption_key'):
+    if is_flag_set('kubernetes-master.secure-storage.created'):
         # TODO: If Vault isn't available, it's probably still better to encrypt
         # anyway and store the key in plaintext and leadership than to just
         # give up on encryption entirely.
@@ -2035,6 +2035,7 @@ def create_secure_storage():
             unitdata.kv().set('kubernetes-master.loop-device', device_name)
         vaultlocker.encrypt_device(device_name, str(encryption_conf_dir))
         set_flag('kubernetes-master.secure-storage.created')
+        clear_flag('kubernetes-master.secure-storage.failed')
         _kick_apiserver()  # need to regen config
     except CalledProcessError:
         # One common cause of this would be deploying on lxd.
@@ -2044,6 +2045,7 @@ def create_secure_storage():
             'Unable to create encrypted mount for storing encryption config. '
             'Secrets are stored in plaintext.', level=hookenv.ERROR)
         set_flag('kubernetes-master.secure-storage.failed')
+        clear_flag('kubernetes-master.secure-storage.created')
 
 
 @when_not('vault.available')
