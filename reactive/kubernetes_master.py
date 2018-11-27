@@ -2064,6 +2064,12 @@ def generate_encryption_key():
     app_kv['encryption_key'] = token_generator(32)
 
 
+@when('layer.vault-kv.app-kv.changed.encryption_key')
+def restart_apiserver_for_encryption_key():
+    _kick_apiserver()
+    clear_flag('layer.vault-kv.app-kv.changed.encryption_key')
+
+
 def _write_encryption_config():
     app_kv = vault_kv.VaultAppKV()
     encryption_config_path().parent.mkdir(parents=True, exist_ok=True)
