@@ -473,6 +473,12 @@ def set_final_status():
                            'Failed to configure encryption; '
                            'secrets are unencrypted or inaccessible')
         return
+    elif is_flag_set('kubernetes-master.secure-storage.created'):
+        if not encryption_config_path().exists():
+            hookenv.status_set('blocked',
+                               'VaultLocker containing encryption config '
+                               'unavailable')
+            return
 
     vsphere_joined = is_state('endpoint.vsphere.joined')
     azure_joined = is_state('endpoint.azure.joined')
@@ -1506,10 +1512,6 @@ def configure_apiserver(etcd_connection_string):
         remove_if_exists(audit_webhook_config_path)
 
     if is_flag_set('kubernetes-master.secure-storage.created'):
-        # TODO: If Vault isn't available, it's probably still better to encrypt
-        # anyway and store the key in plaintext and leadership than to just
-        # give up on encryption entirely.
-        _write_encryption_config()
         api_opts['experimental-encryption-provider-config'] = \
             str(encryption_config_path())
 
@@ -2020,30 +2022,9 @@ def keystone_config():
 def create_secure_storage():
     encryption_conf_dir = encryption_config_path().parent
     encryption_conf_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-    crypt_file = '/root/cdk/encrypted-config'
-
-    def _find_loop_device():
-        losetup_output = check_output(['losetup', '--json'])
-        device_name = [d['name']
-                       for d in json.loads(losetup_output)['loopdevices']
-                       if d['back-file'] == crypt_file]
-        return device_name[0] if device_name else None
-
     try:
-        device_name = _find_loop_device()
-        if not device_name:
-            check_call(['modprobe', 'loop'])
-            check_call(['dd', 'if=/dev/urandom', 'of={}'.format(crypt_file),
-                        'bs=1M', 'count=20'])
-            check_call(['losetup', '-f', crypt_file])
-            device_name = _find_loop_device()
-            if not device_name:
-                raise ValueError('Unable to find loop device')
-            vaultlocker.encrypt_device(device_name, str(encryption_conf_dir))
-        set_flag('kubernetes-master.secure-storage.created')
-        clear_flag('kubernetes-master.secure-storage.failed')
-        _kick_apiserver()  # need to regen config
-    except (CalledProcessError, OSError, ValueError):
+        vaultlocker.create_encrypted_loop_mount(encryption_conf_dir)
+    except vaultlocker.VaultLockerError:
         # One common cause of this would be deploying on lxd.
         # Should this be more fatal?
         hookenv.log(
@@ -2051,6 +2032,19 @@ def create_secure_storage():
             '{}'.format(traceback.format_exc()), level=hookenv.ERROR)
         set_flag('kubernetes-master.secure-storage.failed')
         clear_flag('kubernetes-master.secure-storage.created')
+    else:
+        # TODO: If Vault isn't available, it's probably still better to encrypt
+        # anyway and store the key in plaintext and leadership than to just
+        # give up on encryption entirely.
+        _write_encryption_config()
+        # prevent an unnecessary service restart on this
+        # unit since we've already handled the change
+        clear_flag('layer.vault-kv.app-kv.changed.encryption_key')
+        # mark secure storage as ready
+        set_flag('kubernetes-master.secure-storage.created')
+        clear_flag('kubernetes-master.secure-storage.failed')
+        # restart to regen config
+        _kick_apiserver()
 
 
 @when_not('layer.vaultlocker.ready')
@@ -2069,7 +2063,8 @@ def generate_encryption_key():
     app_kv['encryption_key'] = token_generator(32)
 
 
-@when('layer.vault-kv.app-kv.changed.encryption_key')
+@when('layer.vault-kv.app-kv.changed.encryption_key',
+      'kubernetes-master.secure-storage.created')
 def restart_apiserver_for_encryption_key():
     _kick_apiserver()
     clear_flag('layer.vault-kv.app-kv.changed.encryption_key')
