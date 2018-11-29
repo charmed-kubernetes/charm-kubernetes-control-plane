@@ -36,7 +36,7 @@ get_keystone_token() {
   if [ -z "$token" ]; then
     echo "Invalid authentication information"
   else
-    echo $(echo ${token} | awk -F ': ' '{print $2}')
+    echo $(echo ${token} | awk -F ': ' '{print $2}' | sed -e 's/[[:space:]]*$//')
   fi
 }
 echo "Function get_keystone_token created. Type get_keystone_token in order to generate a login token for the Kubernetes dashboard."
