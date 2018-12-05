@@ -594,6 +594,17 @@ def master_services_down():
             failing_services.append(service)
     return failing_services
 
+def add_systemd_file_limit():
+    directory = '/etc/systemd/system/snap.kube-apiserver.daemon.service.d'
+    file_name = 'file-limit.conf'
+    path = os.path.join(directory, file_name)
+    if not os.path.isfile(path):
+        with open(path, 'w') as f:
+            f.write('[Service]\n')
+            f.write('LimitNOFILE=65535')
+
+    check_call(['systemctl', 'daemon-reload'])
+
 
 def add_systemd_restart_always():
     template = 'templates/service-always-restart.systemd-latest.conf'
@@ -648,6 +659,9 @@ def start_master():
 
     # make all services restart all the time
     add_systemd_restart_always()
+
+    # increase file limit size
+    add_systemd_file_limit()
 
     # Add CLI options to all components
     configure_apiserver(etcd.get_connection_string())
