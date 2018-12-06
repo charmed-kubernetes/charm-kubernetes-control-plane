@@ -603,8 +603,6 @@ def add_systemd_file_limit():
             f.write('[Service]\n')
             f.write('LimitNOFILE=65535')
 
-    check_call(['systemctl', 'daemon-reload'])
-
 
 def add_systemd_restart_always():
     template = 'templates/service-always-restart.systemd-latest.conf'
@@ -631,7 +629,6 @@ def add_systemd_restart_always():
             .format(service)
         os.makedirs(dest_dir, exist_ok=True)
         copyfile(template, '{}/always-restart.conf'.format(dest_dir))
-    check_call(['systemctl', 'daemon-reload'])
 
 
 @when('etcd.available', 'tls_client.server.certificate.saved',
@@ -662,6 +659,10 @@ def start_master():
 
     # increase file limit size
     add_systemd_file_limit()
+
+    # systemctl needs to pick up the changes
+    # from the last 2 commands.
+    check_call(['systemctl', 'daemon-reload'])
 
     # Add CLI options to all components
     configure_apiserver(etcd.get_connection_string())
