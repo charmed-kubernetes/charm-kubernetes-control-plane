@@ -596,6 +596,9 @@ def master_services_down():
 
 def add_systemd_file_limit():
     directory = '/etc/systemd/system/snap.kube-apiserver.daemon.service.d'
+    if not os.path.isdir(directory):
+        os.makedirs(directory)
+
     file_name = 'file-limit.conf'
     path = os.path.join(directory, file_name)
     if not os.path.isfile(path):
