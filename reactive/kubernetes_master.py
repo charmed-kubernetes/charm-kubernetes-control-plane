@@ -1954,11 +1954,21 @@ def cloud_ready():
     remove_state('kubernetes-master.components.started')  # force restart
 
 
-@when('kubernetes-master.cloud.ready',
-      'endpoint.openstack.ready.changed')
-def update_openstack():
+@when('kubernetes-master.cloud.ready')
+@when_any('endpoint.openstack.ready.changed',
+          'endpoint.vsphere.ready.changed')
+def update_cloud_config():
+    '''Signal that cloud config has changed.
+
+    Some clouds (openstack, vsphere) support runtime config that needs to be
+    reflected in the k8s cloud config files when changed. Manage flags to
+    ensure this happens.
+    '''
     remove_state('kubernetes-master.cloud.ready')
-    remove_state('endpoint.openstack.ready.changed')
+    if is_state('endpoint.openstack.ready.changed'):
+        remove_state('endpoint.openstack.ready.changed')
+    if is_state('endpoint.vsphere.ready.changed'):
+        remove_state('endpoint.vsphere.ready.changed')
 
 
 def _cdk_addons_template_path():
