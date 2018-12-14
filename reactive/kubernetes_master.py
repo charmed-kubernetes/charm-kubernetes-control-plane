@@ -2004,8 +2004,8 @@ def _write_vsphere_snap_config(component):
         'server = {}'.format(vsphere.vsphere_ip),
         'datacenter = "{}"'.format(vsphere.datacenter),
         'default-datastore = "{}"'.format(vsphere.datastore),
-        'folder = "kubernetes"',
-        'resourcepool-path = ""',
+        'folder = "{}"'.format(vsphere.folder),
+        'resourcepool-path = "{}"'.format(vsphere.respool_path),
         '[Disk]',
         'scsicontrollertype = "pvscsi"',
     ]))
