@@ -56,6 +56,7 @@ from charmhelpers.core.host import service_stop
 from charmhelpers.core.templating import render
 from charmhelpers.fetch import apt_install
 from charmhelpers.contrib.charmsupport import nrpe
+from charmhelpers.contrib.storage.linux.ceph import ReplicatedPool
 
 from charms.layer.kubernetes_common import kubeclientconfig_path
 from charms.layer.kubernetes_common import migrate_resource_checksums
@@ -988,6 +989,33 @@ def ceph_storage_privilege():
     reconfigure_apiserver(endpoint_from_flag('etcd.available'))
 
 
+@when('kubernetes-master.ceph.configured')
+@when_not('kubernetes-master.ceph.pool.created')
+def ceph_storage_pool():
+    '''Once Ceph relation is ready,
+    we need to add storage pools.
+
+    :return: None
+    '''
+    hookenv.log('Creating Ceph pools.')
+
+    ReplicatedPool(
+        name='xfs-pool',
+        service='admin',
+        replicas=3,
+        app_name=None,
+    ).create()
+
+    ReplicatedPool(
+        name='ext4-pool',
+        service='admin',
+        replicas=3,
+        app_name=None,
+    ).create()
+
+    set_state('kubernetes-master.ceph.pool.created')
+
+
 @when('ceph-storage.available')
 @when('kubernetes-master.privileged')
 @when_not('kubernetes-master.ceph.configured')
@@ -996,23 +1024,14 @@ def ceph_storage():
     configuration, and the ceph secret key file used for authentication.
     This method will install the client package, and render the requisit files
     in order to consume the ceph-storage relation.'''
+    hookenv.log('Configuring Ceph.')
+
     ceph_admin = endpoint_from_flag('ceph-storage.available')
 
-    # deprecated in 1.12 in favor of using CSI instead of dumping the config
-    # to ceph. Also be sure to note that we don't set
-    # kubernetes-master.ceph.configured until ceph is up and has provided
-    # us a key.
-    if get_version('kube-apiserver') >= (1, 12):
-        # this is actually false, but by setting this flag we won't keep
-        # running this function for no reason. Also note that we watch this
-        # flag to run cdk-addons.apply.
-        if not ceph_admin.key():
-            # We didn't have a key, and cannot proceed. Do not set state and
-            # allow this method to re-execute
-            return
-
-        set_state('kubernetes-master.ceph.configured')
-        return
+    # >=1.12 will use CSI.
+    if get_version('kube-apiserver') >= (1, 12) and not ceph_admin.key():
+        hookenv.status_set('blocked', 'Waiting for CSI to provide a key.')
+        return  # Retry until CSI gives us a key.
 
     ceph_context = {
         'mon_hosts': ceph_admin.mon_hosts(),
@@ -1035,8 +1054,8 @@ def ceph_storage():
     render('ceph.conf', charm_ceph_conf, ceph_context)
 
     # The key can rotate independently of other ceph config, so validate it
-    admin_key = os.path.join(etc_ceph_directory,
-                             'ceph.client.admin.keyring')
+    admin_key = os.path.join(
+        etc_ceph_directory, 'ceph.client.admin.keyring')
     try:
         with open(admin_key, 'w') as key_file:
             key_file.write("[client.admin]\n\tkey = {}\n".format(
@@ -1052,21 +1071,24 @@ def ceph_storage():
         # allow this method to re-execute
         return
 
-    context = {'secret': encoded_key.decode('ascii')}
-    render('ceph-secret.yaml', '/tmp/ceph-secret.yaml', context)
-    try:
-        # At first glance this is deceptive. The apply stanza will create if
-        # it doesn't exist, otherwise it will update the entry, ensuring our
-        # ceph-secret is always reflective of what we have in /etc/ceph
-        # assuming we have invoked this anytime that file would change.
-        cmd = ['kubectl', 'apply', '-f', '/tmp/ceph-secret.yaml']
-        check_call(cmd)
-        os.remove('/tmp/ceph-secret.yaml')
-    except:  # NOQA
-        # the enlistment in kubernetes failed, return and prepare for re-exec
-        return
+    # CSI isn't available, so we need to do it ourselves,
+    if get_version('kube-apiserver') < (1, 12):
+        try:
+            # At first glance this is deceptive. The apply stanza will
+            # create if it doesn't exist, otherwise it will update the
+            # entry, ensuring our ceph-secret is always reflective of
+            # what we have in /etc/ceph assuming we have invoked this
+            # anytime that file would change.
+            context = {'secret': encoded_key.decode('ascii')}
+            render('ceph-secret.yaml', '/tmp/ceph-secret.yaml', context)
+            cmd = ['kubectl', 'apply', '-f', '/tmp/ceph-secret.yaml']
+            check_call(cmd)
+            os.remove('/tmp/ceph-secret.yaml')
+        except:  # NOQA
+            # the enlistment in kubernetes failed, return and prepare for re-exec
+            return
 
-    # when complete, set a state relating to configuration of the storage
+    # When complete, set a state relating to configuration of the storage
     # backend that will allow other modules to hook into this and verify we
     # have performed the necessary pre-req steps to interface with a ceph
     # deployment.
