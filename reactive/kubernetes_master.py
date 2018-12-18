@@ -1030,7 +1030,7 @@ def ceph_storage():
 
     # >=1.12 will use CSI.
     if get_version('kube-apiserver') >= (1, 12) and not ceph_admin.key():
-        hookenv.status_set('blocked', 'Waiting for CSI to provide a key.')
+        hookenv.status_set('waiting', 'Waiting for CSI to provide a key.')
         return  # Retry until CSI gives us a key.
 
     ceph_context = {
