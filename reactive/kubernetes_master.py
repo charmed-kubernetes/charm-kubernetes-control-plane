@@ -1278,6 +1278,7 @@ def shutdown():
 def build_kubeconfig(server):
     '''Gather the relevant data for Kubernetes configuration objects and create
     a config object with that information.'''
+    hookenv.status_set('maintenance', 'Writing kubeconfig file.')
     # Get the options from the tls-client layer.
     layer_options = layer.options('tls-client')
     # Get all the paths to the tls information required for kubeconfig.
