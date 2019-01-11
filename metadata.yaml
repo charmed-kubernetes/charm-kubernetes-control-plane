@@ -8,6 +8,7 @@ maintainers:
     - Charles Butler <Chuck@dasroot.net>
     - Matthew Bruzek <mbruzek@ubuntu.com>
     - Mike Wilson <mike.wilson@canonical.com>
+    - Joe Borg <joseph.borg@canonical.com>
 description: |
   Kubernetes is an open-source platform for deploying, scaling, and operations
   of application containers across a cluster of hosts. Kubernetes is portable
