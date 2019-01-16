@@ -159,6 +159,7 @@ def check_for_upgrade_needed():
     migrate_from_pre_snaps()
     maybe_install_kube_proxy()
     add_rbac_roles()
+    switch_auth_mode(forced=True)
     set_state('reconfigure.authentication.setup')
     remove_state('authentication.setup')
 
@@ -1081,11 +1082,11 @@ def initial_nrpe_config(nagios=None):
 
 
 @when('config.changed.authorization-mode')
-def switch_auth_mode():
+def switch_auth_mode(forced=False):
     config = hookenv.config()
     mode = config.get('authorization-mode')
 
-    if data_changed('auth-mode', mode):
+    if data_changed('auth-mode', mode) or forced:
         # manage flags to handle rbac related resources
         if mode and 'rbac' in mode.lower():
             remove_state('kubernetes-master.remove.rbac')
