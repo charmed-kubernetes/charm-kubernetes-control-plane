@@ -35,7 +35,6 @@ from subprocess import check_output
 from subprocess import CalledProcessError
 from urllib.request import Request, urlopen
 
-from charms import layer
 from charms.layer import snap
 from charms.reactive import hook
 from charms.reactive import remove_state, clear_flag
@@ -78,6 +77,11 @@ from charms.layer.kubernetes_common import kubeproxyconfig_path
 from charms.layer.kubernetes_common import kubectl_manifest
 from charms.layer.kubernetes_common import get_version
 from charms.layer.kubernetes_common import retry
+from charms.layer.kubernetes_common import ca_crt_path
+from charms.layer.kubernetes_common import server_crt_path
+from charms.layer.kubernetes_common import server_key_path
+from charms.layer.kubernetes_common import client_crt_path
+from charms.layer.kubernetes_common import client_key_path
 
 # Override the default nagios shortname regex to allow periods, which we
 # need because our bin names contain them (e.g. 'snap.foo.daemon'). The
@@ -159,6 +163,8 @@ def check_for_upgrade_needed():
 
     migrate_from_pre_snaps()
     maybe_install_kube_proxy()
+    update_certificates()
+    create_rbac_resources()
     add_rbac_roles()
     switch_auth_mode(forced=True)
     set_state('reconfigure.authentication.setup')
@@ -609,6 +615,7 @@ def master_services_down():
             failing_services.append(service)
     return failing_services
 
+
 def add_systemd_file_limit():
     directory = '/etc/systemd/system/snap.kube-apiserver.daemon.service.d'
     if not os.path.isdir(directory):
@@ -649,7 +656,7 @@ def add_systemd_restart_always():
         copyfile(template, '{}/always-restart.conf'.format(dest_dir))
 
 
-@when('etcd.available', 'tls_client.server.certificate.saved',
+@when('etcd.available', 'tls_client.certs.saved',
       'authentication.setup',
       'leadership.set.auto_storage_backend',
       'cni.available')
@@ -820,32 +827,34 @@ def send_data(tls, kube_api_endpoint):
     if extra_sans and not extra_sans == "":
         sans.extend(extra_sans.split())
 
-    # Create a path safe name by removing path characters from the unit name.
-    certificate_name = hookenv.local_unit().replace('/', '_')
     # Request a server cert with this information.
-    tls.request_server_cert(common_name, sans, certificate_name)
+    tls_client.request_server_cert(common_name, sans,
+                                   crt_path=server_crt_path,
+                                   key_path=server_key_path)
+
+    # Request a client cert for kubelet.
+    tls_client.request_server_cert('system:kube-apiserver',
+                                   crt_path=client_crt_path,
+                                   key_path=client_key_path)
 
 
 @when('config.changed.extra_sans', 'certificates.available',
       'kube-api-endpoint.available')
-def update_certificate(tls, kube_api_endpoint):
+def update_certificates(tls, kube_api_endpoint):
     # Using the config.changed.extra_sans flag to catch changes.
     # IP changes will take ~5 minutes or so to propagate, but
     # it will update.
     send_data(tls, kube_api_endpoint)
+    clear_flag('config.changed.extra_sans')
 
 
-@when('certificates.server.cert.available',
-      'kubernetes-master.components.started',
-      'tls_client.server.certificate.written')
-def kick_api_server(tls):
-    # need to be idempotent and don't want to kick the api server
-    # without need
-    if data_changed('cert', tls.get_server_cert()):
-        # certificate changed, so restart the api server
-        hookenv.log("Certificate information changed, restarting api server")
-        service_restart('snap.kube-apiserver.daemon')
-    tls_client.reset_certificate_write_flag('server')
+@when('kubernetes-master.components.started',
+      'tls_client.certs.changed')
+def kick_api_server():
+    # certificate changed, so restart the api server
+    hookenv.log("Certificate information changed, restarting api server")
+    service_restart('snap.kube-apiserver.daemon')
+    clear_flag('tls_client.certs.changed')
 
 
 @when_any('config.changed.keystone-policy',
@@ -1144,7 +1153,7 @@ def create_rbac_resources():
     # NB: when metrics and logs are retrieved by proxy, the 'user' is the
     # common name of the cert used to authenticate the proxied request.
     # The CN for /root/cdk/client.crt is 'client'.
-    proxy_user = 'client'
+    proxy_user = 'system:kube-apiserver'
     context = {'juju_application': hookenv.service_name(),
                'proxy_user': proxy_user}
     render('rbac-proxy.yaml', rbac_proxy_path, context)
@@ -1315,11 +1324,7 @@ def build_kubeconfig(server):
     '''Gather the relevant data for Kubernetes configuration objects and create
     a config object with that information.'''
     hookenv.status_set('maintenance', 'Writing kubeconfig file.')
-    # Get the options from the tls-client layer.
-    layer_options = layer.options('tls-client')
-    # Get all the paths to the tls information required for kubeconfig.
-    ca = layer_options.get('ca_certificate_path')
-    ca_exists = ca and os.path.isfile(ca)
+    ca_exists = ca_crt_path.exists()
     client_pass = get_password('basic_auth.csv', 'admin')
     # Do we have everything we need?
     if ca_exists and client_pass:
@@ -1344,11 +1349,11 @@ def build_kubeconfig(server):
         # Create the kubeconfig on this system so users can access the cluster.
 
         if ks:
-            create_kubeconfig(kubeconfig_path, server, ca,
+            create_kubeconfig(kubeconfig_path, server, ca_crt_path,
                               user='admin', password=client_pass,
                               keystone=True)
         else:
-            create_kubeconfig(kubeconfig_path, server, ca,
+            create_kubeconfig(kubeconfig_path, server, ca_crt_path,
                               user='admin', password=client_pass)
 
         # Make the config file readable by the ubuntu users so juju scp works.
@@ -1357,7 +1362,7 @@ def build_kubeconfig(server):
 
         # make a copy in a location shared by kubernetes-worker
         # and kubernete-master
-        create_kubeconfig(kubeclientconfig_path, server, ca,
+        create_kubeconfig(kubeclientconfig_path, server, ca_crt_path,
                           user='admin', password=client_pass)
 
         # make a kubeconfig for kube-proxy
@@ -1365,7 +1370,7 @@ def build_kubeconfig(server):
         if not proxy_token:
             setup_tokens(None, 'system:kube-proxy', 'kube-proxy')
             proxy_token = get_token('system:kube-proxy')
-        create_kubeconfig(kubeproxyconfig_path, server, ca,
+        create_kubeconfig(kubeproxyconfig_path, server, ca_crt_path,
                           token=proxy_token, user='kube-proxy')
 
 
@@ -1420,14 +1425,6 @@ def write_file_with_autogenerated_header(path, contents):
 def configure_apiserver(etcd_connection_string):
     api_opts = {}
 
-    # Get the tls paths from the layer data.
-    layer_options = layer.options('tls-client')
-    ca_cert_path = layer_options.get('ca_certificate_path')
-    client_cert_path = layer_options.get('client_certificate_path')
-    client_key_path = layer_options.get('client_key_path')
-    server_cert_path = layer_options.get('server_certificate_path')
-    server_key_path = layer_options.get('server_key_path')
-
     # at one point in time, this code would set ca-client-cert,
     # but this was removed. This was before configure_kubernetes_service
     # kept track of old arguments and removed them, so client-ca-cert
@@ -1447,11 +1444,11 @@ def configure_apiserver(etcd_connection_string):
     api_opts['service-cluster-ip-range'] = service_cidr()
     api_opts['min-request-timeout'] = '300'
     api_opts['v'] = '4'
-    api_opts['tls-cert-file'] = server_cert_path
-    api_opts['tls-private-key-file'] = server_key_path
-    api_opts['kubelet-certificate-authority'] = ca_cert_path
-    api_opts['kubelet-client-certificate'] = client_cert_path
-    api_opts['kubelet-client-key'] = client_key_path
+    api_opts['tls-cert-file'] = str(server_crt_path)
+    api_opts['tls-private-key-file'] = str(server_key_path)
+    api_opts['kubelet-certificate-authority'] = str(ca_crt_path)
+    api_opts['kubelet-client-certificate'] = str(client_crt_path)
+    api_opts['kubelet-client-key'] = str(client_key_path)
     api_opts['logtostderr'] = 'true'
     api_opts['insecure-bind-address'] = '127.0.0.1'
     api_opts['insecure-port'] = '8080'
@@ -1550,15 +1547,15 @@ def configure_apiserver(etcd_connection_string):
 
     if kube_version > (1, 6) and \
        hookenv.config('enable-metrics'):
-        api_opts['requestheader-client-ca-file'] = ca_cert_path
+        api_opts['requestheader-client-ca-file'] = str(ca_crt_path)
         api_opts['requestheader-allowed-names'] = 'client'
         api_opts['requestheader-extra-headers-prefix'] = 'X-Remote-Extra-'
         api_opts['requestheader-group-headers'] = 'X-Remote-Group'
         api_opts['requestheader-username-headers'] = 'X-Remote-User'
-        api_opts['proxy-client-cert-file'] = client_cert_path
-        api_opts['proxy-client-key-file'] = client_key_path
+        api_opts['proxy-client-cert-file'] = str(client_crt_path)
+        api_opts['proxy-client-key-file'] = str(client_key_path)
         api_opts['enable-aggregator-routing'] = 'true'
-        api_opts['client-ca-file'] = ca_cert_path
+        api_opts['client-ca-file'] = str(ca_crt_path)
 
     api_cloud_config_path = cloud_config_path('kube-apiserver')
     if is_state('endpoint.aws.ready'):
@@ -1614,22 +1611,16 @@ def configure_apiserver(etcd_connection_string):
 def configure_controller_manager():
     controller_opts = {}
 
-    # Get the tls paths from the layer data.
-    layer_options = layer.options('tls-client')
-    ca_cert_path = layer_options.get('ca_certificate_path')
-    server_cert_path = layer_options.get('server_certificate_path')
-    server_key_path = layer_options.get('server_key_path')
-
     # Default to 3 minute resync. TODO: Make this configurable?
     controller_opts['min-resync-period'] = '3m'
     controller_opts['v'] = '2'
-    controller_opts['root-ca-file'] = ca_cert_path
+    controller_opts['root-ca-file'] = str(ca_crt_path)
     controller_opts['logtostderr'] = 'true'
     controller_opts['master'] = 'http://127.0.0.1:8080'
     controller_opts['service-account-private-key-file'] = \
         '/root/cdk/serviceaccount.key'
-    controller_opts['tls-cert-file'] = server_cert_path
-    controller_opts['tls-private-key-file'] = server_key_path
+    controller_opts['tls-cert-file'] = str(server_crt_path)
+    controller_opts['tls-private-key-file'] = str(server_key_path)
 
     cm_cloud_config_path = cloud_config_path('kube-controller-manager')
     if is_state('endpoint.aws.ready'):
