@@ -581,6 +581,18 @@ def set_final_status():
         hookenv.status_set('active', msg)
         return
 
+    if is_state('ceph-storage.available') and \
+            is_state('ceph-storage.available') and \
+            is_state('kubernetes-master.privileged') and \
+            not is_state('kubernetes-master.ceph.configured'):
+
+        ceph_admin = endpoint_from_flag('ceph-storage.available')
+
+        if get_version('kube-apiserver') >= (1, 12) and \
+                not ceph_admin.key():
+            hookenv.status_set(
+                'waiting', 'Waiting for Ceph to provide a key.')
+
     hookenv.status_set('active', 'Kubernetes master running.')
 
 
@@ -1030,8 +1042,8 @@ def ceph_storage():
 
     # >=1.12 will use CSI.
     if get_version('kube-apiserver') >= (1, 12) and not ceph_admin.key():
-        hookenv.status_set('waiting', 'Waiting for CSI to provide a key.')
-        return  # Retry until CSI gives us a key.
+        hookenv.status_set('waiting', 'Waiting for Ceph to provide a key.')
+        return  # Retry until Ceph gives us a key.
 
     ceph_context = {
         'mon_hosts': ceph_admin.mon_hosts(),
