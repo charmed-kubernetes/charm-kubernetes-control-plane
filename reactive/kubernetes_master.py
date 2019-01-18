@@ -592,6 +592,7 @@ def set_final_status():
                 not ceph_admin.key():
             hookenv.status_set(
                 'waiting', 'Waiting for Ceph to provide a key.')
+            return
 
     hookenv.status_set('active', 'Kubernetes master running.')
 
@@ -1042,7 +1043,6 @@ def ceph_storage():
 
     # >=1.12 will use CSI.
     if get_version('kube-apiserver') >= (1, 12) and not ceph_admin.key():
-        hookenv.status_set('waiting', 'Waiting for Ceph to provide a key.')
         return  # Retry until Ceph gives us a key.
 
     ceph_context = {
