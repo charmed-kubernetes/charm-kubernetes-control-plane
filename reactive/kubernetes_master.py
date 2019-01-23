@@ -164,7 +164,6 @@ def check_for_upgrade_needed():
     migrate_from_pre_snaps()
     maybe_install_kube_proxy()
     update_certificates()
-    create_rbac_resources()
     add_rbac_roles()
     switch_auth_mode(forced=True)
     set_state('reconfigure.authentication.setup')
@@ -833,7 +832,7 @@ def send_data(tls, kube_api_endpoint):
                                    key_path=server_key_path)
 
     # Request a client cert for kubelet.
-    tls_client.request_server_cert('system:kube-apiserver',
+    tls_client.request_client_cert('system:kube-apiserver',
                                    crt_path=client_crt_path,
                                    key_path=client_key_path)
 
