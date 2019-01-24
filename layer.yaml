@@ -11,6 +11,7 @@ includes:
   - 'layer:kubernetes-common'
   - 'layer:vault-kv'
   - 'layer:vaultlocker'
+  - 'layer:hacluster'
   - 'interface:ceph-admin'
   - 'interface:etcd'
   - 'interface:http'
