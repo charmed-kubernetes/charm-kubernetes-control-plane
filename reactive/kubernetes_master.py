@@ -1151,7 +1151,8 @@ def create_rbac_resources():
 
     # NB: when metrics and logs are retrieved by proxy, the 'user' is the
     # common name of the cert used to authenticate the proxied request.
-    # The CN for /root/cdk/client.crt is 'client'.
+    # The CN for /root/cdk/client.crt is 'system:kube-apiserver'
+    # (see the send_data handler, above).
     proxy_user = 'system:kube-apiserver'
     context = {'juju_application': hookenv.service_name(),
                'proxy_user': proxy_user}
