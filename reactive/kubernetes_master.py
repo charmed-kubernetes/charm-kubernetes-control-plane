@@ -796,8 +796,6 @@ def push_service_data():
     ''' Send configuration to the load balancer, and close access to the
     public interface '''
     kube_api = endpoint_from_flag('kube-api-endpoint.available')
-    if not kube_api:
-        return
 
     # Note that we do not need to worry about the loadbalancer case because
     # the worker charm will be related to the loadbalancer in that case and
@@ -2271,8 +2269,10 @@ def configure_hacluster():
     if (is_state('certificates.available') and
             is_state('kube-api-endpoint.available')):
         send_data()
+
     # update workers
-    push_service_data()
+    if (is_state('kube-api-endpoint.available')):
+        push_service_data()
 
     set_flag('hacluster-configured')
 
@@ -2289,5 +2289,7 @@ def remove_hacluster():
             is_state('kube-api-endpoint.available')):
         send_data()
     # update workers
-    push_service_data()
+    if (is_state('kube-api-endpoint.available')):
+        push_service_data()
+
     clear_flag('hacluster-configured')
