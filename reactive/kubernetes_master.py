@@ -795,9 +795,11 @@ def push_service_data(kube_api):
 
 
 @when('certificates.available', 'kube-api-endpoint.available')
-def send_data(tls, kube_api_endpoint):
+def send_data():
     '''Send the data that is required to create a server certificate for
     this server.'''
+    kube_api_endpoint = endpoint_from_flag('kube-api-endpoint.available')
+
     # Use the public ip of this unit as the Common Name for the certificate.
     common_name = hookenv.unit_public_ip()
 
@@ -839,11 +841,11 @@ def send_data(tls, kube_api_endpoint):
 
 @when('config.changed.extra_sans', 'certificates.available',
       'kube-api-endpoint.available')
-def update_certificates(tls, kube_api_endpoint):
+def update_certificates():
     # Using the config.changed.extra_sans flag to catch changes.
     # IP changes will take ~5 minutes or so to propagate, but
     # it will update.
-    send_data(tls, kube_api_endpoint)
+    send_data()
     clear_flag('config.changed.extra_sans')
 
 
