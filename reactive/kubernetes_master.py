@@ -2150,14 +2150,12 @@ def keystone_config():
         # we basically just call the other things we need to update
         etcd = endpoint_from_flag('etcd.available')
         lb = endpoint_from_flag('loadbalancer.available')
-        ca = endpoint_from_flag('certificates.ca.available')
-        client = endpoint_from_flag('certificates.client.cert.available')
 
         configure_apiserver(etcd.get_connection_string())
         if lb:
-            loadbalancer_kubeconfig(lb, ca, client)
+            loadbalancer_kubeconfig()
         else:
-            create_self_config(ca, client)
+            create_self_config()
         generate_keystone_configmap()
         set_state('keystone.credentials.configured')
 
