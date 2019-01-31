@@ -8,7 +8,7 @@ includes:
   - 'layer:metrics'
   - 'layer:nagios'
   - 'layer:cdk-service-kicker'
-  - 'layer:kubernetes-common'
+  - 'layer:kubernetes-master-worker-base'
   - 'layer:vault-kv'
   - 'layer:vaultlocker'
   - 'interface:ceph-admin'
