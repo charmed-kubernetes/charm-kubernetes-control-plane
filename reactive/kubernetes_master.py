@@ -1771,8 +1771,8 @@ def get_kube_system_pods_not_running():
 
     pending = [pod for pod in result['items']
                if pod['status']['phase'] == 'Pending']
-    all_pending = len(pending) == len(result['items'])
-    if is_state('endpoint.gcp.ready') and all_pending:
+    any_pending = len(pending) > 0
+    if is_state('endpoint.gcp.ready') and any_pending:
         poke_network_unavailable()
         return not_running
 
@@ -1805,6 +1805,9 @@ def poke_network_unavailable():
 
     for node in nodes:
         node_name = node['metadata']['name']
+        poked_flag = 'kubernetes-master.gcp.network-poked.{}'.format(node_name)
+        if is_flag_set(poked_flag):
+            continue
         url = 'http://localhost:8080/api/v1/nodes/{}/status'.format(node_name)
         with urlopen(url) as response:
             code = response.getcode()
@@ -1836,6 +1839,7 @@ def poke_network_unavailable():
                     hookenv.log('failed to update node status [{}]: {}'.format(
                         code, body), hookenv.ERROR)
                     return
+                set_state(poked_flag)
         except (json.JSONDecodeError, KeyError):
             hookenv.log('failed to parse node status: {}'.format(body),
                         hookenv.ERROR)
