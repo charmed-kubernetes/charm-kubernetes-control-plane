@@ -1805,9 +1805,6 @@ def poke_network_unavailable():
 
     for node in nodes:
         node_name = node['metadata']['name']
-        poked_flag = 'kubernetes-master.gcp.network-poked.{}'.format(node_name)
-        if is_flag_set(poked_flag):
-            continue
         url = 'http://localhost:8080/api/v1/nodes/{}/status'.format(node_name)
         with urlopen(url) as response:
             code = response.getcode()
@@ -1839,7 +1836,6 @@ def poke_network_unavailable():
                     hookenv.log('failed to update node status [{}]: {}'.format(
                         code, body), hookenv.ERROR)
                     return
-                set_state(poked_flag)
         except (json.JSONDecodeError, KeyError):
             hookenv.log('failed to parse node status: {}'.format(body),
                         hookenv.ERROR)
