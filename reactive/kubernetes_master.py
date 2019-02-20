@@ -1518,7 +1518,7 @@ def configure_apiserver(etcd_connection_string):
     if kube_version > (1, 6) and \
        hookenv.config('enable-metrics'):
         api_opts['requestheader-client-ca-file'] = str(ca_crt_path)
-        api_opts['requestheader-allowed-names'] = 'client'
+        api_opts['requestheader-allowed-names'] = 'system:kube-apiserver'
         api_opts['requestheader-extra-headers-prefix'] = 'X-Remote-Extra-'
         api_opts['requestheader-group-headers'] = 'X-Remote-Group'
         api_opts['requestheader-username-headers'] = 'X-Remote-User'
