@@ -37,3 +37,5 @@ options:
       - snap.kube-controller-manager.daemon
       - snap.kube-scheduler.daemon
       - snap.kube-proxy.daemon
+  hacluster:
+    binding_address: 'kube-api-endpoint'
