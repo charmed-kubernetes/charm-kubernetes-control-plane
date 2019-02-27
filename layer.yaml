@@ -11,6 +11,7 @@ includes:
   - 'layer:kubernetes-master-worker-base'
   - 'layer:vault-kv'
   - 'layer:vaultlocker'
+  - 'layer:hacluster'
   - 'interface:ceph-admin'
   - 'interface:etcd'
   - 'interface:http'
@@ -36,3 +37,5 @@ options:
       - snap.kube-controller-manager.daemon
       - snap.kube-scheduler.daemon
       - snap.kube-proxy.daemon
+  hacluster:
+    binding_address: 'kube-api-endpoint'

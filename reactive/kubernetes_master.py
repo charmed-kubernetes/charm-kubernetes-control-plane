@@ -57,6 +57,8 @@ from charmhelpers.fetch import apt_install
 from charmhelpers.contrib.charmsupport import nrpe
 from charmhelpers.contrib.storage.linux.ceph import ReplicatedPool
 
+from charms.layer.hacluster import add_service_to_hacluster
+from charms.layer.hacluster import remove_service_from_hacluster
 from charms.layer.kubernetes_common import kubeclientconfig_path
 from charms.layer.kubernetes_common import migrate_resource_checksums
 from charms.layer.kubernetes_common import check_resources_for_upgrade_needed
@@ -82,6 +84,8 @@ from charms.layer.kubernetes_common import server_crt_path
 from charms.layer.kubernetes_common import server_key_path
 from charms.layer.kubernetes_common import client_crt_path
 from charms.layer.kubernetes_common import client_key_path
+from charms.layer.kubernetes_common import get_unit_number
+
 
 # Override the default nagios shortname regex to allow periods, which we
 # need because our bin names contain them (e.g. 'snap.foo.daemon'). The
@@ -756,10 +760,26 @@ def create_service_configs(kube_control):
 
 
 @when('kube-api-endpoint.available')
-def push_service_data(kube_api):
+def push_service_data():
     ''' Send configuration to the load balancer, and close access to the
     public interface '''
-    kube_api.configure(port=6443)
+    kube_api = endpoint_from_flag('kube-api-endpoint.available')
+
+    # Note that we do not need to worry about the loadbalancer case because
+    # the worker charm will be related to the loadbalancer in that case and
+    # get the information from there instead of the kubernetes-master charm.
+
+    hacluster = endpoint_from_flag('ha.connected')
+    if hacluster:
+        vips = hookenv.config('ha-cluster-vip').split()
+        dns_record = hookenv.config('ha-cluster-dns')
+        if vips:
+            # each worker unit will pick one based on unit number
+            kube_api.configure(6443, vips, vips)
+        else:
+            kube_api.configure(6443, dns_record, dns_record)
+    else:
+        kube_api.configure(6443)
 
 
 @when('certificates.available', 'kube-api-endpoint.available')
@@ -790,6 +810,22 @@ def send_data():
         'kubernetes.default.svc',
         'kubernetes.default.svc.{0}'.format(domain)
     ]
+
+    loadbalancer = endpoint_from_flag('loadbalancer.available')
+    # we don't use get_hacluster_ip_or_hostname only here because
+    # we want the cert to be valid for all the vips
+    hacluster = endpoint_from_flag('ha.connected')
+    if hacluster:
+        vips = hookenv.config('ha-cluster-vip').split()
+        dns_record = hookenv.config('ha-cluster-dns')
+        if vips:
+            sans.extend(vips)
+        else:
+            sans.append(dns_record)
+    elif loadbalancer:
+        # Get the list of loadbalancers from the relation object.
+        hosts = loadbalancer.get_addresses_ports()
+        sans.extend([host.get('public-address') for host in hosts])
 
     # maybe they have extra names they want as SANs
     extra_sans = hookenv.config('extra_sans')
@@ -926,11 +962,19 @@ def addons_ready():
 
 @when('loadbalancer.available', 'certificates.ca.available',
       'certificates.client.cert.available', 'authentication.setup')
-def loadbalancer_kubeconfig(loadbalancer, ca, client):
+def loadbalancer_kubeconfig():
+    loadbalancer = endpoint_from_flag('loadbalancer.available')
     # Get the potential list of loadbalancers from the relation object.
     hosts = loadbalancer.get_addresses_ports()
-    # Get the public address of loadbalancers so users can access the cluster.
-    address = hosts[0].get('public-address')
+    # if there is a hacluster relation, use that vip/dns for the kubeconfig
+    hacluster_vip = get_hacluster_ip_or_hostname()
+    if hacluster_vip:
+        address = hacluster_vip
+    else:
+        # Get the public address of the first loadbalancer so
+        # users can access the cluster.
+        address = hosts[0].get('public-address')
+
     # Get the port of the loadbalancer so users can access the cluster.
     port = hosts[0].get('port')
     server = 'https://{0}:{1}'.format(address, port)
@@ -940,19 +984,25 @@ def loadbalancer_kubeconfig(loadbalancer, ca, client):
 @when('certificates.ca.available', 'certificates.client.cert.available',
       'authentication.setup')
 @when_not('loadbalancer.available')
-def create_self_config(ca, client):
+def create_self_config():
     '''Create a kubernetes configuration for the master unit.'''
-    server = 'https://{0}:{1}'.format(hookenv.unit_get('public-address'), 6443)
+    hacluster_vip = get_hacluster_ip_or_hostname()
+    if hacluster_vip:
+        address = hacluster_vip
+    else:
+        address = hookenv.unit_get('public-address')
+    server = 'https://{0}:{1}'.format(address, 6443)
     build_kubeconfig(server)
 
 
 @when('ceph-storage.available')
-def ceph_state_control(ceph_admin):
+def ceph_state_control():
     ''' Determine if we should remove the state that controls the re-render
     and execution of the ceph-relation-changed event because there
     are changes in the relationship data, and we should re-render any
     configs, keys, and/or service pre-reqs '''
 
+    ceph_admin = endpoint_from_flag('ceph-storage.available')
     ceph_relation_data = {
         'mon_hosts': ceph_admin.mon_hosts(),
         'fsid': ceph_admin.fsid(),
@@ -2066,14 +2116,12 @@ def keystone_config():
         # we basically just call the other things we need to update
         etcd = endpoint_from_flag('etcd.available')
         lb = endpoint_from_flag('loadbalancer.available')
-        ca = endpoint_from_flag('certificates.ca.available')
-        client = endpoint_from_flag('certificates.client.cert.available')
 
         configure_apiserver(etcd.get_connection_string())
         if lb:
-            loadbalancer_kubeconfig(lb, ca, client)
+            loadbalancer_kubeconfig()
         else:
-            create_self_config(ca, client)
+            create_self_config()
         generate_keystone_configmap()
         set_state('keystone.credentials.configured')
 
@@ -2157,3 +2205,59 @@ def _write_encryption_config():
             }],
         })
     )
+
+
+def get_hacluster_ip_or_hostname():
+    hacluster = endpoint_from_flag('ha.connected')
+    if hacluster:
+        vips = hookenv.config('ha-cluster-vip').split()
+        dns_record = hookenv.config('ha-cluster-dns')
+        if vips:
+            # each unit will pick one based on unit number
+            return vips[get_unit_number() % len(vips)]
+        else:
+            return dns_record
+
+    return None
+
+
+@when_any('config.changed.ha-cluster-vip', 'config.changed.ha-cluster-dns')
+def haconfig_changed():
+    clear_flag('hacluster-configured')
+
+
+@when('ha.connected')
+@when_not('hacluster-configured')
+def configure_hacluster():
+    for service in master_services:
+        daemon = 'snap.{}.daemon'.format(service)
+        add_service_to_hacluster(service, daemon)
+
+    # get a new cert
+    if (is_state('certificates.available') and
+            is_state('kube-api-endpoint.available')):
+        send_data()
+
+    # update workers
+    if (is_state('kube-api-endpoint.available')):
+        push_service_data()
+
+    set_flag('hacluster-configured')
+
+
+@when_not('ha.connected')
+@when('hacluster-configured')
+def remove_hacluster():
+    for service in master_services:
+        daemon = 'snap.{}.daemon'.format(service)
+        remove_service_from_hacluster(service, daemon)
+
+    # get a new cert
+    if (is_state('certificates.available') and
+            is_state('kube-api-endpoint.available')):
+        send_data()
+    # update workers
+    if (is_state('kube-api-endpoint.available')):
+        push_service_data()
+
+    clear_flag('hacluster-configured')
