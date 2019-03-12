@@ -43,6 +43,8 @@ requires:
     interface: public-address
   ceph-storage:
     interface: ceph-admin
+  ceph-client:
+    interface: ceph-client
   aws:
     interface: aws-integration
   gcp:

@@ -13,6 +13,7 @@ includes:
   - 'layer:vaultlocker'
   - 'layer:hacluster'
   - 'interface:ceph-admin'
+  - 'interface:ceph-client'
   - 'interface:etcd'
   - 'interface:http'
   - 'interface:kubernetes-cni'
