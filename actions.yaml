@@ -48,3 +48,5 @@ namespace-delete:
     - name
 upgrade:
     description: Upgrade the kubernetes snaps
+get-kubeconfig:
+  description: Retrieve Kubernetes cluster config, including credentials
