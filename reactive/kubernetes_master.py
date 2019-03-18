@@ -885,6 +885,7 @@ def configure_cdk_addons():
     dnsEnabled = str(hookenv.config('enable-kube-dns')).lower()
     metricsEnabled = str(hookenv.config('enable-metrics')).lower()
     default_storage = ''
+    dashboard_auth = str(hookenv.config('dashboard-auth')).lower()
     ceph = {}
     if (is_state('kubernetes-master.ceph.configured') and
             get_version('kube-apiserver') >= (1, 12)):
@@ -912,6 +913,12 @@ def configure_cdk_addons():
     else:
         keystoneEnabled = "false"
 
+    if dashboard_auth == 'auto':
+        if ks:
+            dashboard_auth = 'token'
+        else:
+            dashboard_auth = 'basic'
+
     args = [
         'arch=' + arch(),
         'dns-ip=' + get_deprecated_dns_ip(),
@@ -930,7 +937,8 @@ def configure_cdk_addons():
         'keystone-cert-file=' + keystone.get('cert', ''),
         'keystone-key-file=' + keystone.get('key', ''),
         'keystone-server-url=' + keystone.get('url', ''),
-        'keystone-server-ca=' + keystone.get('keystone-ca', '')
+        'keystone-server-ca=' + keystone.get('keystone-ca', ''),
+        'dashboard-auth=' + dashboard_auth
     ]
     check_call(['snap', 'set', 'cdk-addons'] + args)
     if not addons_ready():
