@@ -191,6 +191,13 @@ def check_for_upgrade_needed():
     if not auto_storage_backend and is_leader:
         leader_set(auto_storage_backend='etcd2')
 
+    if is_leader and not leader_get('auto_dns_provider'):
+        was_kube_dns = hookenv.config().previous('enable-kube-dns')
+        if was_kube_dns is True:
+            leader_set(auto_dns_provider='kube-dns')
+        elif was_kube_dns is False:
+            leader_set(auto_dns_provider='none')
+
 
 def add_rbac_roles():
     '''Update the known_tokens file with proper groups.'''
@@ -706,16 +713,17 @@ def etcd_data_change(etcd):
 @when('cdk-addons.configured')
 def send_cluster_dns_detail(kube_control):
     ''' Send cluster DNS info '''
-    enableKubeDNS = hookenv.config('enable-kube-dns')
-    dnsDomain = hookenv.config('dns_domain')
+    dns_provider = get_dns_provider()
+    dns_enabled = dns_provider != 'none'
+    dns_domain = hookenv.config('dns_domain')
     dns_ip = None
-    if enableKubeDNS:
+    if dns_enabled:
         try:
             dns_ip = get_dns_ip()
         except CalledProcessError:
-            hookenv.log("kubedns not ready yet")
+            hookenv.log("DNS addon service not ready yet")
             return
-    kube_control.set_dns(53, dnsDomain, dns_ip, enableKubeDNS)
+    kube_control.set_dns(53, dns_domain, dns_ip, dns_enabled)
 
 
 @when('kube-control.connected')
@@ -882,7 +890,7 @@ def configure_cdk_addons():
                  is_state('kubernetes-master.gpu.enabled'))
     registry = hookenv.config('addons-registry')
     dbEnabled = str(hookenv.config('enable-dashboard-addons')).lower()
-    dnsEnabled = str(hookenv.config('enable-kube-dns')).lower()
+    dnsProvider = get_dns_provider()
     metricsEnabled = str(hookenv.config('enable-metrics')).lower()
     default_storage = ''
     dashboard_auth = str(hookenv.config('dashboard-auth')).lower()
@@ -925,7 +933,6 @@ def configure_cdk_addons():
         'dns-domain=' + hookenv.config('dns_domain'),
         'registry=' + registry,
         'enable-dashboard=' + dbEnabled,
-        'enable-kube-dns=' + dnsEnabled,
         'enable-metrics=' + metricsEnabled,
         'enable-gpu=' + str(gpuEnable).lower(),
         'enable-ceph=' + cephEnabled,
@@ -940,6 +947,11 @@ def configure_cdk_addons():
         'keystone-server-ca=' + keystone.get('keystone-ca', ''),
         'dashboard-auth=' + dashboard_auth
     ]
+    if get_version('kube-apiserver') >= (1, 14):
+        args.append('dns-provider=' + dnsProvider)
+    else:
+        enableKubeDNS = dnsProvider == 'kube-dns'
+        args.append('enable-kube-dns=' + str(enableKubeDNS).lower())
     check_call(['snap', 'set', 'cdk-addons'] + args)
     if not addons_ready():
         remove_state('cdk-addons.configured')
@@ -2252,3 +2264,16 @@ def remove_hacluster():
         push_service_data()
 
     clear_flag('hacluster-configured')
+
+
+def get_dns_provider():
+    dns_provider = hookenv.config('dns-provider').lower()
+    if dns_provider == 'auto':
+        dns_provider = leader_get('auto_dns_provider')
+        if not dns_provider:
+            if get_version('kube-apiserver') >= (1, 14):
+                dns_provider = 'core-dns'
+            else:
+                dns_provider = 'kube-dns'
+    leader_set(auto_dns_provider=dns_provider)
+    return dns_provider

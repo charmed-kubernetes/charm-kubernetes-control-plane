@@ -51,10 +51,20 @@ options:
     type: boolean
     default: True
     description: Deploy the Kubernetes Dashboard and Heapster addons
-  enable-kube-dns:
-    type: boolean
-    default: True
-    description: Deploy kube-dns addon
+  dns-provider:
+    type: string
+    default: "auto"
+    description: |
+      DNS provider addon to use. Can be "auto", "core-dns", "kube-dns", or
+      "none".
+
+      CoreDNS is only supported on Kubernetes 1.14+.
+
+      When set to "auto", the behavior is as follows:
+      - New deployments of Kubernetes 1.14+ will use CoreDNS
+      - New deployments of Kubernetes 1.13 or older will use KubeDNS
+      - Upgraded deployments will continue to use whichever provider was
+      previously used.
   dns_domain:
     type: string
     default: cluster.local
