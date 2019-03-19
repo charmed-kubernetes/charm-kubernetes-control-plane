@@ -249,7 +249,7 @@ options:
   dashboard-auth:
     type: string
     description: |
-      Method of authentication for the Kubernetes dashboard. Options are auto, basic,
-      and token. If auto, basic used unless keystone is related to kubernetes-master in
-      which case token is used.
+      Method of authentication for the Kubernetes dashboard. Allowed values are "auto", 
+      "basic", and "token". If set to "auto", basic auth is used unless Keystone is 
+      related to kubernetes-master, in which case token auth is used.
     default: "auto"
