@@ -2270,6 +2270,8 @@ def get_dns_provider():
     dns_provider = hookenv.config('dns-provider').lower()
     if dns_provider == 'auto':
         dns_provider = leader_get('auto_dns_provider')
+        # On new deployments, the first time this is called, auto_dns_provider
+        # hasn't been set yet. We need to make a choice now.
         if not dns_provider:
             if get_version('kube-apiserver') >= (1, 14):
                 dns_provider = 'core-dns'
