@@ -784,8 +784,10 @@ def push_service_data():
         if vips:
             # each worker unit will pick one based on unit number
             kube_api.configure(6443, vips, vips)
-        else:
+        elif dns_record:
             kube_api.configure(6443, dns_record, dns_record)
+        else:
+            kube_api.configure(6443)
     else:
         kube_api.configure(6443)
 
@@ -828,7 +830,7 @@ def send_data():
         dns_record = hookenv.config('ha-cluster-dns')
         if vips:
             sans.extend(vips)
-        else:
+        elif dns_record:
             sans.append(dns_record)
     elif loadbalancer:
         # Get the list of loadbalancers from the relation object.
@@ -2218,7 +2220,7 @@ def get_hacluster_ip_or_hostname():
         if vips:
             # each unit will pick one based on unit number
             return vips[get_unit_number() % len(vips)]
-        else:
+        elif dns_record:
             return dns_record
 
     return None
