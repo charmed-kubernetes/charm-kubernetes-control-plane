@@ -511,6 +511,16 @@ def set_final_status():
         hookenv.status_set('blocked', msg)
         return
 
+    try:
+        get_dns_provider()
+    except InvalidDnsProvider as e:
+        if e.value == 'core-dns':
+            msg = 'dns-provider=core-dns requires k8s 1.14+'
+        else:
+            msg = 'dns-provider=%s is invalid' % e.value
+        hookenv.status_set('blocked', msg)
+        return
+
     if is_state('kubernetes-master.components.started'):
         # All services should be up and running at this point. Double-check...
         failing_services = master_services_down()
@@ -713,7 +723,11 @@ def etcd_data_change(etcd):
 @when('cdk-addons.configured')
 def send_cluster_dns_detail(kube_control):
     ''' Send cluster DNS info '''
-    dns_provider = get_dns_provider()
+    try:
+        dns_provider = get_dns_provider()
+    except InvalidDnsProvider:
+        hookenv.log(traceback.format_exc())
+        return
     dns_enabled = dns_provider != 'none'
     dns_domain = hookenv.config('dns_domain')
     dns_ip = None
@@ -892,7 +906,11 @@ def configure_cdk_addons():
                  is_state('kubernetes-master.gpu.enabled'))
     registry = hookenv.config('addons-registry')
     dbEnabled = str(hookenv.config('enable-dashboard-addons')).lower()
-    dnsProvider = get_dns_provider()
+    try:
+        dnsProvider = get_dns_provider()
+    except InvalidDnsProvider:
+        hookenv.log(traceback.format_exc())
+        return
     metricsEnabled = str(hookenv.config('enable-metrics')).lower()
     default_storage = ''
     dashboard_auth = str(hookenv.config('dashboard-auth')).lower()
@@ -2268,16 +2286,29 @@ def remove_hacluster():
     clear_flag('hacluster-configured')
 
 
+class InvalidDnsProvider(Exception):
+    def __init__(self, value):
+        self.value = value
+
+
 def get_dns_provider():
+    valid_dns_providers = ['auto', 'core-dns', 'kube-dns', 'none']
+    if get_version('kube-apiserver') < (1, 14):
+        valid_dns_providers.remove('core-dns')
+
     dns_provider = hookenv.config('dns-provider').lower()
+    if dns_provider not in valid_dns_providers:
+        raise InvalidDnsProvider(dns_provider)
+
     if dns_provider == 'auto':
         dns_provider = leader_get('auto_dns_provider')
         # On new deployments, the first time this is called, auto_dns_provider
         # hasn't been set yet. We need to make a choice now.
         if not dns_provider:
-            if get_version('kube-apiserver') >= (1, 14):
+            if 'core-dns' in valid_dns_providers:
                 dns_provider = 'core-dns'
             else:
                 dns_provider = 'kube-dns'
+
     leader_set(auto_dns_provider=dns_provider)
     return dns_provider
