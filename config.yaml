@@ -254,7 +254,8 @@ options:
   keystone-ssl-ca:
     type: string
     description: |
-      Path to Keystone certificate authority for securing communications to Keystone.
+      Keystone certificate authority encoded in base64 for securing communications to Keystone.
+      For example: `juju config kubernetes-master keystone-ssl-ca=$(base64 /path/to/ca.crt)`
     default: ""
   dashboard-auth:
     type: string
