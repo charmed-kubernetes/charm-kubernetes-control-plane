@@ -16,6 +16,7 @@ includes:
   - 'interface:ceph-client'
   - 'interface:etcd'
   - 'interface:http'
+  - 'interface:container-runtime'
   - 'interface:kubernetes-cni'
   - 'interface:kube-dns'
   - 'interface:kube-control'

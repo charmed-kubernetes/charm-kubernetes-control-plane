@@ -36,6 +36,9 @@ provides:
   cni:
     interface: kubernetes-cni
     scope: container
+  container-runtime:
+    interface: container-runtime
+    scope: container
 requires:
   etcd:
     interface: etcd
