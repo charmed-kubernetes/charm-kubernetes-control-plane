@@ -1912,12 +1912,10 @@ def create_cluster_tag():
 
 @when('leadership.set.cluster_tag',
       'kube-control.connected')
-@when_not('kubernetes-master.cluster-tag-sent')
 def send_cluster_tag():
     cluster_tag = leader_get('cluster_tag')
     kube_control = endpoint_from_flag('kube-control.connected')
     kube_control.set_cluster_tag(cluster_tag)
-    set_state('kubernetes-master.cluster-tag-sent')
 
 
 @when_not('kube-control.connected')
