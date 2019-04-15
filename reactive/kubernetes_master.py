@@ -933,9 +933,9 @@ def configure_cdk_addons():
         keystoneEnabled = "true"
         keystone['cert'] = '/root/cdk/server.crt'
         keystone['key'] = '/root/cdk/server.key'
-        keystone['url'] = '{}://{}:{}/v{}'.format(ks.auth_protocol(),
-                                                  ks.auth_host(),
-                                                  ks.auth_port(),
+        keystone['url'] = '{}://{}:{}/v{}'.format(ks.credentials_protocol(),
+                                                  ks.credentials_host(),
+                                                  ks.credentials_port(),
                                                   ks.api_version())
         keystone['keystone-ca'] = hookenv.config('keystone-ssl-ca')
     else:
@@ -1912,12 +1912,10 @@ def create_cluster_tag():
 
 @when('leadership.set.cluster_tag',
       'kube-control.connected')
-@when_not('kubernetes-master.cluster-tag-sent')
 def send_cluster_tag():
     cluster_tag = leader_get('cluster_tag')
     kube_control = endpoint_from_flag('kube-control.connected')
     kube_control.set_cluster_tag(cluster_tag)
-    set_state('kubernetes-master.cluster-tag-sent')
 
 
 @when_not('kube-control.connected')
@@ -2128,9 +2126,9 @@ def keystone_config():
     # first, we have to have the service set up before we can render this stuff
     ks = endpoint_from_flag('keystone-credentials.available.auth')
     data = {
-        'host': ks.auth_host(),
-        'proto': ks.auth_protocol(),
-        'port': ks.auth_port(),
+        'host': ks.credentials_host(),
+        'proto': ks.credentials_protocol(),
+        'port': ks.credentials_port(),
         'version': ks.api_version()
     }
     if data_changed('keystone', data):
