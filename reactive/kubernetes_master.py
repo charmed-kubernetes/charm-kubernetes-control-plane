@@ -835,21 +835,27 @@ def send_data():
         'kubernetes.default.svc.{0}'.format(domain)
     ]
 
-    loadbalancer = endpoint_from_flag('loadbalancer.available')
-    # we don't use get_hacluster_ip_or_hostname only here because
-    # we want the cert to be valid for all the vips
-    hacluster = endpoint_from_flag('ha.connected')
-    if hacluster:
-        vips = hookenv.config('ha-cluster-vip').split()
-        dns_record = hookenv.config('ha-cluster-dns')
-        if vips:
-            sans.extend(vips)
-        elif dns_record:
-            sans.append(dns_record)
-    elif loadbalancer:
-        # Get the list of loadbalancers from the relation object.
-        hosts = loadbalancer.get_addresses_ports()
-        sans.extend([host.get('public-address') for host in hosts])
+    # if the user gave us IPs for the load balancer, assume they know
+    # what they are talking about and use that instead of our information.
+    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
+    if forced_lb_ips:
+        sans.extend(forced_lb_ips)
+    else:
+        loadbalancer = endpoint_from_flag('loadbalancer.available')
+        # we don't use get_hacluster_ip_or_hostname only here because
+        # we want the cert to be valid for all the vips
+        hacluster = endpoint_from_flag('ha.connected')
+        if hacluster:
+            vips = hookenv.config('ha-cluster-vip').split()
+            dns_record = hookenv.config('ha-cluster-dns')
+            if vips:
+                sans.extend(vips)
+            elif dns_record:
+                sans.append(dns_record)
+        elif loadbalancer:
+            # Get the list of loadbalancers from the relation object.
+            hosts = loadbalancer.get_addresses_ports()
+            sans.extend([host.get('public-address') for host in hosts])
 
     # maybe they have extra names they want as SANs
     extra_sans = hookenv.config('extra_sans')
@@ -1008,12 +1014,18 @@ def loadbalancer_kubeconfig():
     hosts = loadbalancer.get_addresses_ports()
     # if there is a hacluster relation, use that vip/dns for the kubeconfig
     hacluster_vip = get_hacluster_ip_or_hostname()
-    if hacluster_vip:
-        address = hacluster_vip
+    # if the user gave us IPs for the load balancer, assume they know
+    # what they are talking about and use that instead of our information.
+    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
+    if forced_lb_ips:
+        address = forced_lb_ips[get_unit_number() % len(forced_lb_ips)]
     else:
-        # Get the public address of the first loadbalancer so
-        # users can access the cluster.
-        address = hosts[0].get('public-address')
+        if hacluster_vip:
+            address = hacluster_vip
+        else:
+            # Get the public address of the first loadbalancer so
+            # users can access the cluster.
+            address = hosts[0].get('public-address')
 
     # Get the port of the loadbalancer so users can access the cluster.
     port = hosts[0].get('port')
@@ -1026,11 +1038,17 @@ def loadbalancer_kubeconfig():
 @when_not('loadbalancer.available')
 def create_self_config():
     '''Create a kubernetes configuration for the master unit.'''
-    hacluster_vip = get_hacluster_ip_or_hostname()
-    if hacluster_vip:
-        address = hacluster_vip
+    # if the user gave us IPs for the load balancer, assume they know
+    # what they are talking about and use that instead of our information.
+    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
+    if forced_lb_ips:
+        address = forced_lb_ips[get_unit_number() % len(forced_lb_ips)]
     else:
-        address = hookenv.unit_get('public-address')
+        hacluster_vip = get_hacluster_ip_or_hostname()
+        if hacluster_vip:
+            address = hacluster_vip
+        else:
+            address = hookenv.unit_get('public-address')
     server = 'https://{0}:{1}'.format(address, 6443)
     build_kubeconfig(server)
 
