@@ -791,17 +791,25 @@ def push_service_data():
     # the worker charm will be related to the loadbalancer in that case and
     # get the information from there instead of the kubernetes-master charm.
 
-    hacluster = endpoint_from_flag('ha.connected')
-    if hacluster:
-        vips = hookenv.config('ha-cluster-vip').split()
-        dns_record = hookenv.config('ha-cluster-dns')
-        if vips:
-            # each worker unit will pick one based on unit number
-            kube_api.configure(6443, vips, vips)
-        elif dns_record:
-            kube_api.configure(6443, dns_record, dns_record)
-        else:
-            kube_api.configure(6443)
+    # if the user gave us IPs for the load balancer, assume they know
+    # what they are talking about and use that instead of our information.
+    address = None
+    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
+    if forced_lb_ips:
+        address = forced_lb_ips[get_unit_number() % len(forced_lb_ips)]
+    else:
+        hacluster = endpoint_from_flag('ha.connected')
+        if hacluster:
+            vips = hookenv.config('ha-cluster-vip').split()
+            dns_record = hookenv.config('ha-cluster-dns')
+            if vips:
+                # each worker unit will pick one based on unit number
+                address = vips
+            elif dns_record:
+                address = dns_record
+
+    if address:
+        kube_api.configure(6443, address, address)
     else:
         kube_api.configure(6443)
 
@@ -1023,6 +1031,11 @@ def loadbalancer_kubeconfig():
         if hacluster_vip:
             address = hacluster_vip
         else:
+            if len(hosts) < 1:
+                # oops...hopefully we just lost our relation.
+                # skip this for now.
+            return
+
             # Get the public address of the first loadbalancer so
             # users can access the cluster.
             address = hosts[0].get('public-address')
@@ -1124,7 +1137,6 @@ def ceph_storage_pool():
                     e
                 )
             )
-
 
     set_state('kubernetes-master.ceph.pool.created')
 
@@ -2328,3 +2340,15 @@ def get_dns_provider():
 
     leader_set(auto_dns_provider=dns_provider)
     return dns_provider
+
+
+@when('config.changed.loadbalancer-ips')
+def vip_changed():
+    # get a new cert
+    if (is_state('certificates.available') and
+            is_state('kube-api-endpoint.available')):
+        send_data()
+
+    # update workers
+    if (is_state('kube-api-endpoint.available')):
+        push_service_data()
