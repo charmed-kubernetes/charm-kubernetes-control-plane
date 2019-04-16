@@ -795,18 +795,17 @@ def push_service_data():
     # what they are talking about and use that instead of our information.
     address = None
     forced_lb_ips = hookenv.config('loadbalancer-ips').split()
+    hacluster = endpoint_from_flag('ha.connected')
     if forced_lb_ips:
-        address = forced_lb_ips[get_unit_number() % len(forced_lb_ips)]
-    else:
-        hacluster = endpoint_from_flag('ha.connected')
-        if hacluster:
-            vips = hookenv.config('ha-cluster-vip').split()
-            dns_record = hookenv.config('ha-cluster-dns')
-            if vips:
-                # each worker unit will pick one based on unit number
-                address = vips
-            elif dns_record:
-                address = dns_record
+        address = forced_lb_ips
+    elif hacluster:
+        vips = hookenv.config('ha-cluster-vip').split()
+        dns_record = hookenv.config('ha-cluster-dns')
+        if vips:
+            # each worker unit will pick one based on unit number
+            address = vips
+        elif dns_record:
+            address = dns_record
 
     if address:
         kube_api.configure(6443, address, address)
