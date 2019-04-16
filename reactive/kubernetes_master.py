@@ -1034,7 +1034,7 @@ def loadbalancer_kubeconfig():
             if len(hosts) < 1:
                 # oops...hopefully we just lost our relation.
                 # skip this for now.
-            return
+                return
 
             # Get the public address of the first loadbalancer so
             # users can access the cluster.

@@ -271,5 +271,9 @@ options:
       These can be either virtual IP addresses that are floated in front of the control
       plane or the IP of a loadbalancer such as an F5. The workers will alternate IP
       addresses from this list to distribute load. If you have 2 IPs and 4 workers,
-      each IP will be used by 2 workers.
+      each IP will be used by 2 workers. Note that this will only work if there is a
+      relation between kubernetes-master:kube-api-endpoint and
+      kubernetes-worker:kube-api-endpoint. This is the case if kubeapi-load-balancer
+      is not in use. If it is, use the loadbalancer-ips configuration variable on
+      the kubeapi-load-balancer charm.
     default: ""
