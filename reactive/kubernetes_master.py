@@ -577,7 +577,7 @@ def set_final_status():
         return
 
     if is_state('ceph-storage.available') and \
-            is_state('ceph-storage.available') and \
+            is_state('ceph-client.connected') and \
             is_state('kubernetes-master.privileged') and \
             not is_state('kubernetes-master.ceph.configured'):
 
@@ -915,10 +915,11 @@ def configure_cdk_addons():
     default_storage = ''
     dashboard_auth = str(hookenv.config('dashboard-auth')).lower()
     ceph = {}
-    if (is_state('kubernetes-master.ceph.configured') and
+    ceph_ep = endpoint_from_flag('ceph-storage.available')
+    if (ceph_ep and ceph_ep.key() and
+            is_state('kubernetes-master.ceph.configured') and
             get_version('kube-apiserver') >= (1, 12)):
         cephEnabled = "true"
-        ceph_ep = endpoint_from_flag('ceph-storage.available')
         b64_ceph_key = base64.b64encode(ceph_ep.key().encode('utf-8'))
         ceph['admin_key'] = b64_ceph_key.decode('ascii')
         ceph['kubernetes_key'] = b64_ceph_key.decode('ascii')
@@ -1056,6 +1057,23 @@ def ceph_state_control():
         remove_state('kubernetes-master.ceph.configured')
 
 
+@when('kubernetes-master.ceph.configured')
+@when_not('ceph-storage.available')
+def ceph_storage_gone():
+    # ceph has left, so clean up
+    reconfigure_apiserver(endpoint_from_flag('etcd.available'))
+
+    remove_state('kubernetes-master.ceph.configured')
+
+
+@when('kubernetes-master.ceph.pools.created')
+@when_not('ceph-client.connected')
+def ceph_client_gone():
+    # can't nuke pools, but we can't be certain that they
+    # are still made when a new relation comes in
+    remove_state('kubernetes-master.ceph.pools.created')
+
+
 @when('etcd.available')
 @when('ceph-storage.available')
 @when_not('kubernetes-master.privileged')
@@ -1106,7 +1124,6 @@ def ceph_storage_pool():
                     e
                 )
             )
-
 
     set_state('kubernetes-master.ceph.pool.created')
 
