@@ -1030,11 +1030,6 @@ def loadbalancer_kubeconfig():
         if hacluster_vip:
             address = hacluster_vip
         else:
-            if len(hosts) < 1:
-                # oops...hopefully we just lost our relation.
-                # skip this for now.
-                return
-
             # Get the public address of the first loadbalancer so
             # users can access the cluster.
             address = hosts[0].get('public-address')
@@ -2339,15 +2334,3 @@ def get_dns_provider():
 
     leader_set(auto_dns_provider=dns_provider)
     return dns_provider
-
-
-@when('config.changed.loadbalancer-ips')
-def vip_changed():
-    # get a new cert
-    if (is_state('certificates.available') and
-            is_state('kube-api-endpoint.available')):
-        send_data()
-
-    # update workers
-    if (is_state('kube-api-endpoint.available')):
-        push_service_data()
