@@ -308,7 +308,6 @@ def install_snaps():
     calculate_and_store_resource_checksums(checksum_prefix, snap_resources)
     db.set('snap.resources.fingerprint.initialised', True)
     set_state('kubernetes-master.snaps.installed')
-    remove_state('kubernetes-master.components.started')
 
 
 @when('config.changed.client_password', 'leadership.is_leader')
