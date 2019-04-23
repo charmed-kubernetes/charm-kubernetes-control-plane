@@ -1207,29 +1207,16 @@ def ceph_storage_pool():
     hookenv.log('Creating Ceph pools.')
     ceph_client = endpoint_from_flag('ceph-client.connected')
 
-    pools = [
-        'xfs-pool',
-        'ext4-pool'
-    ]
+    pools = ['xfs-pool', 'ext4-pool']
 
-    for pool in pools:
+    try:
+        hookenv.status_set('maintenance', 'Creating ceph pools.')
+        ceph_client.create_pools(names=pools, replicas=3)
+    except Exception as e:
         hookenv.status_set(
-            'maintenance',
-            'Creating {} pool.'.format(pool)
+            'blocked',
+            'Error creating pools: {}.'.format(e)
         )
-        try:
-            ceph_client.create_pool(
-                name=pool,
-                replicas=3
-            )
-        except Exception as e:
-            hookenv.status_set(
-                'blocked',
-                'Error creating {} pool: {}.'.format(
-                    pool,
-                    e
-                )
-            )
 
     set_state('kubernetes-master.ceph.pool.created')
 
