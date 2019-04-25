@@ -53,9 +53,7 @@ from charmhelpers.core import host
 from charmhelpers.core import unitdata
 from charmhelpers.core.host import service_stop
 from charmhelpers.core.templating import render
-from charmhelpers.fetch import apt_install
 from charmhelpers.contrib.charmsupport import nrpe
-from charmhelpers.contrib.storage.linux.ceph import ReplicatedPool
 
 from charms.layer.hacluster import add_service_to_hacluster
 from charms.layer.hacluster import remove_service_from_hacluster
