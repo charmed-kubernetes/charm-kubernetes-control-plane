@@ -1736,18 +1736,18 @@ def setup_basic_auth(password=None, username='admin', uid='admin',
     # If we have an existing line for this username, update it, leaving
     # lines for other users unchanged.
     with fileinput.input(htaccess, inplace=True) as f:
-        user_written = False
+        wrote_user_line = False
 
         for line in f:
             line_user, line_uid = line.split(',')[1:3]
             if (line_user, line_uid) == (username, uid):
                 print(newline)
-                user_written = True
+                wrote_user_line = True
             else:
                 print(line.strip())
 
     # If we didn't find an existing line for this username, add one.
-    if not user_written:
+    if not wrote_user_line:
         with open(htaccess, 'a') as f:
             f.write(newline)
 
