@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import base64
+import fileinput
 import os
 import re
 import random
@@ -1722,19 +1723,35 @@ def configure_scheduler():
 
 def setup_basic_auth(password=None, username='admin', uid='admin',
                      groups=None):
-    '''Create the htacces file and the tokens.'''
+    '''Add or update an entry in /root/cdk/basic_auth.csv.'''
     root_cdk = '/root/cdk'
     if not os.path.isdir(root_cdk):
         os.makedirs(root_cdk)
     htaccess = os.path.join(root_cdk, 'basic_auth.csv')
     if not password:
         password = token_generator()
-    with open(htaccess, 'w') as stream:
-        if groups:
-            stream.write('{0},{1},{2},"{3}"'.format(password,
-                                                    username, uid, groups))
-        else:
-            stream.write('{0},{1},{2}'.format(password, username, uid))
+
+    newline = '{0},{1},{2}'.format(password, username, uid)
+    if groups:
+        newline += ',"{0}"'.format(groups)
+
+    # If we have an existing line for this username, update it, leaving
+    # lines for other users unchanged.
+    with fileinput.input(htaccess, inplace=True) as f:
+        user_written = False
+
+        for line in f:
+            line_user, line_uid = line.split(',')[1:3]
+            if (line_user, line_uid) == (username, uid):
+                print(newline)
+                user_written = True
+            else:
+                print(line.strip())
+
+    # If we didn't find an existing line for this username, add one.
+    if not user_written:
+        with open(htaccess, 'a') as f:
+            f.write(newline)
 
 
 def setup_tokens(token, username, user, groups=None):
