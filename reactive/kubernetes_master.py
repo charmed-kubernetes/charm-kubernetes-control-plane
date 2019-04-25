@@ -1518,7 +1518,7 @@ def configure_apiserver(etcd_connection_string):
     api_opts['token-auth-file'] = '/root/cdk/known_tokens.csv'
     api_opts['service-account-key-file'] = '/root/cdk/serviceaccount.key'
     api_opts['kubelet-preferred-address-types'] = \
-        '[InternalIP,Hostname,InternalDNS,ExternalDNS,ExternalIP]'
+        'InternalIP,Hostname,InternalDNS,ExternalDNS,ExternalIP'
     api_opts['advertise-address'] = get_ingress_address('kube-control')
 
     etcd_dir = '/root/cdk/etcd'
