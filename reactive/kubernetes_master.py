@@ -52,7 +52,7 @@ from charms.layer import vault_kv
 from charmhelpers.core import hookenv
 from charmhelpers.core import host
 from charmhelpers.core import unitdata
-from charmhelpers.core.host import service_stop
+from charmhelpers.core.host import service_stop, service_resume
 from charmhelpers.core.templating import render
 from charmhelpers.fetch import apt_install
 from charmhelpers.contrib.charmsupport import nrpe
@@ -645,6 +645,34 @@ def add_systemd_restart_always():
         copyfile(template, '{}/always-restart.conf'.format(dest_dir))
 
 
+def add_systemd_file_watcher():
+    """Setup systemd file-watcher service.
+
+    This service watches these files for changes:
+
+    /root/cdk/basic_auth.csv
+    /root/cdk/known_tokens.csv
+    /root/cdk/serviceaccount.key
+
+    If a file is changed, the service uses juju-run to invoke a script in a
+    hook context on this unit. If this unit is the leader, the script will
+    call leader-set to distribute the contents of these files to the
+    non-leaders so they can sync their local copies to match.
+
+    """
+    render('cdk.master.leader.file-watcher.sh',
+        '/usr/local/sbin/cdk.master.leader.file-watcher.sh',
+        {}, perms=0o777)
+    render('cdk.master.leader.file-watcher.service',
+        '/etc/systemd/system/cdk.master.leader.file-watcher.service',
+        {'unit': hookenv.local_unit()}, perms=0o644)
+    render('cdk.master.leader.file-watcher.path',
+        '/etc/systemd/system/cdk.master.leader.file-watcher.path',
+        {}, perms=0o644)
+    service_resume('cdk.master.leader.file-watcher.service')
+    service_resume('cdk.master.leader.file-watcher.path')
+
+
 @when('etcd.available', 'tls_client.certs.saved',
       'authentication.setup',
       'leadership.set.auto_storage_backend',
@@ -668,14 +696,10 @@ def start_master():
     # https://github.com/kubernetes/kubernetes/issues/43461
     handle_etcd_relation(etcd)
 
-    # make all services restart all the time
+    # Set up additional systemd services
     add_systemd_restart_always()
-
-    # increase file limit size
     add_systemd_file_limit()
-
-    # systemctl needs to pick up the changes
-    # from the last 2 commands.
+    add_systemd_file_watcher()
     check_call(['systemctl', 'daemon-reload'])
 
     # Add CLI options to all components
