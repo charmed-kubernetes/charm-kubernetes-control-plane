@@ -15,7 +15,7 @@
 # limitations under the License.
 
 import base64
-import fileinput
+import csv
 import os
 import re
 import random
@@ -674,7 +674,6 @@ def add_systemd_file_watcher():
         'cdk.master.leader.file-watcher.path',
         '/etc/systemd/system/cdk.master.leader.file-watcher.path',
         {}, perms=0o644)
-    service_resume('cdk.master.leader.file-watcher.service')
     service_resume('cdk.master.leader.file-watcher.path')
 
 
@@ -1751,34 +1750,28 @@ def configure_scheduler():
 def setup_basic_auth(password=None, username='admin', uid='admin',
                      groups=None):
     '''Add or update an entry in /root/cdk/basic_auth.csv.'''
-    root_cdk = '/root/cdk'
-    if not os.path.isdir(root_cdk):
-        os.makedirs(root_cdk)
-    htaccess = os.path.join(root_cdk, 'basic_auth.csv')
+    htaccess = Path('/root/cdk/basic_auth.csv')
+    htaccess.parent.mkdir(parents=True, exist_ok=True)
+
     if not password:
         password = token_generator()
 
-    newline = '{0},{1},{2}'.format(password, username, uid)
-    if groups:
-        newline += ',"{0}"'.format(groups)
+    new_row = [password, username, uid] + ([groups] if groups else [])
 
-    # If we have an existing line for this username, update it, leaving
-    # lines for other users unchanged.
-    with fileinput.input(htaccess, inplace=True) as f:
-        wrote_user_line = False
+    with htaccess.open('r') as f:
+        rows = list(csv.reader(f))
 
-        for line in f:
-            line_user, line_uid = line.split(',')[1:3]
-            if (line_user, line_uid) == (username, uid):
-                print(newline)
-                wrote_user_line = True
-            else:
-                print(line.strip())
+    for row in rows:
+        if row[1] == username or row[2] == uid:
+            # update existing entry based on username or uid
+            row[:] = new_row
+            break
+    else:
+        # append new entry
+        rows.append(new_row)
 
-    # If we didn't find an existing line for this username, add one.
-    if not wrote_user_line:
-        with open(htaccess, 'a') as f:
-            f.write(newline)
+    with htaccess.open('w') as f:
+        csv.writer(f).writerows(rows)
 
 
 def setup_tokens(token, username, user, groups=None):
