@@ -660,13 +660,16 @@ def add_systemd_file_watcher():
     non-leaders so they can sync their local copies to match.
 
     """
-    render('cdk.master.leader.file-watcher.sh',
+    render(
+        'cdk.master.leader.file-watcher.sh',
         '/usr/local/sbin/cdk.master.leader.file-watcher.sh',
         {}, perms=0o777)
-    render('cdk.master.leader.file-watcher.service',
+    render(
+        'cdk.master.leader.file-watcher.service',
         '/etc/systemd/system/cdk.master.leader.file-watcher.service',
         {'unit': hookenv.local_unit()}, perms=0o644)
-    render('cdk.master.leader.file-watcher.path',
+    render(
+        'cdk.master.leader.file-watcher.path',
         '/etc/systemd/system/cdk.master.leader.file-watcher.path',
         {}, perms=0o644)
     service_resume('cdk.master.leader.file-watcher.service')
