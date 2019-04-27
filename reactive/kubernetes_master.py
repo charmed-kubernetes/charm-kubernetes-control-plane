@@ -1753,8 +1753,11 @@ def setup_basic_auth(password=None, username='admin', uid='admin',
 
     new_row = [password, username, uid] + ([groups] if groups else [])
 
-    with htaccess.open('r') as f:
-        rows = list(csv.reader(f))
+    try:
+        with htaccess.open('r') as f:
+            rows = list(csv.reader(f))
+    except FileNotFoundError:
+        rows = []
 
     for row in rows:
         if row[1] == username or row[2] == uid:
