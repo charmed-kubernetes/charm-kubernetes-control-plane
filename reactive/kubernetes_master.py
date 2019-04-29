@@ -1657,9 +1657,6 @@ def configure_apiserver(etcd_connection_string):
     elif is_state('endpoint.azure.ready'):
         api_opts['cloud-provider'] = 'azure'
         api_opts['cloud-config'] = str(api_cloud_config_path)
-    else:
-        api_opts['cloud-provider'] = ''
-        api_opts['cloud-config'] = ''
 
     audit_root = '/root/cdk/audit'
     os.makedirs(audit_root, exist_ok=True)
@@ -1725,9 +1722,6 @@ def configure_controller_manager():
     elif is_state('endpoint.azure.ready'):
         controller_opts['cloud-provider'] = 'azure'
         controller_opts['cloud-config'] = str(cm_cloud_config_path)
-    else:
-        controller_opts['cloud-provider'] = ''
-        controller_opts['cloud-config'] = ''
 
     configure_kubernetes_service(configure_prefix, 'kube-controller-manager',
                                  controller_opts,
