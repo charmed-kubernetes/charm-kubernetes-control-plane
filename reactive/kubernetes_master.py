@@ -2046,11 +2046,17 @@ def request_integration():
            'endpoint.openstack.joined',
            'endpoint.vsphere.joined',
            'endpoint.azure.joined')
+@when_any('kubernetes-master.cloud.pending',
+          'kubernetes-master.cloud.request-sent',
+          'kubernetes-master.cloud.blocked',
+          'kubernetes-master.cloud.ready')
 def clear_cloud_flags():
     remove_state('kubernetes-master.cloud.pending')
     remove_state('kubernetes-master.cloud.request-sent')
     remove_state('kubernetes-master.cloud.blocked')
     remove_state('kubernetes-master.cloud.ready')
+    _kick_apiserver()
+    _kick_controller_manager()
 
 
 @when_any('endpoint.aws.ready',
@@ -2162,6 +2168,11 @@ def _kick_apiserver():
     if is_flag_set('kubernetes-master.components.started'):
         etcd = endpoint_from_flag('etcd.available')
         configure_apiserver(etcd.get_connection_string())
+
+
+def _kick_controller_manager():
+    if is_flag_set('kubernetes-master.components.started'):
+        configure_controller_manager()
 
 
 @when('keystone.credentials.configured',
