@@ -2052,6 +2052,10 @@ def request_integration():
            'endpoint.openstack.joined',
            'endpoint.vsphere.joined',
            'endpoint.azure.joined')
+@when_any('kubernetes-master.cloud.pending',
+          'kubernetes-master.cloud.request-sent',
+          'kubernetes-master.cloud.blocked',
+          'kubernetes-master.cloud.ready')
 def clear_cloud_flags():
     remove_state('kubernetes-master.cloud.pending')
     remove_state('kubernetes-master.cloud.request-sent')
