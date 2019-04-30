@@ -20,6 +20,10 @@ metrics:
     type: gauge
     description: number of kubernetes nodes
     command: /snap/bin/kubectl get nodes | tail -n+2 | wc -l
+  nodes-gpu:
+    type: gauge
+    description: number of gpu-enabled kubernetes nodes
+    command: /snap/bin/kubectl get nodes -l gpu=true -o name | wc -l
   persistentvolume:
     type: gauge
     description: number of pv
