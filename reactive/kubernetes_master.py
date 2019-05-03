@@ -2315,10 +2315,6 @@ def haconfig_changed():
 @when('ha.connected')
 @when_not('hacluster-configured')
 def configure_hacluster():
-    for service in master_services:
-        daemon = 'snap.{}.daemon'.format(service)
-        add_service_to_hacluster(service, daemon)
-
     # get a new cert
     if (is_state('certificates.available') and
             is_state('kube-api-endpoint.available')):
@@ -2334,10 +2330,6 @@ def configure_hacluster():
 @when_not('ha.connected')
 @when('hacluster-configured')
 def remove_hacluster():
-    for service in master_services:
-        daemon = 'snap.{}.daemon'.format(service)
-        remove_service_from_hacluster(service, daemon)
-
     # get a new cert
     if (is_state('certificates.available') and
             is_state('kube-api-endpoint.available')):
