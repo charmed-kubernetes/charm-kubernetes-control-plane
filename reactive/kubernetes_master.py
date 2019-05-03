@@ -881,7 +881,7 @@ def send_data():
         sans.extend(extra_sans.split())
 
     # Request a server cert with this information.
-    tls_client.request_server_cert(common_name, sans,
+    tls_client.request_server_cert(common_name, sorted(set(sans)),
                                    crt_path=server_crt_path,
                                    key_path=server_key_path)
 
