@@ -43,10 +43,6 @@ options:
       Audit webhook config passed to kube-apiserver via --audit-webhook-config-file.
       For more info, please refer to the upstream documentation at
       https://kubernetes.io/docs/tasks/debug-application-cluster/audit/
-  addons-registry:
-    type: string
-    default: ""
-    description: Specify the docker registry to use when applying addons
   enable-dashboard-addons:
     type: boolean
     default: True
@@ -264,3 +260,10 @@ options:
       "basic", and "token". If set to "auto", basic auth is used unless Keystone is 
       related to kubernetes-master, in which case token auth is used.
     default: "auto"
+  image-registry:
+    type: string
+    description: |
+      Container image registry to use for CDK. This includes addons like the Kubernetes dashboard,
+      metrics server, ingress, and dns along with impacting the source location for the pause
+      container and default backend image.
+    default: "http://image-registry.canonical.com:5000/cdk"

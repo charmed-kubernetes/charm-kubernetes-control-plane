@@ -164,6 +164,11 @@ def check_for_upgrade_needed():
     # to old ceph on Kubernetes 1.10 or 1.11
     remove_state('kubernetes-master.ceph.configured')
 
+    original_registry = hookenv.config().previous('addons-registry')
+    hookenv.log('mwilson: addons-registry is "{}"'.format(original_registry))
+    if original_registry:
+        hookenv.config()['image-registry'] = original_registry
+
     migrate_from_pre_snaps()
     maybe_install_kube_proxy()
     update_certificates()
@@ -928,7 +933,7 @@ def configure_cdk_addons():
     gpuEnable = (get_version('kube-apiserver') >= (1, 9) and
                  load_gpu_plugin == "auto" and
                  is_state('kubernetes-master.gpu.enabled'))
-    registry = hookenv.config('addons-registry')
+    registry = hookenv.config('image-registry')
     dbEnabled = str(hookenv.config('enable-dashboard-addons')).lower()
     try:
         dnsProvider = get_dns_provider()
@@ -2375,3 +2380,18 @@ def get_dns_provider():
 
     leader_set(auto_dns_provider=dns_provider)
     return dns_provider
+
+
+@when('kube-control.connected')
+@when_not('kubernetes-master.sent-registry')
+def send_registry_location():
+    registry_location = hookenv.config('image-registry')
+    kube_control = endpoint_from_flag('kube-control.connected')
+    kube_control.set_registry_location(registry_location)
+    set_flag('kubernetes-master.sent-registry')
+
+
+@when('kube-control.connected')
+@when('config.changed.image-registry')
+def send_new_registry_location():
+    clear_flag('kubernetes-master.sent-registry')
