@@ -58,6 +58,10 @@ requires:
   keystone-credentials:
     interface: keystone-credentials
 resources:
+  core:
+    type: file
+    filename: core.snap
+    description: core snap
   kubectl:
     type: file
     filename: kubectl.snap
