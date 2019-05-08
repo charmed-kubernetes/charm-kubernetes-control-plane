@@ -292,6 +292,8 @@ def do_upgrade():
 
 def install_snaps():
     channel = hookenv.config('channel')
+    hookenv.status_set('maintenance', 'Installing core snap')
+    snap.install('core')
     hookenv.status_set('maintenance', 'Installing kubectl snap')
     snap.install('kubectl', channel=channel, classic=True)
     hookenv.status_set('maintenance', 'Installing kube-apiserver snap')
