@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import base64
+import csv
 import os
 import re
 import random
@@ -51,11 +52,9 @@ from charms.layer import vault_kv
 from charmhelpers.core import hookenv
 from charmhelpers.core import host
 from charmhelpers.core import unitdata
-from charmhelpers.core.host import service_stop
+from charmhelpers.core.host import service_stop, service_resume
 from charmhelpers.core.templating import render
-from charmhelpers.fetch import apt_install
 from charmhelpers.contrib.charmsupport import nrpe
-from charmhelpers.contrib.storage.linux.ceph import ReplicatedPool
 
 from charms.layer.hacluster import add_service_to_hacluster
 from charms.layer.hacluster import remove_service_from_hacluster
@@ -291,6 +290,8 @@ def do_upgrade():
 
 def install_snaps():
     channel = hookenv.config('channel')
+    hookenv.status_set('maintenance', 'Installing core snap')
+    snap.install('core')
     hookenv.status_set('maintenance', 'Installing kubectl snap')
     snap.install('kubectl', channel=channel, classic=True)
     hookenv.status_set('maintenance', 'Installing kube-apiserver snap')
@@ -643,6 +644,36 @@ def add_systemd_restart_always():
         copyfile(template, '{}/always-restart.conf'.format(dest_dir))
 
 
+def add_systemd_file_watcher():
+    """Setup systemd file-watcher service.
+
+    This service watches these files for changes:
+
+    /root/cdk/basic_auth.csv
+    /root/cdk/known_tokens.csv
+    /root/cdk/serviceaccount.key
+
+    If a file is changed, the service uses juju-run to invoke a script in a
+    hook context on this unit. If this unit is the leader, the script will
+    call leader-set to distribute the contents of these files to the
+    non-leaders so they can sync their local copies to match.
+
+    """
+    render(
+        'cdk.master.leader.file-watcher.sh',
+        '/usr/local/sbin/cdk.master.leader.file-watcher.sh',
+        {}, perms=0o777)
+    render(
+        'cdk.master.leader.file-watcher.service',
+        '/etc/systemd/system/cdk.master.leader.file-watcher.service',
+        {'unit': hookenv.local_unit()}, perms=0o644)
+    render(
+        'cdk.master.leader.file-watcher.path',
+        '/etc/systemd/system/cdk.master.leader.file-watcher.path',
+        {}, perms=0o644)
+    service_resume('cdk.master.leader.file-watcher.path')
+
+
 @when('etcd.available', 'tls_client.certs.saved',
       'authentication.setup',
       'leadership.set.auto_storage_backend',
@@ -666,14 +697,10 @@ def start_master():
     # https://github.com/kubernetes/kubernetes/issues/43461
     handle_etcd_relation(etcd)
 
-    # make all services restart all the time
+    # Set up additional systemd services
     add_systemd_restart_always()
-
-    # increase file limit size
     add_systemd_file_limit()
-
-    # systemctl needs to pick up the changes
-    # from the last 2 commands.
+    add_systemd_file_watcher()
     check_call(['systemctl', 'daemon-reload'])
 
     # Add CLI options to all components
@@ -856,7 +883,7 @@ def send_data():
         sans.extend(extra_sans.split())
 
     # Request a server cert with this information.
-    tls_client.request_server_cert(common_name, sans,
+    tls_client.request_server_cert(common_name, sorted(set(sans)),
                                    crt_path=server_crt_path,
                                    key_path=server_key_path)
 
@@ -1719,19 +1746,32 @@ def configure_scheduler():
 
 def setup_basic_auth(password=None, username='admin', uid='admin',
                      groups=None):
-    '''Create the htacces file and the tokens.'''
-    root_cdk = '/root/cdk'
-    if not os.path.isdir(root_cdk):
-        os.makedirs(root_cdk)
-    htaccess = os.path.join(root_cdk, 'basic_auth.csv')
+    '''Add or update an entry in /root/cdk/basic_auth.csv.'''
+    htaccess = Path('/root/cdk/basic_auth.csv')
+    htaccess.parent.mkdir(parents=True, exist_ok=True)
+
     if not password:
         password = token_generator()
-    with open(htaccess, 'w') as stream:
-        if groups:
-            stream.write('{0},{1},{2},"{3}"'.format(password,
-                                                    username, uid, groups))
-        else:
-            stream.write('{0},{1},{2}'.format(password, username, uid))
+
+    new_row = [password, username, uid] + ([groups] if groups else [])
+
+    try:
+        with htaccess.open('r') as f:
+            rows = list(csv.reader(f))
+    except FileNotFoundError:
+        rows = []
+
+    for row in rows:
+        if row[1] == username or row[2] == uid:
+            # update existing entry based on username or uid
+            row[:] = new_row
+            break
+    else:
+        # append new entry
+        rows.append(new_row)
+
+    with htaccess.open('w') as f:
+        csv.writer(f).writerows(rows)
 
 
 def setup_tokens(token, username, user, groups=None):
@@ -2008,11 +2048,17 @@ def request_integration():
            'endpoint.openstack.joined',
            'endpoint.vsphere.joined',
            'endpoint.azure.joined')
+@when_any('kubernetes-master.cloud.pending',
+          'kubernetes-master.cloud.request-sent',
+          'kubernetes-master.cloud.blocked',
+          'kubernetes-master.cloud.ready')
 def clear_cloud_flags():
     remove_state('kubernetes-master.cloud.pending')
     remove_state('kubernetes-master.cloud.request-sent')
     remove_state('kubernetes-master.cloud.blocked')
     remove_state('kubernetes-master.cloud.ready')
+    _kick_apiserver()
+    _kick_controller_manager()
 
 
 @when_any('endpoint.aws.ready',
@@ -2124,6 +2170,11 @@ def _kick_apiserver():
     if is_flag_set('kubernetes-master.components.started'):
         etcd = endpoint_from_flag('etcd.available')
         configure_apiserver(etcd.get_connection_string())
+
+
+def _kick_controller_manager():
+    if is_flag_set('kubernetes-master.components.started'):
+        configure_controller_manager()
 
 
 @when('keystone.credentials.configured',
