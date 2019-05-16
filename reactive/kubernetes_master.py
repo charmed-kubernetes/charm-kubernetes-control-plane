@@ -43,6 +43,7 @@ from charms.reactive import set_state, set_flag
 from charms.reactive import is_state, is_flag_set
 from charms.reactive import endpoint_from_flag
 from charms.reactive import when, when_any, when_not, when_none
+from charms.reactive import register_trigger
 from charms.reactive.helpers import data_changed, any_file_changed
 
 from charms.layer import tls_client
@@ -105,6 +106,19 @@ db = unitdata.kv()
 checksum_prefix = 'kubernetes-master.resource-checksums.'
 configure_prefix = 'kubernetes-master.prev_args.'
 keystone_root = '/root/cdk/keystone'
+
+register_trigger(when='endpoint.aws.ready',  # when set
+                 set_flag='kubernetes-master.aws.changed')
+register_trigger(when_not='endpoint.aws.ready',  # when cleared
+                 set_flag='kubernetes-master.aws.changed')
+register_trigger(when='endpoint.azure.ready',  # when set
+                 set_flag='kubernetes-master.azure.changed')
+register_trigger(when_not='endpoint.azure.ready',  # when cleared
+                 set_flag='kubernetes-master.azure.changed')
+register_trigger(when='endpoint.gcp.ready',  # when set
+                 set_flag='kubernetes-master.gcp.changed')
+register_trigger(when_not='endpoint.gcp.ready',  # when cleared
+                 set_flag='kubernetes-master.gcp.changed')
 
 
 def set_upgrade_needed(forced=False):
@@ -920,11 +934,17 @@ def regenerate_cdk_addons():
 @when_any('kubernetes-master.components.started',
           'kubernetes-master.ceph.configured',
           'keystone-credentials.available.auth',
+          'kubernetes-master.aws.changed',
+          'kubernetes-master.azure.changed',
+          'kubernetes-master.gcp.changed',
           'kubernetes-master.openstack.changed')
 @when('leadership.is_leader')
 def configure_cdk_addons():
     ''' Configure CDK addons '''
     remove_state('cdk-addons.configured')
+    remove_state('kubernetes-master.aws.changed')
+    remove_state('kubernetes-master.azure.changed')
+    remove_state('kubernetes-master.gcp.changed')
     remove_state('kubernetes-master.openstack.changed')
     load_gpu_plugin = hookenv.config('enable-nvidia-plugin').lower()
     gpuEnable = (get_version('kube-apiserver') >= (1, 9) and
@@ -974,6 +994,10 @@ def configure_cdk_addons():
         else:
             dashboard_auth = 'basic'
 
+    enable_aws = str(is_flag_set('endpoint.aws.ready')).lower()
+    enable_azure = str(is_flag_set('endpoint.azure.ready')).lower()
+    enable_gcp = str(is_flag_set('endpoint.gcp.ready')).lower()
+    enable_openstack = str(is_flag_set('endpoint.openstack.ready')).lower()
     openstack = endpoint_from_flag('endpoint.openstack.ready')
 
     args = [
@@ -995,7 +1019,10 @@ def configure_cdk_addons():
         'keystone-server-url=' + keystone.get('url', ''),
         'keystone-server-ca=' + keystone.get('keystone-ca', ''),
         'dashboard-auth=' + dashboard_auth,
-        'enable-openstack=' + 'true' if openstack else 'false',
+        'enable-aws=' + enable_aws,
+        'enable-azure=' + enable_azure,
+        'enable-gcp=' + enable_gcp,
+        'enable-openstack=' + enable_openstack,
     ]
     if openstack:
         args.extend([
