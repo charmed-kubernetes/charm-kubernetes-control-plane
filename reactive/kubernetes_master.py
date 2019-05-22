@@ -1005,7 +1005,8 @@ def configure_cdk_addons():
         'keystone-key-file=' + keystone.get('key', ''),
         'keystone-server-url=' + keystone.get('url', ''),
         'keystone-server-ca=' + keystone.get('keystone-ca', ''),
-        'dashboard-auth=' + dashboard_auth
+        'dashboard-auth=' + dashboard_auth,
+        'enable-multus-cni=' + str(hookenv.config('enable-multus-cni')).lower()
     ]
     if get_version('kube-apiserver') >= (1, 14):
         args.append('dns-provider=' + dnsProvider)

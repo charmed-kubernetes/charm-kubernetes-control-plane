@@ -276,3 +276,8 @@ options:
       kubernetes-worker:kube-api-endpoint. If using the kubeapi-load-balancer, see the
       loadbalancer-ips configuration variable on the kubeapi-load-balancer charm.
     default: ""
+  enable-multus-cni:
+    type: boolean
+    default: false
+    description: |
+      Enable Multus CNI addon
