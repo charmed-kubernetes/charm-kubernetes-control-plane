@@ -164,11 +164,6 @@ def check_for_upgrade_needed():
     # to old ceph on Kubernetes 1.10 or 1.11
     remove_state('kubernetes-master.ceph.configured')
 
-    original_registry = hookenv.config().previous('addons-registry')
-    hookenv.log('mwilson: addons-registry is "{}"'.format(original_registry))
-    if original_registry:
-        hookenv.config()['image-registry'] = original_registry
-
     migrate_from_pre_snaps()
     maybe_install_kube_proxy()
     update_certificates()
@@ -295,6 +290,8 @@ def do_upgrade():
 
 def install_snaps():
     channel = hookenv.config('channel')
+    hookenv.status_set('maintenance', 'Installing core snap')
+    snap.install('core')
     hookenv.status_set('maintenance', 'Installing kubectl snap')
     snap.install('kubectl', channel=channel, classic=True)
     hookenv.status_set('maintenance', 'Installing kube-apiserver snap')
@@ -820,17 +817,24 @@ def push_service_data():
     # the worker charm will be related to the loadbalancer in that case and
     # get the information from there instead of the kubernetes-master charm.
 
+    # if the user gave us IPs for the load balancer, assume they know
+    # what they are talking about and use that instead of our information.
+    address = None
+    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
     hacluster = endpoint_from_flag('ha.connected')
-    if hacluster:
+    if forced_lb_ips:
+        address = forced_lb_ips
+    elif hacluster:
         vips = hookenv.config('ha-cluster-vip').split()
         dns_record = hookenv.config('ha-cluster-dns')
         if vips:
             # each worker unit will pick one based on unit number
-            kube_api.configure(6443, vips, vips)
+            address = vips
         elif dns_record:
-            kube_api.configure(6443, dns_record, dns_record)
-        else:
-            kube_api.configure(6443)
+            address = dns_record
+
+    if address:
+        kube_api.configure(6443, address, address)
     else:
         kube_api.configure(6443)
 
@@ -864,21 +868,27 @@ def send_data():
         'kubernetes.default.svc.{0}'.format(domain)
     ]
 
-    loadbalancer = endpoint_from_flag('loadbalancer.available')
-    # we don't use get_hacluster_ip_or_hostname only here because
-    # we want the cert to be valid for all the vips
-    hacluster = endpoint_from_flag('ha.connected')
-    if hacluster:
-        vips = hookenv.config('ha-cluster-vip').split()
-        dns_record = hookenv.config('ha-cluster-dns')
-        if vips:
-            sans.extend(vips)
-        elif dns_record:
-            sans.append(dns_record)
-    elif loadbalancer:
-        # Get the list of loadbalancers from the relation object.
-        hosts = loadbalancer.get_addresses_ports()
-        sans.extend([host.get('public-address') for host in hosts])
+    # if the user gave us IPs for the load balancer, assume they know
+    # what they are talking about and use that instead of our information.
+    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
+    if forced_lb_ips:
+        sans.extend(forced_lb_ips)
+    else:
+        loadbalancer = endpoint_from_flag('loadbalancer.available')
+        # we don't use get_hacluster_ip_or_hostname only here because
+        # we want the cert to be valid for all the vips
+        hacluster = endpoint_from_flag('ha.connected')
+        if hacluster:
+            vips = hookenv.config('ha-cluster-vip').split()
+            dns_record = hookenv.config('ha-cluster-dns')
+            if vips:
+                sans.extend(vips)
+            elif dns_record:
+                sans.append(dns_record)
+        elif loadbalancer:
+            # Get the list of loadbalancers from the relation object.
+            hosts = loadbalancer.get_addresses_ports()
+            sans.extend([host.get('public-address') for host in hosts])
 
     # maybe they have extra names they want as SANs
     extra_sans = hookenv.config('extra_sans')
@@ -933,7 +943,13 @@ def configure_cdk_addons():
     gpuEnable = (get_version('kube-apiserver') >= (1, 9) and
                  load_gpu_plugin == "auto" and
                  is_state('kubernetes-master.gpu.enabled'))
-    registry = hookenv.config('image-registry')
+    # addons-registry is deprecated in 1.15, but it should still take
+    # precedent if set when configuring the cdk-addons snap.
+    registry = hookenv.config('addons-registry')
+    if registry:
+        hookenv.log('addons-registry is deprecated; use image-registry instead')
+    else:
+        registry = hookenv.config('image-registry')
     dbEnabled = str(hookenv.config('enable-dashboard-addons')).lower()
     try:
         dnsProvider = get_dns_provider()
@@ -1038,12 +1054,18 @@ def loadbalancer_kubeconfig():
     hosts = loadbalancer.get_addresses_ports()
     # if there is a hacluster relation, use that vip/dns for the kubeconfig
     hacluster_vip = get_hacluster_ip_or_hostname()
-    if hacluster_vip:
-        address = hacluster_vip
+    # if the user gave us IPs for the load balancer, assume they know
+    # what they are talking about and use that instead of our information.
+    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
+    if forced_lb_ips:
+        address = forced_lb_ips[get_unit_number() % len(forced_lb_ips)]
     else:
-        # Get the public address of the first loadbalancer so
-        # users can access the cluster.
-        address = hosts[0].get('public-address')
+        if hacluster_vip:
+            address = hacluster_vip
+        else:
+            # Get the public address of the first loadbalancer so
+            # users can access the cluster.
+            address = hosts[0].get('public-address')
 
     # Get the port of the loadbalancer so users can access the cluster.
     port = hosts[0].get('port')
@@ -1056,11 +1078,17 @@ def loadbalancer_kubeconfig():
 @when_not('loadbalancer.available')
 def create_self_config():
     '''Create a kubernetes configuration for the master unit.'''
-    hacluster_vip = get_hacluster_ip_or_hostname()
-    if hacluster_vip:
-        address = hacluster_vip
+    # if the user gave us IPs for the load balancer, assume they know
+    # what they are talking about and use that instead of our information.
+    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
+    if forced_lb_ips:
+        address = forced_lb_ips[get_unit_number() % len(forced_lb_ips)]
     else:
-        address = hookenv.unit_get('public-address')
+        hacluster_vip = get_hacluster_ip_or_hostname()
+        if hacluster_vip:
+            address = hacluster_vip
+        else:
+            address = hookenv.unit_get('public-address')
     server = 'https://{0}:{1}'.format(address, 6443)
     build_kubeconfig(server)
 
