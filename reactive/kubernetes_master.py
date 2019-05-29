@@ -2419,7 +2419,6 @@ def send_registry_location():
     set_flag('kubernetes-master.sent-registry')
 
 
-@when('kube-control.connected')
 @when('config.changed.image-registry')
 def send_new_registry_location():
     clear_flag('kubernetes-master.sent-registry')
