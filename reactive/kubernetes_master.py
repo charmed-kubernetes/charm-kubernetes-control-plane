@@ -943,10 +943,10 @@ def configure_cdk_addons():
     gpuEnable = (get_version('kube-apiserver') >= (1, 9) and
                  load_gpu_plugin == "auto" and
                  is_state('kubernetes-master.gpu.enabled'))
-    # addons-registry is deprecated in 1.15, but it should still take
-    # precedent if set when configuring the cdk-addons snap.
+    # addons-registry is deprecated in 1.15, but it should take precedence
+    # when configuring the cdk-addons snap until 1.17 is released.
     registry = hookenv.config('addons-registry')
-    if registry:
+    if registry and get_version('kube-apiserver') < (1, 17):
         hookenv.log('addons-registry is deprecated; use image-registry instead')
     else:
         registry = hookenv.config('image-registry')

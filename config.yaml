@@ -50,8 +50,8 @@ options:
       Specify the docker registry to use when applying addons.
 
       DEPRECATED in 1.15: Use the broader 'image-registry' config option instead. If both
-      options are set, addons-registry will take precedence during cdk-addons snap
-      configuration until v1.14 reaches EOL.
+      options are set, 'addons-registry' will be used to configure the cdk-addons snap until
+      v1.17 is released. After that, the 'addons-registry' option will have no effect.
   image-registry:
     type: string
     default: "image-registry.canonical.com:5000/cdk"
