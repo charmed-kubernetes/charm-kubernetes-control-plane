@@ -46,7 +46,19 @@ options:
   addons-registry:
     type: string
     default: ""
-    description: Specify the docker registry to use when applying addons
+    description: |
+      Specify the docker registry to use when applying addons.
+
+      DEPRECATED in 1.15: Use the broader 'image-registry' config option instead. If both
+      options are set, 'addons-registry' will be used to configure the cdk-addons snap until
+      v1.17 is released. After that, the 'addons-registry' option will have no effect.
+  image-registry:
+    type: string
+    default: "image-registry.canonical.com:5000/cdk"
+    description: |
+      Container image registry to use for CDK. This includes addons like the Kubernetes dashboard,
+      metrics server, ingress, and dns along with non-addon images including the pause
+      container and default backend image.
   enable-dashboard-addons:
     type: boolean
     default: True
