@@ -46,10 +46,22 @@ options:
   addons-registry:
     type: string
     default: ""
-    description: Specify the docker registry to use when applying addons
+    description: |
+      Specify the docker registry to use when applying addons.
+
+      DEPRECATED in 1.15: Use the broader 'image-registry' config option instead. If both
+      options are set, 'addons-registry' will be used to configure the cdk-addons snap until
+      v1.17 is released. After that, the 'addons-registry' option will have no effect.
+  image-registry:
+    type: string
+    default: "image-registry.canonical.com:5000/cdk"
+    description: |
+      Container image registry to use for CDK. This includes addons like the Kubernetes dashboard,
+      metrics server, ingress, and dns along with non-addon images including the pause
+      container and default backend image.
   enable-dashboard-addons:
     type: boolean
-    default: True
+    default: true
     description: Deploy the Kubernetes Dashboard and Heapster addons
   dns-provider:
     type: string
@@ -264,3 +276,15 @@ options:
       "basic", and "token". If set to "auto", basic auth is used unless Keystone is 
       related to kubernetes-master, in which case token auth is used.
     default: "auto"
+  loadbalancer-ips:
+    type: string
+    description: |
+      Space separated list of IP addresses of loadbalancers in front of the control plane.
+      These can be either virtual IP addresses that have been floated in front of the control
+      plane or the IP of a loadbalancer appliance such as an F5. Workers will alternate IP
+      addresses from this list to distribute load - for example If you have 2 IPs and 4 workers,
+      each IP will be used by 2 workers. Note that this will only work if kubeapi-load-balancer
+      is not in use and there is a relation between kubernetes-master:kube-api-endpoint and
+      kubernetes-worker:kube-api-endpoint. If using the kubeapi-load-balancer, see the
+      loadbalancer-ips configuration variable on the kubeapi-load-balancer charm.
+    default: ""

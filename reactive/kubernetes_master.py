@@ -817,17 +817,24 @@ def push_service_data():
     # the worker charm will be related to the loadbalancer in that case and
     # get the information from there instead of the kubernetes-master charm.
 
+    # if the user gave us IPs for the load balancer, assume they know
+    # what they are talking about and use that instead of our information.
+    address = None
+    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
     hacluster = endpoint_from_flag('ha.connected')
-    if hacluster:
+    if forced_lb_ips:
+        address = forced_lb_ips
+    elif hacluster:
         vips = hookenv.config('ha-cluster-vip').split()
         dns_record = hookenv.config('ha-cluster-dns')
         if vips:
             # each worker unit will pick one based on unit number
-            kube_api.configure(6443, vips, vips)
+            address = vips
         elif dns_record:
-            kube_api.configure(6443, dns_record, dns_record)
-        else:
-            kube_api.configure(6443)
+            address = dns_record
+
+    if address:
+        kube_api.configure(6443, address, address)
     else:
         kube_api.configure(6443)
 
@@ -861,21 +868,27 @@ def send_data():
         'kubernetes.default.svc.{0}'.format(domain)
     ]
 
-    loadbalancer = endpoint_from_flag('loadbalancer.available')
-    # we don't use get_hacluster_ip_or_hostname only here because
-    # we want the cert to be valid for all the vips
-    hacluster = endpoint_from_flag('ha.connected')
-    if hacluster:
-        vips = hookenv.config('ha-cluster-vip').split()
-        dns_record = hookenv.config('ha-cluster-dns')
-        if vips:
-            sans.extend(vips)
-        elif dns_record:
-            sans.append(dns_record)
-    elif loadbalancer:
-        # Get the list of loadbalancers from the relation object.
-        hosts = loadbalancer.get_addresses_ports()
-        sans.extend([host.get('public-address') for host in hosts])
+    # if the user gave us IPs for the load balancer, assume they know
+    # what they are talking about and use that instead of our information.
+    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
+    if forced_lb_ips:
+        sans.extend(forced_lb_ips)
+    else:
+        loadbalancer = endpoint_from_flag('loadbalancer.available')
+        # we don't use get_hacluster_ip_or_hostname only here because
+        # we want the cert to be valid for all the vips
+        hacluster = endpoint_from_flag('ha.connected')
+        if hacluster:
+            vips = hookenv.config('ha-cluster-vip').split()
+            dns_record = hookenv.config('ha-cluster-dns')
+            if vips:
+                sans.extend(vips)
+            elif dns_record:
+                sans.append(dns_record)
+        elif loadbalancer:
+            # Get the list of loadbalancers from the relation object.
+            hosts = loadbalancer.get_addresses_ports()
+            sans.extend([host.get('public-address') for host in hosts])
 
     # maybe they have extra names they want as SANs
     extra_sans = hookenv.config('extra_sans')
@@ -930,7 +943,13 @@ def configure_cdk_addons():
     gpuEnable = (get_version('kube-apiserver') >= (1, 9) and
                  load_gpu_plugin == "auto" and
                  is_state('kubernetes-master.gpu.enabled'))
+    # addons-registry is deprecated in 1.15, but it should take precedence
+    # when configuring the cdk-addons snap until 1.17 is released.
     registry = hookenv.config('addons-registry')
+    if registry and get_version('kube-apiserver') < (1, 17):
+        hookenv.log('addons-registry is deprecated; use image-registry instead')
+    else:
+        registry = hookenv.config('image-registry')
     dbEnabled = str(hookenv.config('enable-dashboard-addons')).lower()
     try:
         dnsProvider = get_dns_provider()
@@ -1035,12 +1054,18 @@ def loadbalancer_kubeconfig():
     hosts = loadbalancer.get_addresses_ports()
     # if there is a hacluster relation, use that vip/dns for the kubeconfig
     hacluster_vip = get_hacluster_ip_or_hostname()
-    if hacluster_vip:
-        address = hacluster_vip
+    # if the user gave us IPs for the load balancer, assume they know
+    # what they are talking about and use that instead of our information.
+    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
+    if forced_lb_ips:
+        address = forced_lb_ips[get_unit_number() % len(forced_lb_ips)]
     else:
-        # Get the public address of the first loadbalancer so
-        # users can access the cluster.
-        address = hosts[0].get('public-address')
+        if hacluster_vip:
+            address = hacluster_vip
+        else:
+            # Get the public address of the first loadbalancer so
+            # users can access the cluster.
+            address = hosts[0].get('public-address')
 
     # Get the port of the loadbalancer so users can access the cluster.
     port = hosts[0].get('port')
@@ -1053,11 +1078,17 @@ def loadbalancer_kubeconfig():
 @when_not('loadbalancer.available')
 def create_self_config():
     '''Create a kubernetes configuration for the master unit.'''
-    hacluster_vip = get_hacluster_ip_or_hostname()
-    if hacluster_vip:
-        address = hacluster_vip
+    # if the user gave us IPs for the load balancer, assume they know
+    # what they are talking about and use that instead of our information.
+    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
+    if forced_lb_ips:
+        address = forced_lb_ips[get_unit_number() % len(forced_lb_ips)]
     else:
-        address = hookenv.unit_get('public-address')
+        hacluster_vip = get_hacluster_ip_or_hostname()
+        if hacluster_vip:
+            address = hacluster_vip
+        else:
+            address = hookenv.unit_get('public-address')
     server = 'https://{0}:{1}'.format(address, 6443)
     build_kubeconfig(server)
 
@@ -2377,3 +2408,17 @@ def get_dns_provider():
 
     leader_set(auto_dns_provider=dns_provider)
     return dns_provider
+
+
+@when('kube-control.connected')
+@when_not('kubernetes-master.sent-registry')
+def send_registry_location():
+    registry_location = hookenv.config('image-registry')
+    kube_control = endpoint_from_flag('kube-control.connected')
+    kube_control.set_registry_location(registry_location)
+    set_flag('kubernetes-master.sent-registry')
+
+
+@when('config.changed.image-registry')
+def send_new_registry_location():
+    clear_flag('kubernetes-master.sent-registry')
