@@ -61,7 +61,7 @@ options:
       container and default backend image.
   enable-dashboard-addons:
     type: boolean
-    default: True
+    default: true
     description: Deploy the Kubernetes Dashboard and Heapster addons
   dns-provider:
     type: string
