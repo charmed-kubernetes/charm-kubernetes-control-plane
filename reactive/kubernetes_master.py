@@ -943,7 +943,13 @@ def configure_cdk_addons():
     gpuEnable = (get_version('kube-apiserver') >= (1, 9) and
                  load_gpu_plugin == "auto" and
                  is_state('kubernetes-master.gpu.enabled'))
+    # addons-registry is deprecated in 1.15, but it should take precedence
+    # when configuring the cdk-addons snap until 1.17 is released.
     registry = hookenv.config('addons-registry')
+    if registry and get_version('kube-apiserver') < (1, 17):
+        hookenv.log('addons-registry is deprecated; use image-registry instead')
+    else:
+        registry = hookenv.config('image-registry')
     dbEnabled = str(hookenv.config('enable-dashboard-addons')).lower()
     try:
         dnsProvider = get_dns_provider()
@@ -2403,3 +2409,17 @@ def get_dns_provider():
 
     leader_set(auto_dns_provider=dns_provider)
     return dns_provider
+
+
+@when('kube-control.connected')
+@when_not('kubernetes-master.sent-registry')
+def send_registry_location():
+    registry_location = hookenv.config('image-registry')
+    kube_control = endpoint_from_flag('kube-control.connected')
+    kube_control.set_registry_location(registry_location)
+    set_flag('kubernetes-master.sent-registry')
+
+
+@when('config.changed.image-registry')
+def send_new_registry_location():
+    clear_flag('kubernetes-master.sent-registry')
