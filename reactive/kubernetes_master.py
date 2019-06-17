@@ -2366,5 +2366,8 @@ def get_dns_provider():
             else:
                 dns_provider = 'kube-dns'
 
-    leader_set(auto_dns_provider=dns_provider)
+    # LP: 1833089. Followers end up here when setting final status; ensure only
+    # leaders call leader_set.
+    if is_state('leadership.is_leader'):
+        leader_set(auto_dns_provider=dns_provider)
     return dns_provider
