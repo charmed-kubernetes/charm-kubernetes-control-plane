@@ -925,13 +925,6 @@ def kick_api_server():
     clear_flag('tls_client.certs.changed')
 
 
-@when_any('config.changed.keystone-policy',
-          'config.changed.keystone-ssl-ca')
-@when('keystone-credentials.available.auth')
-def regenerate_cdk_addons():
-    configure_cdk_addons()
-
-
 @when_any('kubernetes-master.components.started',
           'kubernetes-master.ceph.configured',
           'keystone-credentials.available.auth')
