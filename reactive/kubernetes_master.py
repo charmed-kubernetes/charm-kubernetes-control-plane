@@ -1433,7 +1433,7 @@ def shutdown():
 def build_kubeconfig(server):
     '''Gather the relevant data for Kubernetes configuration objects and create
     a config object with that information.'''
-    hookenv.status_set('maintenance', 'Writing kubeconfig file.')
+
     ca_exists = ca_crt_path.exists()
     client_pass = get_password('basic_auth.csv', 'admin')
     # Do we have everything we need?
@@ -1457,6 +1457,13 @@ def build_kubeconfig(server):
         # Create an absolute path for the kubeconfig file.
         kubeconfig_path = os.path.join(os.sep, 'home', 'ubuntu', 'config')
         # Create the kubeconfig on this system so users can access the cluster.
+
+        with open(kubeclientconfig_path, 'r') as conf:
+            if not data_changed('kube-config-build', conf.read()):
+                hookenv.log('Skipping config write. No changes.', 'DEBUG')
+                return
+
+        hookenv.status_set('maintenance', 'Writing kubeconfig file.')
 
         if ks:
             create_kubeconfig(kubeconfig_path, server, ca_crt_path,
