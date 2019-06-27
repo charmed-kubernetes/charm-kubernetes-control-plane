@@ -717,6 +717,17 @@ def start_master():
 
     set_state('kubernetes-master.components.started')
     hookenv.open_port(6443)
+    remove_state('tls_client.certs.changed')
+    remove_state('tls_client.ca.written')
+
+
+@when('kubernetes-master.components.started')
+@when_any('tls_client.certs.changed',
+          'tls_client.ca.written')
+def update_certs():
+    remove_state('kubernetes-master.components.started')
+    remove_state('tls_client.certs.changed')
+    remove_state('tls_client.ca.written')
 
 
 @when('etcd.available')
