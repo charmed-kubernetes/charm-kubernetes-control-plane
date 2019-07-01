@@ -22,8 +22,9 @@ This charm is not fully functional when deployed by itself. It requires other
 charms to model a complete Kubernetes cluster. A Kubernetes cluster needs a
 distributed key value store such as [Etcd](https://coreos.com/etcd/) and the
 kubernetes-worker charm which delivers the Kubernetes node services. A cluster
-requires a Software Defined Network (SDN) and Transport Layer Security (TLS) so
-the components in a cluster communicate securely.
+requires a Software Defined Network (SDN), a Container Runtime such as
+[containerd](https://jaas.ai/u/containers/containerd), and Transport Layer
+Security (TLS) so the components in a cluster communicate securely.
 
 Please take a look at the [Canonical Distribution of Kubernetes](https://jujucharms.com/canonical-kubernetes/)
 or the [Kubernetes core](https://jujucharms.com/kubernetes-core/) bundles for
