@@ -927,15 +927,6 @@ def update_certificates():
     clear_flag('config.changed.extra_sans')
 
 
-@when('kubernetes-master.components.started',
-      'tls_client.certs.changed')
-def kick_api_server():
-    # certificate changed, so restart the api server
-    hookenv.log("Certificate information changed, restarting api server")
-    service_restart('snap.kube-apiserver.daemon')
-    clear_flag('tls_client.certs.changed')
-
-
 @when_any('kubernetes-master.components.started',
           'kubernetes-master.ceph.configured',
           'keystone-credentials.available.auth')
