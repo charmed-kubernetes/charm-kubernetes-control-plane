@@ -1063,7 +1063,10 @@ def loadbalancer_kubeconfig():
 
     # Get the port of the loadbalancer so users can access the cluster.
     port = hosts[0].get('port')
-    server = 'https://{0}:{1}'.format(address, port)
+    if ipaddress.ip_address(address).version == 6:
+        server = 'https://[{0}]:{1}'.format(address, port)
+    else:
+        server = 'https://{0}:{1}'.format(address, port)
     build_kubeconfig(server)
 
 
@@ -1083,7 +1086,10 @@ def create_self_config():
             address = hacluster_vip
         else:
             address = hookenv.unit_get('public-address')
-    server = 'https://{0}:{1}'.format(address, 6443)
+    if ipaddress.ip_address(address).version == 6:
+        server = 'https://[{0}]:{1}'.format(address, 6443)
+    else:
+        server = 'https://{0}:{1}'.format(address, 6443)
     build_kubeconfig(server)
 
 
@@ -1492,14 +1498,14 @@ def get_dns_ip():
 def get_deprecated_dns_ip():
     '''We previously hardcoded the dns ip. This function returns the old
     hardcoded value for use with older versions of cdk_addons.'''
-    interface = ipaddress.IPv4Interface(service_cidr())
+    interface = ipaddress.ip_interface(service_cidr())
     ip = interface.network.network_address + 10
     return ip.exploded
 
 
 def get_kubernetes_service_ip():
     '''Get the IP address for the kubernetes service based on the cidr.'''
-    interface = ipaddress.IPv4Interface(service_cidr())
+    interface = ipaddress.ip_interface(service_cidr())
     # Add .1 at the end of the network
     ip = interface.network.network_address + 1
     return ip.exploded
