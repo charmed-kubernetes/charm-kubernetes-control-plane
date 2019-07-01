@@ -745,6 +745,11 @@ def etcd_data_change(etcd):
     if data_changed('etcd-connect', connection_string):
         remove_state('kubernetes-master.components.started')
 
+    # If the cert info changes, remove the started state to trigger
+    # handling of the master components
+    if data_changed('etcd-certs', etcd.get_client_credentials()):
+        remove_state('kubernetes-master.components.started')
+
     # We are the leader and the auto_storage_backend is not set meaning
     # this is the first time we connect to etcd.
     auto_storage_backend = leader_get('auto_storage_backend')
