@@ -1860,9 +1860,14 @@ def token_generator(length=32):
     return token
 
 
-@retry(times=3, delay_secs=10)
+@retry(times=3, delay_secs=1)
 def get_pods(namespace='default'):
-    cmd = ['kubectl', 'get', 'po', '-n', namespace, '-o', 'json']
+    cmd = [
+        'kubectl', 'get', 'po',
+        '-n', namespace,
+        '-o', 'json',
+        '--request-timeout', '10s'
+    ]
     try:
         output = check_output(cmd).decode('utf-8')
         result = json.loads(output)
