@@ -29,6 +29,11 @@ Please take a look at the [Canonical Distribution of Kubernetes](https://jujucha
 or the [Kubernetes core](https://jujucharms.com/kubernetes-core/) bundles for
 examples of complete models of Kubernetes clusters.
 
+## LXD
+
+The [LXD profile](https://github.com/charmed-kubernetes/bundle/wiki/Deploying-on-LXD) included in this charm uses keys which are not allowed in the current [juju version](https://docs.jujucharms.com/lxd-cloud-advanced#charms-and-lxd-profiles) this means that you are required to supply `--force` to your `deploy` and `upgrade-charm` commands.
+
+
 # Resources
 
 The kubernetes-master charm takes advantage of the [Juju Resources](https://jujucharms.com/docs/2.0/developer-resources)
