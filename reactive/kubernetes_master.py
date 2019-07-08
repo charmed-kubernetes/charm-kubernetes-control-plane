@@ -680,7 +680,9 @@ def add_systemd_file_watcher():
       'cni.available')
 @when_not('kubernetes-master.components.started',
           'kubernetes-master.cloud.pending',
-          'kubernetes-master.cloud.blocked')
+          'kubernetes-master.cloud.blocked',
+          'tls_client.certs.changed',
+          'tls_client.ca.written')
 def start_master():
     '''Run the Kubernetes master components.'''
     hookenv.status_set('maintenance',
@@ -717,16 +719,20 @@ def start_master():
 
     set_state('kubernetes-master.components.started')
     hookenv.open_port(6443)
-    remove_state('tls_client.certs.changed')
-    remove_state('tls_client.ca.written')
 
 
-@when('kubernetes-master.components.started')
-@when_any('tls_client.certs.changed',
-          'tls_client.ca.written')
-def update_certs():
+@when('tls_client.certs.changed')
+def certs_changed():
     remove_state('kubernetes-master.components.started')
     remove_state('tls_client.certs.changed')
+
+
+@when('tls_client.ca.written')
+def ca_written():
+    remove_state('kubernetes-master.components.started')
+    if is_state('leadership.is_leader'):
+        if leader_get('kubernetes-master-addons-ca-in-use'):
+            leader_set({'kubernetes-master-addons-restart-needed': True})
     remove_state('tls_client.ca.written')
 
 
@@ -1024,6 +1030,7 @@ def configure_cdk_addons():
         return
 
     set_state('cdk-addons.configured')
+    leader_set({'kubernetes-master-addons-ca-in-use': True})
     if ks:
         leader_set({'keystone-cdk-addons-configured': True})
     else:
@@ -2430,3 +2437,35 @@ def send_registry_location():
 @when('config.changed.image-registry')
 def send_new_registry_location():
     clear_flag('kubernetes-master.sent-registry')
+
+
+@when('leadership.is_leader',
+      'leadership.set.kubernetes-master-addons-restart-needed',
+      'kubernetes-master.components.started')
+def restart_addons():
+    try:
+        cmd = [
+            'kubectl', 'get',
+            '-o', 'json',
+            '--all-namespaces',
+            '-l', 'cdk-addons=true',
+            'daemonset,deployment,statefulset'
+        ]
+        output = check_output(cmd).decode('UTF-8')
+        items = json.loads(output)['items']
+        for item in items:
+            kind = item['kind']
+            namespace = item['metadata']['namespace']
+            name = item['metadata']['name']
+            hookenv.log('Restarting addon: %s %s %s' % (kind, namespace, name))
+            cmd = [
+                'kubectl', 'rollout', 'restart',
+                '-n', namespace,
+                kind + '/' + name
+            ]
+            check_call(cmd)
+    except CalledProcessError:
+        hookenv.log(traceback.format_exc())
+        hookenv.log('Waiting to retry restarting addons')
+        return
+    leader_set({'kubernetes-master-addons-restart-needed': None})
