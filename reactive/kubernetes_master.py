@@ -732,7 +732,7 @@ def ca_written():
     remove_state('kubernetes-master.components.started')
     if is_state('leadership.is_leader'):
         if leader_get('kubernetes-master-addons-ca-in-use'):
-            leader_set({'kubernetes-master-addons-restart-needed': True})
+            leader_set({'kubernetes-master-addons-restart-for-ca': True})
     remove_state('tls_client.ca.written')
 
 
@@ -2440,23 +2440,87 @@ def send_new_registry_location():
 
 
 @when('leadership.is_leader',
-      'leadership.set.kubernetes-master-addons-restart-needed',
+      'leadership.set.kubernetes-master-addons-restart-for-ca',
       'kubernetes-master.components.started')
-def restart_addons():
+def restart_addons_for_ca():
     try:
-        cmd = [
-            'kubectl', 'get',
-            '-o', 'json',
-            '--all-namespaces',
-            '-l', 'cdk-addons=true',
-            'daemonset,deployment,statefulset'
+        # Get deployments/daemonsets/statefulsets
+        labels = ['cdk-addons=true', 'cdk-ingress=true']
+        deployments = []
+        for label in labels:
+            cmd = [
+                'kubectl', 'get',
+                '-o', 'json',
+                '--all-namespaces',
+                '-l', label,
+                'daemonset,deployment,statefulset'
+            ]
+            output = check_output(cmd).decode('UTF-8')
+            deployments += json.loads(output)['items']
+
+        # Get ServiceAccounts
+        service_account_names = set(
+            (
+                deployment['metadata']['namespace'],
+                deployment['spec']['template']['spec'].get(
+                    'serviceAccountName', 'default'
+                )
+            )
+            for deployment in deployments
+        )
+        service_accounts = []
+        for namespace, name in service_account_names:
+            cmd = [
+                'kubectl', 'get',
+                '-o', 'json',
+                '-n', namespace,
+                'ServiceAccount', name
+            ]
+            output = check_output(cmd).decode('UTF-8')
+            service_account = json.loads(output)
+            service_accounts.append(service_account)
+
+        # Get ServiceAccount secrets
+        secret_names = set()
+        for service_account in service_accounts:
+            namespace = service_account['metadata']['namespace']
+            for secret in service_account['secrets']:
+                secret_names.add((namespace, secret['name']))
+        secrets = []
+        for namespace, name in secret_names:
+            cmd = [
+                'kubectl', 'get',
+                '-o', 'json',
+                '-n', namespace,
+                'Secret', name
+            ]
+            output = check_output(cmd).decode('UTF-8')
+            secret = json.loads(output)
+            secrets.append(secret)
+
+        # Check secrets have updated CA
+        with open(ca_crt_path, 'rb') as f:
+            ca = f.read()
+        encoded_ca = base64.b64encode(ca).decode('UTF-8')
+        mismatched_secrets = [
+            secret for secret in secrets
+            if secret['data']['ca.crt'] != encoded_ca
         ]
-        output = check_output(cmd).decode('UTF-8')
-        items = json.loads(output)['items']
-        for item in items:
-            kind = item['kind']
-            namespace = item['metadata']['namespace']
-            name = item['metadata']['name']
+        if mismatched_secrets:
+            hookenv.log(
+                'ServiceAccount secrets do not have correct ca.crt: '
+                + ','.join(
+                    secret['metadata']['name'] for secret in mismatched_secrets
+                )
+            )
+            hookenv.log('Waiting to retry restarting addons')
+            return
+
+        # Now restart the addons
+        for deployment in deployments:
+            kind = deployment['kind']
+            namespace = deployment['metadata']['namespace']
+            name = deployment['metadata']['name']
             hookenv.log('Restarting addon: %s %s %s' % (kind, namespace, name))
             cmd = [
                 'kubectl', 'rollout', 'restart',
@@ -2464,8 +2528,8 @@ def restart_addons():
                 kind + '/' + name
             ]
             check_call(cmd)
-    except CalledProcessError:
+
+        leader_set({'kubernetes-master-addons-restart-for-ca': None})
+    except Exception:
         hookenv.log(traceback.format_exc())
         hookenv.log('Waiting to retry restarting addons')
-        return
-    leader_set({'kubernetes-master-addons-restart-needed': None})
