@@ -2445,18 +2445,15 @@ def send_new_registry_location():
 def restart_addons_for_ca():
     try:
         # Get deployments/daemonsets/statefulsets
-        labels = ['cdk-addons=true', 'cdk-ingress=true']
-        deployments = []
-        for label in labels:
-            cmd = [
-                'kubectl', 'get',
-                '-o', 'json',
-                '--all-namespaces',
-                '-l', label,
-                'daemonset,deployment,statefulset'
-            ]
-            output = check_output(cmd).decode('UTF-8')
-            deployments += json.loads(output)['items']
+        cmd = [
+            'kubectl', 'get',
+            '-o', 'json',
+            '--all-namespaces',
+            '-l', 'cdk-restart-on-ca-change=true',
+            'daemonset,deployment,statefulset'
+        ]
+        output = check_output(cmd).decode('UTF-8')
+        deployments = json.loads(output)['items']
 
         # Get ServiceAccounts
         service_account_names = set(
