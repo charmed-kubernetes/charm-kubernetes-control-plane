@@ -1,6 +1,5 @@
-name: juju-default-k8s-master-deployment-0
+name: juju-default-k8s-worker-deployment-0
 config:
-  boot.autostart: true
   linux.kernel_modules: ip_tables,ip6_tables,netlink_diag,nf_nat,overlay
   raw.lxc: |
     lxc.apparmor.profile=unconfined
@@ -10,14 +9,6 @@ config:
   security.privileged: true
 description: ""
 devices:
-  aadisable:
-    path: /sys/module/nf_conntrack/parameters/hashsize
-    source: /dev/null
-    type: disk
-  aadisable1:
-    path: /sys/module/apparmor/parameters/enabled
-    source: /dev/null
-    type: disk
   aadisable2:
     path: /dev/kmsg
     source: /dev/kmsg
