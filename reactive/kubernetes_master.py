@@ -1458,10 +1458,13 @@ def build_kubeconfig(server):
         kubeconfig_path = os.path.join(os.sep, 'home', 'ubuntu', 'config')
         # Create the kubeconfig on this system so users can access the cluster.
 
-        with open(kubeclientconfig_path, 'r') as conf:
-            if not data_changed('kube-config-build', conf.read()):
-                hookenv.log('Skipping config write. No changes.', 'DEBUG')
-                return
+        try:
+            with open(kubeconfig_path, 'r') as conf:
+                if not data_changed('kube-config-build', conf.read()):
+                    hookenv.log('Skipping config write. No changes.', 'DEBUG')
+                    return
+        except FileNotFoundError:
+            pass
 
         hookenv.status_set('maintenance', 'Writing kubeconfig file.')
 
