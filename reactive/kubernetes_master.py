@@ -84,6 +84,7 @@ from charms.layer.kubernetes_common import server_key_path
 from charms.layer.kubernetes_common import client_crt_path
 from charms.layer.kubernetes_common import client_key_path
 from charms.layer.kubernetes_common import get_unit_number
+from charms.layer.kubernetes_common import kubectl
 
 
 # Override the default nagios shortname regex to allow periods, which we
@@ -723,17 +724,17 @@ def start_master():
 
 @when('tls_client.certs.changed')
 def certs_changed():
-    remove_state('kubernetes-master.components.started')
-    remove_state('tls_client.certs.changed')
+    clear_flag('kubernetes-master.components.started')
+    clear_flag('tls_client.certs.changed')
 
 
 @when('tls_client.ca.written')
 def ca_written():
-    remove_state('kubernetes-master.components.started')
+    clear_flag('kubernetes-master.components.started')
     if is_state('leadership.is_leader'):
         if leader_get('kubernetes-master-addons-ca-in-use'):
             leader_set({'kubernetes-master-addons-restart-for-ca': True})
-    remove_state('tls_client.ca.written')
+    clear_flag('tls_client.ca.written')
 
 
 @when('etcd.available')
@@ -754,7 +755,7 @@ def etcd_data_change(etcd):
     # If the cert info changes, remove the started state to trigger
     # handling of the master components
     if data_changed('etcd-certs', etcd.get_client_credentials()):
-        remove_state('kubernetes-master.components.started')
+        clear_flag('kubernetes-master.components.started')
 
     # We are the leader and the auto_storage_backend is not set meaning
     # this is the first time we connect to etcd.
@@ -1869,14 +1870,13 @@ def token_generator(length=32):
 
 @retry(times=3, delay_secs=1)
 def get_pods(namespace='default'):
-    cmd = [
-        'kubectl', 'get', 'po',
-        '-n', namespace,
-        '-o', 'json',
-        '--request-timeout', '10s'
-    ]
     try:
-        output = check_output(cmd).decode('utf-8')
+        output = kubectl(
+            'get', 'po',
+            '-n', namespace,
+            '-o', 'json',
+            '--request-timeout', '10s'
+        ).decode('UTF-8')
         result = json.loads(output)
     except CalledProcessError:
         hookenv.log('failed to get {} pod status'.format(namespace))
@@ -2445,14 +2445,12 @@ def send_new_registry_location():
 def restart_addons_for_ca():
     try:
         # Get deployments/daemonsets/statefulsets
-        cmd = [
-            'kubectl', 'get',
+        output = kubectl(
+            'get', 'daemonset,deployment,statefulset',
             '-o', 'json',
             '--all-namespaces',
-            '-l', 'cdk-restart-on-ca-change=true',
-            'daemonset,deployment,statefulset'
-        ]
-        output = check_output(cmd).decode('UTF-8')
+            '-l', 'cdk-restart-on-ca-change=true'
+        ).decode('UTF-8')
         deployments = json.loads(output)['items']
 
         # Get ServiceAccounts
@@ -2467,13 +2465,11 @@ def restart_addons_for_ca():
         )
         service_accounts = []
         for namespace, name in service_account_names:
-            cmd = [
-                'kubectl', 'get',
+            output = kubectl(
+                'kubectl', 'get', 'ServiceAccount', name,
                 '-o', 'json',
-                '-n', namespace,
-                'ServiceAccount', name
-            ]
-            output = check_output(cmd).decode('UTF-8')
+                '-n', namespace
+            ).decode('UTF-8')
             service_account = json.loads(output)
             service_accounts.append(service_account)
 
@@ -2485,13 +2481,11 @@ def restart_addons_for_ca():
                 secret_names.add((namespace, secret['name']))
         secrets = []
         for namespace, name in secret_names:
-            cmd = [
-                'kubectl', 'get',
+            output = kubectl(
+                'get', 'Secret', name,
                 '-o', 'json',
-                '-n', namespace,
-                'Secret', name
-            ]
-            output = check_output(cmd).decode('UTF-8')
+                '-n', namespace
+            ).decode('UTF-8')
             secret = json.loads(output)
             secrets.append(secret)
 
@@ -2519,12 +2513,10 @@ def restart_addons_for_ca():
             namespace = deployment['metadata']['namespace']
             name = deployment['metadata']['name']
             hookenv.log('Restarting addon: %s %s %s' % (kind, namespace, name))
-            cmd = [
-                'kubectl', 'rollout', 'restart',
-                '-n', namespace,
-                kind + '/' + name
-            ]
-            check_call(cmd)
+            kubectl(
+                'rollout', 'restart', kind + '/' + name,
+                '-n', namespace
+            )
 
         leader_set({'kubernetes-master-addons-restart-for-ca': None})
     except Exception:
