@@ -2466,7 +2466,7 @@ def restart_addons_for_ca():
         service_accounts = []
         for namespace, name in service_account_names:
             output = kubectl(
-                'kubectl', 'get', 'ServiceAccount', name,
+                'get', 'ServiceAccount', name,
                 '-o', 'json',
                 '-n', namespace
             ).decode('UTF-8')
