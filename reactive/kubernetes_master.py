@@ -84,6 +84,7 @@ from charms.layer.kubernetes_common import server_key_path
 from charms.layer.kubernetes_common import client_crt_path
 from charms.layer.kubernetes_common import client_key_path
 from charms.layer.kubernetes_common import get_unit_number
+from charms.layer.kubernetes_common import kubectl
 
 
 # Override the default nagios shortname regex to allow periods, which we
@@ -680,7 +681,9 @@ def add_systemd_file_watcher():
       'cni.available')
 @when_not('kubernetes-master.components.started',
           'kubernetes-master.cloud.pending',
-          'kubernetes-master.cloud.blocked')
+          'kubernetes-master.cloud.blocked',
+          'tls_client.certs.changed',
+          'tls_client.ca.written')
 def start_master():
     '''Run the Kubernetes master components.'''
     hookenv.status_set('maintenance',
@@ -719,6 +722,21 @@ def start_master():
     hookenv.open_port(6443)
 
 
+@when('tls_client.certs.changed')
+def certs_changed():
+    clear_flag('kubernetes-master.components.started')
+    clear_flag('tls_client.certs.changed')
+
+
+@when('tls_client.ca.written')
+def ca_written():
+    clear_flag('kubernetes-master.components.started')
+    if is_state('leadership.is_leader'):
+        if leader_get('kubernetes-master-addons-ca-in-use'):
+            leader_set({'kubernetes-master-addons-restart-for-ca': True})
+    clear_flag('tls_client.ca.written')
+
+
 @when('etcd.available')
 def etcd_data_change(etcd):
     ''' Etcd scale events block master reconfiguration due to the
@@ -733,6 +751,11 @@ def etcd_data_change(etcd):
     # handling of the master components
     if data_changed('etcd-connect', connection_string):
         remove_state('kubernetes-master.components.started')
+
+    # If the cert info changes, remove the started state to trigger
+    # handling of the master components
+    if data_changed('etcd-certs', etcd.get_client_credentials()):
+        clear_flag('kubernetes-master.components.started')
 
     # We are the leader and the auto_storage_backend is not set meaning
     # this is the first time we connect to etcd.
@@ -916,15 +939,6 @@ def update_certificates():
     clear_flag('config.changed.extra_sans')
 
 
-@when('kubernetes-master.components.started',
-      'tls_client.certs.changed')
-def kick_api_server():
-    # certificate changed, so restart the api server
-    hookenv.log("Certificate information changed, restarting api server")
-    service_restart('snap.kube-apiserver.daemon')
-    clear_flag('tls_client.certs.changed')
-
-
 @when_any('kubernetes-master.components.started',
           'kubernetes-master.ceph.configured',
           'keystone-credentials.available.auth')
@@ -1017,6 +1031,7 @@ def configure_cdk_addons():
         return
 
     set_state('cdk-addons.configured')
+    leader_set({'kubernetes-master-addons-ca-in-use': True})
     if ks:
         leader_set({'keystone-cdk-addons-configured': True})
     else:
@@ -1853,11 +1868,15 @@ def token_generator(length=32):
     return token
 
 
-@retry(times=3, delay_secs=10)
+@retry(times=3, delay_secs=1)
 def get_pods(namespace='default'):
-    cmd = ['kubectl', 'get', 'po', '-n', namespace, '-o', 'json']
     try:
-        output = check_output(cmd).decode('utf-8')
+        output = kubectl(
+            'get', 'po',
+            '-n', namespace,
+            '-o', 'json',
+            '--request-timeout', '10s'
+        ).decode('UTF-8')
         result = json.loads(output)
     except CalledProcessError:
         hookenv.log('failed to get {} pod status'.format(namespace))
@@ -2418,3 +2437,88 @@ def send_registry_location():
 @when('config.changed.image-registry')
 def send_new_registry_location():
     clear_flag('kubernetes-master.sent-registry')
+
+
+@when('leadership.is_leader',
+      'leadership.set.kubernetes-master-addons-restart-for-ca',
+      'kubernetes-master.components.started')
+def restart_addons_for_ca():
+    try:
+        # Get deployments/daemonsets/statefulsets
+        output = kubectl(
+            'get', 'daemonset,deployment,statefulset',
+            '-o', 'json',
+            '--all-namespaces',
+            '-l', 'cdk-restart-on-ca-change=true'
+        ).decode('UTF-8')
+        deployments = json.loads(output)['items']
+
+        # Get ServiceAccounts
+        service_account_names = set(
+            (
+                deployment['metadata']['namespace'],
+                deployment['spec']['template']['spec'].get(
+                    'serviceAccountName', 'default'
+                )
+            )
+            for deployment in deployments
+        )
+        service_accounts = []
+        for namespace, name in service_account_names:
+            output = kubectl(
+                'get', 'ServiceAccount', name,
+                '-o', 'json',
+                '-n', namespace
+            ).decode('UTF-8')
+            service_account = json.loads(output)
+            service_accounts.append(service_account)
+
+        # Get ServiceAccount secrets
+        secret_names = set()
+        for service_account in service_accounts:
+            namespace = service_account['metadata']['namespace']
+            for secret in service_account['secrets']:
+                secret_names.add((namespace, secret['name']))
+        secrets = []
+        for namespace, name in secret_names:
+            output = kubectl(
+                'get', 'Secret', name,
+                '-o', 'json',
+                '-n', namespace
+            ).decode('UTF-8')
+            secret = json.loads(output)
+            secrets.append(secret)
+
+        # Check secrets have updated CA
+        with open(ca_crt_path, 'rb') as f:
+            ca = f.read()
+        encoded_ca = base64.b64encode(ca).decode('UTF-8')
+        mismatched_secrets = [
+            secret for secret in secrets
+            if secret['data']['ca.crt'] != encoded_ca
+        ]
+        if mismatched_secrets:
+            hookenv.log(
+                'ServiceAccount secrets do not have correct ca.crt: '
+                + ','.join(
+                    secret['metadata']['name'] for secret in mismatched_secrets
+                )
+            )
+            hookenv.log('Waiting to retry restarting addons')
+            return
+
+        # Now restart the addons
+        for deployment in deployments:
+            kind = deployment['kind']
+            namespace = deployment['metadata']['namespace']
+            name = deployment['metadata']['name']
+            hookenv.log('Restarting addon: %s %s %s' % (kind, namespace, name))
+            kubectl(
+                'rollout', 'restart', kind + '/' + name,
+                '-n', namespace
+            )
+
+        leader_set({'kubernetes-master-addons-restart-for-ca': None})
+    except Exception:
+        hookenv.log(traceback.format_exc())
+        hookenv.log('Waiting to retry restarting addons')
