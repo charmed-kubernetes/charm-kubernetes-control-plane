@@ -1460,7 +1460,11 @@ def build_kubeconfig(server):
 
         try:
             with open(kubeconfig_path, 'r') as conf:
-                if not data_changed('kube-config-build', conf.read()):
+                config_matrix = {
+                    'keystone': ks,
+                    'conf': conf.read()
+                }
+                if not data_changed('kube-config-build', config_matrix):
                     hookenv.log('Skipping config write. No changes.', 'DEBUG')
                     return
         except FileNotFoundError:
