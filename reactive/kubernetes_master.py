@@ -1465,12 +1465,11 @@ def build_kubeconfig(server):
                     'conf': conf.read()
                 }
                 if not data_changed('kube-config-build', config_matrix):
-                    hookenv.log('Skipping config write. No changes.', 'DEBUG')
                     return
         except FileNotFoundError:
             pass
 
-        hookenv.status_set('maintenance', 'Writing kubeconfig file.')
+        hookenv.log('Writing kubeconfig file.')
 
         if ks:
             create_kubeconfig(kubeconfig_path, server, ca_crt_path,
