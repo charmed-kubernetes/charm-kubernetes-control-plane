@@ -1273,6 +1273,7 @@ def switch_auth_mode(forced=False):
       'kubernetes-master.create.rbac')
 def create_rbac_resources():
     rbac_proxy_path = '/root/cdk/rbac-proxy.yaml'
+    rbac_namespaces_path = '/root/cdk/rbac-namespaces.yaml'
 
     # NB: when metrics and logs are retrieved by proxy, the 'user' is the
     # common name of the cert used to authenticate the proxied request.
@@ -1282,13 +1283,24 @@ def create_rbac_resources():
     context = {'juju_application': hookenv.service_name(),
                'proxy_user': proxy_user}
     render('rbac-proxy.yaml', rbac_proxy_path, context)
+    render('rbac-namespaces.yaml', rbac_namespaces_path)
 
     hookenv.log('Creating proxy-related RBAC resources.')
-    if kubectl_manifest('apply', rbac_proxy_path):
-        remove_state('kubernetes-master.create.rbac')
-    else:
+    hookenv.log('Creating namespaces-related RBAC resources.')
+
+    proxy_apply = kubectl_manifest('apply', rbac_proxy_path)
+    namespaces_apply = kubectl_manifest('apply', rbac_namespaces_path)
+
+    if not proxy_apply:
         msg = 'Failed to apply {}, will retry.'.format(rbac_proxy_path)
         hookenv.log(msg)
+
+    if not namespaces_apply:
+        msg = 'Failed to apply {}, will retry.'.format(rbac_namespaces_path)
+        hookenv.log(msg)
+
+    if proxy_apply and namespaces_apply:
+        remove_state('kubernetes-master.create.rbac')
 
 
 @when('leadership.is_leader',
