@@ -1258,11 +1258,15 @@ def switch_auth_mode(forced=False):
     if data_changed('auth-mode', mode) or forced:
         # manage flags to handle rbac related resources
         if mode and 'rbac' in mode.lower():
-            remove_state('kubernetes-master.remove.rbac')
-            set_state('kubernetes-master.create.rbac')
+            remove_state('kubernetes-master.remove.rbac.proxy')
+            remove_state('kubernetes-master.remove.rbac.namespaces')
+            set_state('kubernetes-master.create.rbac.proxy')
+            set_state('kubernetes-master.create.rbac.namespaces')
         else:
-            remove_state('kubernetes-master.create.rbac')
-            set_state('kubernetes-master.remove.rbac')
+            remove_state('kubernetes-master.create.rbac.proxy')
+            remove_state('kubernetes-master.create.rbac.namespaces')
+            set_state('kubernetes-master.remove.rbac.proxy')
+            set_state('kubernetes-master.remove.rbac.namespaces')
 
         # set ourselves up to restart since auth mode has changed
         remove_state('kubernetes-master.components.started')
@@ -1270,10 +1274,9 @@ def switch_auth_mode(forced=False):
 
 @when('leadership.is_leader',
       'kubernetes-master.components.started',
-      'kubernetes-master.create.rbac')
-def create_rbac_resources():
+      'kubernetes-master.create.rbac.proxy')
+def create_rbac_proxy():
     rbac_proxy_path = '/root/cdk/rbac-proxy.yaml'
-    rbac_namespaces_path = '/root/cdk/rbac-namespaces.yaml'
 
     # NB: when metrics and logs are retrieved by proxy, the 'user' is the
     # common name of the cert used to authenticate the proxied request.
@@ -1283,42 +1286,65 @@ def create_rbac_resources():
     context = {'juju_application': hookenv.service_name(),
                'proxy_user': proxy_user}
     render('rbac-proxy.yaml', rbac_proxy_path, context)
-    render('rbac-namespaces.yaml', rbac_namespaces_path)
 
     hookenv.log('Creating proxy-related RBAC resources.')
-    hookenv.log('Creating namespaces-related RBAC resources.')
-
-    proxy_apply = kubectl_manifest('apply', rbac_proxy_path)
-    namespaces_apply = kubectl_manifest('apply', rbac_namespaces_path)
-
-    if not proxy_apply:
+    if kubectl_manifest('apply', rbac_proxy_path):
+        remove_state('kubernetes-master.create.rbac.proxy')
+    else:
         msg = 'Failed to apply {}, will retry.'.format(rbac_proxy_path)
         hookenv.log(msg)
-
-    if not namespaces_apply:
-        msg = 'Failed to apply {}, will retry.'.format(rbac_namespaces_path)
-        hookenv.log(msg)
-
-    if proxy_apply and namespaces_apply:
-        remove_state('kubernetes-master.create.rbac')
 
 
 @when('leadership.is_leader',
       'kubernetes-master.components.started',
-      'kubernetes-master.remove.rbac')
-def remove_rbac_resources():
+      'kubernetes-master.create.rbac.namespaces')
+def create_rbac_namespaces():
+    rbac_namespaces_path = '/root/cdk/rbac-namespaces.yaml'
+
+    render('rbac-namespaces.yaml', rbac_namespaces_path, {})
+
+    hookenv.log('Creating namespaces-related RBAC resources.')
+    if kubectl_manifest('apply', 'rbac-namespaces.yaml'):
+        remove_state('kubernetes-master.create.rbac.proxy')
+    else:
+        msg = 'Failed to apply {}, will retry.'.format(rbac_namespaces_path)
+        hookenv.log(msg)
+
+
+@when('leadership.is_leader',
+      'kubernetes-master.components.started',
+      'kubernetes-master.remove.rbac.proxy')
+def remove_rbac_proxy():
     rbac_proxy_path = '/root/cdk/rbac-proxy.yaml'
     if os.path.isfile(rbac_proxy_path):
         hookenv.log('Removing proxy-related RBAC resources.')
         if kubectl_manifest('delete', rbac_proxy_path):
             os.remove(rbac_proxy_path)
-            remove_state('kubernetes-master.remove.rbac')
+            remove_state('kubernetes-master.remove.rbac.proxy')
         else:
             msg = 'Failed to delete {}, will retry.'.format(rbac_proxy_path)
             hookenv.log(msg)
     else:
         # if we dont have the yaml, there's nothing for us to do
-        remove_state('kubernetes-master.remove.rbac')
+        remove_state('kubernetes-master.remove.rbac.proxy')
+
+
+@when('leadership.is_leader',
+      'kubernetes-master.components.started',
+      'kubernetes-master.remove.rbac.namespaces')
+def remove_rbac_namespaces():
+    rbac_namespaces_path = '/root/cdk/rbac-namespaces.yaml'
+    if os.path.isfile(rbac_namespaces_path):
+        hookenv.log('Removing namespaces-related RBAC resources.')
+        if kubectl_manifest('delete', rbac_namespaces_path):
+            os.remove(rbac_namespaces_path)
+            remove_state('kubernetes-master.remove.rbac.namespaces')
+        else:
+            msg = 'Failed to delete {}, will retry.'.format(rbac_namespaces_path)
+            hookenv.log(msg)
+    else:
+        # if we dont have the yaml, there's nothing for us to do
+        remove_state('kubernetes-master.remove.rbac.namespaces')
 
 
 @when('kubernetes-master.components.started')
