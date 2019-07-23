@@ -718,6 +718,9 @@ def start_master():
                          ['127.0.0.1:8080'], cluster_cidr)
     service_restart('snap.kube-proxy.daemon')
 
+    # Setting switch_auth_mode here will set flags if RBAC
+    # is enabled and bypass "Waiting for pods to start"
+    switch_auth_mode(forced=True)
     set_state('kubernetes-master.components.started')
     hookenv.open_port(6443)
 
@@ -1304,7 +1307,7 @@ def create_rbac_namespaces():
     render('rbac-namespaces.yaml', rbac_namespaces_path, {})
 
     hookenv.log('Creating namespaces-related RBAC resources.')
-    if kubectl_manifest('apply', 'rbac-namespaces.yaml'):
+    if kubectl_manifest('apply', rbac_namespaces_path):
         remove_state('kubernetes-master.create.rbac.proxy')
     else:
         msg = 'Failed to apply {}, will retry.'.format(rbac_namespaces_path)
