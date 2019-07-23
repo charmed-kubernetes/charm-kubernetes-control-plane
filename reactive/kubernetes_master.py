@@ -718,6 +718,8 @@ def start_master():
                          ['127.0.0.1:8080'], cluster_cidr)
     service_restart('snap.kube-proxy.daemon')
 
+    switch_auth_mode(forced=True)
+
     set_state('kubernetes-master.components.started')
     hookenv.open_port(6443)
 
@@ -1299,16 +1301,26 @@ def create_rbac_proxy():
       'kubernetes-master.components.started',
       'kubernetes-master.create.rbac.namespaces')
 def create_rbac_namespaces():
-    rbac_namespaces_path = '/root/cdk/rbac-namespaces.yaml'
+    cluster_role_binding = '/root/cdk/rbac-clusterrolebinding.yaml'
+    cluster_role_patch = '/root/cdk/rbac-clusterrole.yaml'
 
-    render('rbac-namespaces.yaml', rbac_namespaces_path, {})
+    render('rbac-clusterrolebinding.yaml', cluster_role_binding, {})
+    render('rbac-clusterrole.yaml', cluster_role_patch, {})
 
     hookenv.log('Creating namespaces-related RBAC resources.')
-    if kubectl_manifest('apply', 'rbac-namespaces.yaml'):
-        remove_state('kubernetes-master.create.rbac.proxy')
-    else:
-        msg = 'Failed to apply {}, will retry.'.format(rbac_namespaces_path)
+
+    if not kubectl_manifest('apply', cluster_role_binding):
+        msg = 'Failed to apply {}, will retry.'.format(cluster_role_binding)
         hookenv.log(msg)
+
+    with open(cluster_role_patch) as f:
+        patch = f.read()
+
+    if not kubectl('patch', 'clusterrole', 'system:node','-p', patch):
+        msg = 'Failed to apply {}, will retry.'.format(cluster_role_patch)
+        hookenv.log(msg)
+
+    remove_state('kubernetes-master.create.rbac.proxy')
 
 
 @when('leadership.is_leader',
@@ -1333,7 +1345,7 @@ def remove_rbac_proxy():
       'kubernetes-master.components.started',
       'kubernetes-master.remove.rbac.namespaces')
 def remove_rbac_namespaces():
-    rbac_namespaces_path = '/root/cdk/rbac-namespaces.yaml'
+    rbac_namespaces_path = '/root/cdk/rbac-clusterrolebinding.yaml'
     if os.path.isfile(rbac_namespaces_path):
         hookenv.log('Removing namespaces-related RBAC resources.')
         if kubectl_manifest('delete', rbac_namespaces_path):
