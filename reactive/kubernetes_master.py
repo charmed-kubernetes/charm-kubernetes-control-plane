@@ -704,6 +704,7 @@ def start_master():
     add_systemd_restart_always()
     add_systemd_file_limit()
     add_systemd_file_watcher()
+    add_systemd_iptables_patch()
     check_call(['systemctl', 'daemon-reload'])
 
     # Add CLI options to all components
@@ -2535,3 +2536,21 @@ def restart_addons_for_ca():
     except Exception:
         hookenv.log(traceback.format_exc())
         hookenv.log('Waiting to retry restarting addons')
+
+
+def add_systemd_iptables_patch():
+    source = 'templates/kube-proxy-iptables-fix.sh'
+    dest = '/usr/local/bin/kube-proxy-iptables-fix.sh'
+    copyfile(source, dest)
+    os.chmod(dest, 0o775)
+
+    template = 'templates/service-iptables-fix.service'
+    dest_dir = '/etc/systemd/system'
+    os.makedirs(dest_dir, exist_ok=True)
+    service_name = 'kube-proxy-iptables-fix.service'
+    copyfile(template, '{}/{}'.format(dest_dir, service_name))
+
+    check_call(['systemctl', 'daemon-reload'])
+
+    # enable and run the service
+    service_resume(service_name)
