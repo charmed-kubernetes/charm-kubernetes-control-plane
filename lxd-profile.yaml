@@ -1,4 +1,4 @@
-name: juju-default-k8s-worker-deployment-0
+name: juju-default-k8s-deployment-0
 config:
   linux.kernel_modules: ip_tables,ip6_tables,netlink_diag,nf_nat,overlay
   raw.lxc: |
@@ -9,7 +9,7 @@ config:
   security.privileged: true
 description: ""
 devices:
-  aadisable2:
+  aadisable:
     path: /dev/kmsg
     source: /dev/kmsg
     type: unix-char
