@@ -43,6 +43,7 @@ from charms.reactive import set_state, set_flag
 from charms.reactive import is_state, is_flag_set
 from charms.reactive import endpoint_from_flag
 from charms.reactive import when, when_any, when_not, when_none
+from charms.reactive import register_trigger
 from charms.reactive.helpers import data_changed, any_file_changed
 
 from charms.layer import tls_client
@@ -71,7 +72,7 @@ from charms.layer.kubernetes_common import configure_kubernetes_service
 from charms.layer.kubernetes_common import cloud_config_path
 from charms.layer.kubernetes_common import encryption_config_path
 from charms.layer.kubernetes_common import write_gcp_snap_config
-from charms.layer.kubernetes_common import write_openstack_snap_config
+from charms.layer.kubernetes_common import generate_openstack_cloud_config
 from charms.layer.kubernetes_common import write_azure_snap_config
 from charms.layer.kubernetes_common import configure_kube_proxy
 from charms.layer.kubernetes_common import kubeproxyconfig_path
@@ -106,6 +107,19 @@ db = unitdata.kv()
 checksum_prefix = 'kubernetes-master.resource-checksums.'
 configure_prefix = 'kubernetes-master.prev_args.'
 keystone_root = '/root/cdk/keystone'
+
+register_trigger(when='endpoint.aws.ready',  # when set
+                 set_flag='kubernetes-master.aws.changed')
+register_trigger(when_not='endpoint.aws.ready',  # when cleared
+                 set_flag='kubernetes-master.aws.changed')
+register_trigger(when='endpoint.azure.ready',  # when set
+                 set_flag='kubernetes-master.azure.changed')
+register_trigger(when_not='endpoint.azure.ready',  # when cleared
+                 set_flag='kubernetes-master.azure.changed')
+register_trigger(when='endpoint.gcp.ready',  # when set
+                 set_flag='kubernetes-master.gcp.changed')
+register_trigger(when_not='endpoint.gcp.ready',  # when cleared
+                 set_flag='kubernetes-master.gcp.changed')
 
 
 def set_upgrade_needed(forced=False):
@@ -704,6 +718,7 @@ def start_master():
     add_systemd_restart_always()
     add_systemd_file_limit()
     add_systemd_file_watcher()
+    add_systemd_iptables_patch()
     check_call(['systemctl', 'daemon-reload'])
 
     # Add CLI options to all components
@@ -718,10 +733,39 @@ def start_master():
                          ['127.0.0.1:8080'], cluster_cidr)
     service_restart('snap.kube-proxy.daemon')
 
-    switch_auth_mode(forced=True)
-
     set_state('kubernetes-master.components.started')
     hookenv.open_port(6443)
+
+
+@when('leadership.is_leader', 'kubernetes-master.components.started')
+@when_not('kubernetes-master.systemnode.applied')
+def apply_systemnode_clusterrole():
+    """
+    Apply system:node ClusterRole to 
+    cluster.  This is to workaround bug
+    https://bugs.launchpad.net/charm-kubernetes-master/+bug/1837249
+
+    :return: None
+    """
+    cluster_role = '/root/cdk/rbac-clusterrole.yaml'
+    cluster_role_binding = '/root/cdk/rbac-clusterrolebinding.yaml'
+
+    render('rbac-clusterrole.yaml', cluster_role, {})
+    render('rbac-clusterrolebinding.yaml', cluster_role_binding, {})
+
+    hookenv.log('Creating system:node RBAC resources.')
+
+    if not kubectl_manifest('apply', cluster_role):
+        msg = 'Failed to apply {}, will retry.'.format(cluster_role)
+        hookenv.log(msg)
+        return
+
+    if not kubectl_manifest('apply', cluster_role_binding):
+        msg = 'Failed to apply {}, will retry.'.format(cluster_role_binding)
+        hookenv.log(msg)
+        return
+
+    set_state('kubernetes-master.systemnode.applied')
 
 
 @when('tls_client.certs.changed')
@@ -943,11 +987,19 @@ def update_certificates():
 
 @when_any('kubernetes-master.components.started',
           'kubernetes-master.ceph.configured',
-          'keystone-credentials.available.auth')
+          'keystone-credentials.available.auth',
+          'kubernetes-master.aws.changed',
+          'kubernetes-master.azure.changed',
+          'kubernetes-master.gcp.changed',
+          'kubernetes-master.openstack.changed')
 @when('leadership.is_leader')
 def configure_cdk_addons():
     ''' Configure CDK addons '''
     remove_state('cdk-addons.configured')
+    remove_state('kubernetes-master.aws.changed')
+    remove_state('kubernetes-master.azure.changed')
+    remove_state('kubernetes-master.gcp.changed')
+    remove_state('kubernetes-master.openstack.changed')
     load_gpu_plugin = hookenv.config('enable-nvidia-plugin').lower()
     gpuEnable = (get_version('kube-apiserver') >= (1, 9) and
                  load_gpu_plugin == "auto" and
@@ -1002,6 +1054,12 @@ def configure_cdk_addons():
         else:
             dashboard_auth = 'basic'
 
+    enable_aws = str(is_flag_set('endpoint.aws.ready')).lower()
+    enable_azure = str(is_flag_set('endpoint.azure.ready')).lower()
+    enable_gcp = str(is_flag_set('endpoint.gcp.ready')).lower()
+    enable_openstack = str(is_flag_set('endpoint.openstack.ready')).lower()
+    openstack = endpoint_from_flag('endpoint.openstack.ready')
+
     args = [
         'arch=' + arch(),
         'dns-ip=' + get_deprecated_dns_ip(),
@@ -1020,8 +1078,19 @@ def configure_cdk_addons():
         'keystone-key-file=' + keystone.get('key', ''),
         'keystone-server-url=' + keystone.get('url', ''),
         'keystone-server-ca=' + keystone.get('keystone-ca', ''),
-        'dashboard-auth=' + dashboard_auth
+        'dashboard-auth=' + dashboard_auth,
+        'enable-aws=' + enable_aws,
+        'enable-azure=' + enable_azure,
+        'enable-gcp=' + enable_gcp,
+        'enable-openstack=' + enable_openstack,
     ]
+    if openstack:
+        args.extend([
+            'openstack-cloud-conf=' + base64.b64encode(
+                generate_openstack_cloud_config().encode('utf-8')
+            ).decode('utf-8'),
+            'openstack-endpoint-ca=' + (openstack.endpoint_tls_ca or ''),
+        ])
     if get_version('kube-apiserver') >= (1, 14):
         args.append('dns-provider=' + dnsProvider)
     else:
@@ -1260,15 +1329,11 @@ def switch_auth_mode(forced=False):
     if data_changed('auth-mode', mode) or forced:
         # manage flags to handle rbac related resources
         if mode and 'rbac' in mode.lower():
-            remove_state('kubernetes-master.remove.rbac.proxy')
-            remove_state('kubernetes-master.remove.rbac.namespaces')
-            set_state('kubernetes-master.create.rbac.proxy')
-            set_state('kubernetes-master.create.rbac.namespaces')
+            remove_state('kubernetes-master.remove.rbac')
+            set_state('kubernetes-master.create.rbac')
         else:
-            remove_state('kubernetes-master.create.rbac.proxy')
-            remove_state('kubernetes-master.create.rbac.namespaces')
-            set_state('kubernetes-master.remove.rbac.proxy')
-            set_state('kubernetes-master.remove.rbac.namespaces')
+            remove_state('kubernetes-master.create.rbac')
+            set_state('kubernetes-master.remove.rbac')
 
         # set ourselves up to restart since auth mode has changed
         remove_state('kubernetes-master.components.started')
@@ -1276,8 +1341,8 @@ def switch_auth_mode(forced=False):
 
 @when('leadership.is_leader',
       'kubernetes-master.components.started',
-      'kubernetes-master.create.rbac.proxy')
-def create_rbac_proxy():
+      'kubernetes-master.create.rbac')
+def create_rbac_resources():
     rbac_proxy_path = '/root/cdk/rbac-proxy.yaml'
 
     # NB: when metrics and logs are retrieved by proxy, the 'user' is the
@@ -1291,7 +1356,7 @@ def create_rbac_proxy():
 
     hookenv.log('Creating proxy-related RBAC resources.')
     if kubectl_manifest('apply', rbac_proxy_path):
-        remove_state('kubernetes-master.create.rbac.proxy')
+        remove_state('kubernetes-master.create.rbac')
     else:
         msg = 'Failed to apply {}, will retry.'.format(rbac_proxy_path)
         hookenv.log(msg)
@@ -1299,64 +1364,20 @@ def create_rbac_proxy():
 
 @when('leadership.is_leader',
       'kubernetes-master.components.started',
-      'kubernetes-master.create.rbac.namespaces')
-def create_rbac_namespaces():
-    cluster_role_binding = '/root/cdk/rbac-clusterrolebinding.yaml'
-    cluster_role_patch = '/root/cdk/rbac-clusterrole.yaml'
-
-    render('rbac-clusterrolebinding.yaml', cluster_role_binding, {})
-    render('rbac-clusterrole.yaml', cluster_role_patch, {})
-
-    hookenv.log('Creating namespaces-related RBAC resources.')
-
-    if not kubectl_manifest('apply', cluster_role_binding):
-        msg = 'Failed to apply {}, will retry.'.format(cluster_role_binding)
-        hookenv.log(msg)
-
-    with open(cluster_role_patch) as f:
-        patch = f.read()
-
-    if not kubectl('patch', 'clusterrole', 'system:node','-p', patch):
-        msg = 'Failed to apply {}, will retry.'.format(cluster_role_patch)
-        hookenv.log(msg)
-
-    remove_state('kubernetes-master.create.rbac.proxy')
-
-
-@when('leadership.is_leader',
-      'kubernetes-master.components.started',
-      'kubernetes-master.remove.rbac.proxy')
-def remove_rbac_proxy():
+      'kubernetes-master.remove.rbac')
+def remove_rbac_resources():
     rbac_proxy_path = '/root/cdk/rbac-proxy.yaml'
     if os.path.isfile(rbac_proxy_path):
         hookenv.log('Removing proxy-related RBAC resources.')
         if kubectl_manifest('delete', rbac_proxy_path):
             os.remove(rbac_proxy_path)
-            remove_state('kubernetes-master.remove.rbac.proxy')
+            remove_state('kubernetes-master.remove.rbac')
         else:
             msg = 'Failed to delete {}, will retry.'.format(rbac_proxy_path)
             hookenv.log(msg)
     else:
         # if we dont have the yaml, there's nothing for us to do
-        remove_state('kubernetes-master.remove.rbac.proxy')
-
-
-@when('leadership.is_leader',
-      'kubernetes-master.components.started',
-      'kubernetes-master.remove.rbac.namespaces')
-def remove_rbac_namespaces():
-    rbac_namespaces_path = '/root/cdk/rbac-clusterrolebinding.yaml'
-    if os.path.isfile(rbac_namespaces_path):
-        hookenv.log('Removing namespaces-related RBAC resources.')
-        if kubectl_manifest('delete', rbac_namespaces_path):
-            os.remove(rbac_namespaces_path)
-            remove_state('kubernetes-master.remove.rbac.namespaces')
-        else:
-            msg = 'Failed to delete {}, will retry.'.format(rbac_namespaces_path)
-            hookenv.log(msg)
-    else:
-        # if we dont have the yaml, there's nothing for us to do
-        remove_state('kubernetes-master.remove.rbac.namespaces')
+        remove_state('kubernetes-master.remove.rbac')
 
 
 @when('kubernetes-master.components.started')
@@ -1405,7 +1426,8 @@ def is_privileged():
     if privileged == 'auto':
         return \
             is_state('kubernetes-master.gpu.enabled') or \
-            is_state('ceph-storage.available')
+            is_state('ceph-storage.available') or \
+            is_state('endpoint.openstack.joined')
     else:
         return privileged == 'true'
 
@@ -1751,9 +1773,6 @@ def configure_apiserver(etcd_connection_string):
     elif is_state('endpoint.gcp.ready'):
         api_opts['cloud-provider'] = 'gce'
         api_opts['cloud-config'] = str(api_cloud_config_path)
-    elif is_state('endpoint.openstack.ready'):
-        api_opts['cloud-provider'] = 'openstack'
-        api_opts['cloud-config'] = str(api_cloud_config_path)
     elif (is_state('endpoint.vsphere.ready') and
           get_version('kube-apiserver') >= (1, 12)):
         api_opts['cloud-provider'] = 'vsphere'
@@ -1815,9 +1834,6 @@ def configure_controller_manager():
         controller_opts['cloud-provider'] = 'aws'
     elif is_state('endpoint.gcp.ready'):
         controller_opts['cloud-provider'] = 'gce'
-        controller_opts['cloud-config'] = str(cm_cloud_config_path)
-    elif is_state('endpoint.openstack.ready'):
-        controller_opts['cloud-provider'] = 'openstack'
         controller_opts['cloud-config'] = str(cm_cloud_config_path)
     elif (is_state('endpoint.vsphere.ready') and
           get_version('kube-apiserver') >= (1, 12)):
@@ -2178,9 +2194,6 @@ def cloud_ready():
     if is_state('endpoint.gcp.ready'):
         write_gcp_snap_config('kube-apiserver')
         write_gcp_snap_config('kube-controller-manager')
-    elif is_state('endpoint.openstack.ready'):
-        write_openstack_snap_config('kube-apiserver')
-        write_openstack_snap_config('kube-controller-manager')
     elif is_state('endpoint.vsphere.ready'):
         _write_vsphere_snap_config('kube-apiserver')
         _write_vsphere_snap_config('kube-controller-manager')
@@ -2202,10 +2215,11 @@ def update_cloud_config():
     reflected in the k8s cloud config files when changed. Manage flags to
     ensure this happens.
     '''
-    remove_state('kubernetes-master.cloud.ready')
     if is_state('endpoint.openstack.ready.changed'):
         remove_state('endpoint.openstack.ready.changed')
+        set_state('kubernetes-master.openstack.changed')
     if is_state('endpoint.vsphere.ready.changed'):
+        remove_state('kubernetes-master.cloud.ready')
         remove_state('endpoint.vsphere.ready.changed')
 
 
@@ -2585,3 +2599,21 @@ def restart_addons_for_ca():
     except Exception:
         hookenv.log(traceback.format_exc())
         hookenv.log('Waiting to retry restarting addons')
+
+
+def add_systemd_iptables_patch():
+    source = 'templates/kube-proxy-iptables-fix.sh'
+    dest = '/usr/local/bin/kube-proxy-iptables-fix.sh'
+    copyfile(source, dest)
+    os.chmod(dest, 0o775)
+
+    template = 'templates/service-iptables-fix.service'
+    dest_dir = '/etc/systemd/system'
+    os.makedirs(dest_dir, exist_ok=True)
+    service_name = 'kube-proxy-iptables-fix.service'
+    copyfile(template, '{}/{}'.format(dest_dir, service_name))
+
+    check_call(['systemctl', 'daemon-reload'])
+
+    # enable and run the service
+    service_resume(service_name)
