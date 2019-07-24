@@ -884,6 +884,7 @@ def send_data():
         hookenv.unit_public_ip(),
         ingress_ip,
         socket.gethostname(),
+        socket.getfqdn(),
         kubernetes_service_ip,
         'kubernetes',
         'kubernetes.{0}'.format(domain),
