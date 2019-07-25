@@ -1543,19 +1543,8 @@ def build_kubeconfig(server):
 
         # Create an absolute path for the kubeconfig file.
         kubeconfig_path = os.path.join(os.sep, 'home', 'ubuntu', 'config')
+
         # Create the kubeconfig on this system so users can access the cluster.
-
-        try:
-            with open(kubeconfig_path, 'r') as conf:
-                config_matrix = {
-                    'keystone': ks,
-                    'conf': conf.read()
-                }
-                if not data_changed('kube-config-build', config_matrix):
-                    return
-        except FileNotFoundError:
-            pass
-
         hookenv.log('Writing kubeconfig file.')
 
         if ks:
