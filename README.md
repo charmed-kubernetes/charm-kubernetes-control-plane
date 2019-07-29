@@ -42,7 +42,9 @@ operator.
 
 ## Deploying on LXD
 
-If you wish to run on LXD with GPU please see [deploying on lxd](https://github.com/charmed-kubernetes/bundle/wiki/Deploying-on-LXD#privileged-containers) as you will need to edit a line of the LXD profile which deployed with this charm.
+When deploying on LXD this charm will deploy its own profile, this profile can be inspected by running `lxd profile list` and choosing the profile matching your juju model name, once you have this you can run `lxc profile show ${PROFILE_NAME}`.
+
+If you wish to run on LXD with GPU passthru please see [deploying on lxd](https://github.com/charmed-kubernetes/bundle/wiki/Deploying-on-LXD#privileged-containers) as you will need to edit a line of the deployed LXD profile.
 
 #### Snap Refresh
 
