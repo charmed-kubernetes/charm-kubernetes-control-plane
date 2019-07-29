@@ -739,26 +739,19 @@ def start_master():
 
 @when('leadership.is_leader', 'kubernetes-master.components.started')
 @when_not('kubernetes-master.systemnode.applied')
-def apply_systemnode_clusterrole():
+def apply_systemnode_clusterrolebinding():
     """
-    Apply system:node ClusterRole to 
+    Apply system:node ClusterRoleBinding to 
     cluster.  This is to workaround bug
     https://bugs.launchpad.net/charm-kubernetes-master/+bug/1837249
 
     :return: None
     """
-    cluster_role = '/root/cdk/rbac-clusterrole.yaml'
     cluster_role_binding = '/root/cdk/rbac-clusterrolebinding.yaml'
 
-    render('rbac-clusterrole.yaml', cluster_role, {})
     render('rbac-clusterrolebinding.yaml', cluster_role_binding, {})
 
     hookenv.log('Creating system:node RBAC resources.')
-
-    if not kubectl_manifest('apply', cluster_role):
-        msg = 'Failed to apply {}, will retry.'.format(cluster_role)
-        hookenv.log(msg)
-        return
 
     if not kubectl_manifest('apply', cluster_role_binding):
         msg = 'Failed to apply {}, will retry.'.format(cluster_role_binding)
