@@ -42,7 +42,7 @@ operator.
 
 ## Deploying on LXD
 
-When deploying on LXD this charm will deploy its own profile, this profile can be inspected by running `lxd profile list` and choosing the profile matching your juju model name, once you have this you can run `lxc profile show ${PROFILE_NAME}`.
+When deploying on LXD juju will deploy the lxd profile found inside of this charm, renaming it in the process this profile can be inspected by running `lxd profile list` and choosing the profile matching your juju model name, once you have this you can run `lxc profile show ${PROFILE_NAME}`.
 
 If you wish to run on LXD with GPU passthru please see [deploying on lxd](https://github.com/charmed-kubernetes/bundle/wiki/Deploying-on-LXD#privileged-containers) as you will need to edit a line of the deployed LXD profile.
 
