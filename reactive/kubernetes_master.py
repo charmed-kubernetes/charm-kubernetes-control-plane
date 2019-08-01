@@ -326,6 +326,28 @@ def install_snaps():
     remove_state('kubernetes-master.components.started')
 
 
+@when('etcd.available')
+@when('config.changed.enable-metrics')
+def enable_metric_changed():
+    """
+    Trigger an api server update.
+
+    :return: None
+    """
+    etcd = endpoint_from_flag('etcd.available')
+    connection = etcd.get_connection_string()
+    if not connection:
+        # etcd is not returning a connection string. This happens when
+        # the master unit disconnects from etcd and is ready to terminate.
+        # No point in trying to start master services and fail. Just return.
+        return
+
+    configure_apiserver(connection)
+
+    if is_state('leadership.is_leader'):
+        configure_cdk_addons()
+
+
 @when('config.changed.client_password', 'leadership.is_leader')
 def password_changed():
     """Handle password change via the charms config."""
