@@ -72,7 +72,7 @@ from charms.layer.kubernetes_common import configure_kubernetes_service
 from charms.layer.kubernetes_common import cloud_config_path
 from charms.layer.kubernetes_common import encryption_config_path
 from charms.layer.kubernetes_common import write_gcp_snap_config
-from charms.layer.kubernetes_common import generate_openstack_snap_config
+from charms.layer.kubernetes_common import generate_openstack_cloud_config
 from charms.layer.kubernetes_common import write_azure_snap_config
 from charms.layer.kubernetes_common import configure_kube_proxy
 from charms.layer.kubernetes_common import kubeproxyconfig_path
@@ -1319,18 +1319,22 @@ def create_rbac_resources():
     # common name of the cert used to authenticate the proxied request.
     # The CN for /root/cdk/client.crt is 'system:kube-apiserver'
     # (see the send_data handler, above).
-    proxy_user = 'system:kube-apiserver'
-    context = {'juju_application': hookenv.service_name(),
-               'proxy_user': proxy_user}
-    render('rbac-proxy.yaml', rbac_proxy_path, context)
+    proxy_users = [
+        'client',
+        'system:kube-apiserver'
+    ]
 
-    hookenv.log('Creating proxy-related RBAC resources.')
-    if kubectl_manifest('apply', rbac_proxy_path):
-        remove_state('kubernetes-master.create.rbac')
-    else:
-        msg = 'Failed to apply {}, will retry.'.format(rbac_proxy_path)
-        hookenv.log(msg)
+    for proxy_user in proxy_users:
+        context = {'juju_application': hookenv.service_name(),
+                'proxy_user': proxy_user}
+        render('rbac-proxy.yaml', rbac_proxy_path, context)
 
+        hookenv.log('Creating proxy-related RBAC resources.')
+        if kubectl_manifest('apply', rbac_proxy_path):
+            remove_state('kubernetes-master.create.rbac')
+        else:
+            msg = 'Failed to apply {}, will retry.'.format(rbac_proxy_path)
+            hookenv.log(msg)
 
 @when('leadership.is_leader',
       'kubernetes-master.components.started',
@@ -1717,7 +1721,7 @@ def configure_apiserver(etcd_connection_string):
     if kube_version > (1, 6) and \
        hookenv.config('enable-metrics'):
         api_opts['requestheader-client-ca-file'] = str(ca_crt_path)
-        api_opts['requestheader-allowed-names'] = 'system:kube-apiserver'
+        api_opts['requestheader-allowed-names'] = 'system:kube-apiserver,client'
         api_opts['requestheader-extra-headers-prefix'] = 'X-Remote-Extra-'
         api_opts['requestheader-group-headers'] = 'X-Remote-Group'
         api_opts['requestheader-username-headers'] = 'X-Remote-User'
@@ -2153,9 +2157,6 @@ def cloud_ready():
     if is_state('endpoint.gcp.ready'):
         write_gcp_snap_config('kube-apiserver')
         write_gcp_snap_config('kube-controller-manager')
-    elif is_state('endpoint.openstack.ready'):
-        generate_openstack_snap_config('kube-apiserver')
-        generate_openstack_snap_config('kube-controller-manager')
     elif is_state('endpoint.vsphere.ready'):
         _write_vsphere_snap_config('kube-apiserver')
         _write_vsphere_snap_config('kube-controller-manager')
