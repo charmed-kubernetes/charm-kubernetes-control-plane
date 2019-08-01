@@ -72,7 +72,7 @@ from charms.layer.kubernetes_common import configure_kubernetes_service
 from charms.layer.kubernetes_common import cloud_config_path
 from charms.layer.kubernetes_common import encryption_config_path
 from charms.layer.kubernetes_common import write_gcp_snap_config
-from charms.layer.kubernetes_common import generate_openstack_cloud_config
+from charms.layer.kubernetes_common import generate_openstack_snap_config
 from charms.layer.kubernetes_common import write_azure_snap_config
 from charms.layer.kubernetes_common import configure_kube_proxy
 from charms.layer.kubernetes_common import kubeproxyconfig_path
@@ -2153,6 +2153,9 @@ def cloud_ready():
     if is_state('endpoint.gcp.ready'):
         write_gcp_snap_config('kube-apiserver')
         write_gcp_snap_config('kube-controller-manager')
+    elif is_state('endpoint.openstack.ready'):
+        generate_openstack_snap_config('kube-apiserver')
+        generate_openstack_snap_config('kube-controller-manager')
     elif is_state('endpoint.vsphere.ready'):
         _write_vsphere_snap_config('kube-apiserver')
         _write_vsphere_snap_config('kube-controller-manager')
