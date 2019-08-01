@@ -1324,17 +1324,16 @@ def create_rbac_resources():
         'system:kube-apiserver'
     ]
 
-    for proxy_user in proxy_users:
-        context = {'juju_application': hookenv.service_name(),
-                'proxy_user': proxy_user}
-        render('rbac-proxy.yaml', rbac_proxy_path, context)
+    context = {'juju_application': hookenv.service_name(),
+            'proxy_users': proxy_users}
+    render('rbac-proxy.yaml', rbac_proxy_path, context)
 
-        hookenv.log('Creating proxy-related RBAC resources.')
-        if kubectl_manifest('apply', rbac_proxy_path):
-            remove_state('kubernetes-master.create.rbac')
-        else:
-            msg = 'Failed to apply {}, will retry.'.format(rbac_proxy_path)
-            hookenv.log(msg)
+    hookenv.log('Creating proxy-related RBAC resources.')
+    if kubectl_manifest('apply', rbac_proxy_path):
+        remove_state('kubernetes-master.create.rbac')
+    else:
+        msg = 'Failed to apply {}, will retry.'.format(rbac_proxy_path)
+        hookenv.log(msg)
 
 @when('leadership.is_leader',
       'kubernetes-master.components.started',

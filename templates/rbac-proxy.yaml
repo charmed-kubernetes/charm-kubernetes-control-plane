@@ -17,7 +17,8 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: proxy-clusterrole-{{ juju_application }}
-subjects:
+subjects: {% for proxy_user in proxy_users %}
 - apiGroup: rbac.authorization.k8s.io
   kind: User
   name: {{ proxy_user }}
+{% endfor %}
