@@ -28,6 +28,7 @@ includes:
   - 'interface:keystone-credentials'
   - 'interface:prometheus-manual'
   - 'interface:grafana-dashboard'
+  - 'interface:aws-iam'
 options:
   basic:
     packages:

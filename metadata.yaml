@@ -40,6 +40,9 @@ provides:
     interface: prometheus-manual
   grafana:
     interface: grafana-dashboard
+  aws-iam:
+    interface: aws-iam
+    scope: container
 requires:
   etcd:
     interface: etcd
