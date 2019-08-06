@@ -36,6 +36,10 @@ provides:
   cni:
     interface: kubernetes-cni
     scope: container
+  prometheus:
+    interface: prometheus-manual
+  grafana:
+    interface: grafana-dashboard
 requires:
   etcd:
     interface: etcd

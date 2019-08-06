@@ -1,0 +1,20 @@
+job_name: 'k8s-api-endpoints'
+kubernetes_sd_configs:
+- api_server: https://{{k8s_api_endpoint}}
+  role: endpoints
+  tls_config:
+    insecure_skip_verify: true
+  basic_auth:
+    username: admin
+    password: {{k8s_password}}
+scrape_interval: 30s
+scheme: https
+tls_config:
+  insecure_skip_verify: true
+basic_auth:
+  username: admin
+  password: {{k8s_password}}
+relabel_configs:
+- source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+  action: keep
+  regex: default;kubernetes;https

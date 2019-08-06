@@ -1,0 +1,25 @@
+job_name: 'kubernetes-cadvisor'
+kubernetes_sd_configs:
+- api_server: https://{{k8s_api_endpoint}}
+  role: node
+  tls_config:
+    insecure_skip_verify: true
+  basic_auth:
+    username: admin
+    password: {{k8s_password}}
+scrape_interval: 30s
+scheme: https
+tls_config:
+  insecure_skip_verify: true
+basic_auth:
+  username: admin
+  password: {{k8s_password}}
+relabel_configs:
+- action: labelmap
+  regex: __meta_kubernetes_node_label_(.+)
+- target_label: __address__
+  replacement: {{k8s_api_endpoint}}
+- source_labels: [__meta_kubernetes_node_name]
+  regex: (.+)
+  target_label: __metrics_path__
+  replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor

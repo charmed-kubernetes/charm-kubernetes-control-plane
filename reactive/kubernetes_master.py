@@ -977,7 +977,8 @@ def configure_cdk_addons():
     # when configuring the cdk-addons snap until 1.17 is released.
     registry = hookenv.config('addons-registry')
     if registry and get_version('kube-apiserver') < (1, 17):
-        hookenv.log('addons-registry is deprecated; use image-registry instead')
+        hookenv.log('addons-registry is deprecated; '
+                    'use image-registry instead')
     else:
         registry = hookenv.config('image-registry')
     dbEnabled = str(hookenv.config('enable-dashboard-addons')).lower()
@@ -2575,3 +2576,77 @@ def add_systemd_iptables_patch():
 
     # enable and run the service
     service_resume(service_name)
+
+
+@when('leadership.is_leader',
+      'kubernetes-master.components.started',
+      'endpoint.prometheus.joined',
+      'certificates.ca.available')
+def register_prometheus_jobs():
+    prometheus = endpoint_from_flag('endpoint.prometheus.joined')
+    # tls = endpoint_from_flag('certificates.ca.available')
+    loadbalancer = endpoint_from_flag('loadbalancer.available')
+    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
+    hacluster_vip = get_hacluster_ip_or_hostname()
+
+    if forced_lb_ips:
+        # if the user gave us IPs for the load balancer, assume they know
+        # what they are talking about and use that instead of our information.
+        round_robin = get_unit_number() % len(forced_lb_ips)
+        k8s_api_endpoint = forced_lb_ips[round_robin]
+    elif hacluster_vip:
+        k8s_api_endpoint = hacluster_vip
+    elif loadbalancer:
+        lb_addresses = loadbalancer.get_addresses_ports()
+        k8s_api_endpoint = lb_addresses[0].get('public-address')
+    else:
+        k8s_api_endpoint = prometheus.ingress_address
+    k8s_password = get_password('basic_auth.csv', 'admin')
+
+    templates_dir = Path('templates')
+    for job_file in Path('templates/prometheus').glob('*.yaml.j2'):
+        prometheus.register_job(
+            job_name=job_file.name.split('.')[0],
+            job_data=yaml.safe_load(
+                render(source=job_file.relative_to(templates_dir),
+                       target=None,  # don't write file, just return rendered
+                       context={
+                           'k8s_api_endpoint': k8s_api_endpoint,
+                           'k8s_password': k8s_password,
+                       })
+            ),
+        )
+
+
+def detect_telegraf():
+    # Telegraf uses the implicit juju-info relation, which makes it difficult
+    # to tell if it's related. The "best" option is to look for the subordinate
+    # charm on disk.
+    for charm_dir in Path('/var/lib/juju/agents').glob('unit-*/charm'):
+        metadata = yaml.safe_load((charm_dir / 'metadata.yaml').read_text())
+        if 'telegraf' in metadata['name']:
+            return True
+    else:
+        return False
+
+
+@when('leadership.is_leader',
+      'kubernetes-master.components.started',
+      'endpoint.grafana.joined')
+def register_grafana_dashboards():
+    grafana = endpoint_from_flag('endpoint.grafana.joined')
+
+    # load conditional dashboards
+    dash_dir = Path('templates/grafana/conditional')
+    if is_flag_set('endpoint.prometheus.joined'):
+        dashboard = (dash_dir / 'prometheus.json').read_text()
+        grafana.register_dashboard('prometheus', json.loads(dashboard))
+    if detect_telegraf():
+        dashboard = (dash_dir / 'telegraf.json').read_text()
+        grafana.register_dashboard('telegraf', json.loads(dashboard))
+
+    # load automatic dashboards
+    dash_dir = Path('templates/grafana/autoload')
+    for dash_file in dash_dir.glob('*.json'):
+        dashboard = dash_file.read_text()
+        grafana.register_dashboard('telegraf', json.loads(dashboard))
