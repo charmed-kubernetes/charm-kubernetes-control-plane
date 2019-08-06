@@ -1325,7 +1325,7 @@ def create_rbac_resources():
     ]
 
     context = {'juju_application': hookenv.service_name(),
-            'proxy_users': proxy_users}
+               'proxy_users': proxy_users}
     render('rbac-proxy.yaml', rbac_proxy_path, context)
 
     hookenv.log('Creating proxy-related RBAC resources.')
