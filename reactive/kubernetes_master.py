@@ -852,8 +852,15 @@ def push_service_data():
     public interface '''
     kube_api = endpoint_from_flag('kube-api-endpoint.available')
 
-    address, port = kubernetes_master.get_api_endpoint(kube_api.relations[0])
-    kube_api.configure(port, address, address)
+    external_endpoints = kubernetes_master.get_external_lb_endpoints()
+    if external_endpoints:
+        addresses = [e[0] for e in external_endpoints]
+        kube_api.configure(kubernetes_master.STANDARD_API_PORT,
+                           addresses, addresses)
+    else:
+        # no external addresses configured, so rely on the interface layer
+        # to use the ingress address for each relation
+        kube_api.configure(kubernetes_master.STANDARD_API_PORT)
 
 
 @when('certificates.available', 'kube-api-endpoint.available')
@@ -885,30 +892,8 @@ def send_data():
         'kubernetes.default.svc.{0}'.format(domain)
     ]
 
-    # NB: this section can't be refactored to use
-    # kubernetes_master.get_api_endpoint because it needs to include all LB
-    # addresses, rather than round-robining them
-    # if the user gave us IPs for the load balancer, assume they know
-    # what they are talking about and use that instead of our information.
-    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
-    if forced_lb_ips:
-        sans.extend(forced_lb_ips)
-    else:
-        loadbalancer = endpoint_from_flag('loadbalancer.available')
-        # we don't use get_hacluster_ip_or_hostname only here because
-        # we want the cert to be valid for all the vips
-        hacluster = endpoint_from_flag('ha.connected')
-        if hacluster:
-            vips = hookenv.config('ha-cluster-vip').split()
-            dns_record = hookenv.config('ha-cluster-dns')
-            if vips:
-                sans.extend(vips)
-            elif dns_record:
-                sans.append(dns_record)
-        elif loadbalancer:
-            # Get the list of loadbalancers from the relation object.
-            hosts = loadbalancer.get_addresses_ports()
-            sans.extend([host.get('public-address') for host in hosts])
+    lb_addrs = [e[0] for e in kubernetes_master.get_lb_endpoints()]
+    sans.extend(lb_addrs)
 
     # maybe they have extra names they want as SANs
     extra_sans = hookenv.config('extra_sans')
@@ -2508,23 +2493,25 @@ def register_prometheus_jobs():
     prometheus = endpoint_from_flag('endpoint.prometheus.joined')
     # tls = endpoint_from_flag('certificates.ca.available')
 
-    address, port = kubernetes_master.get_api_endpoint(prometheus.relations[0])
-    k8s_password = get_password('basic_auth.csv', 'admin')
+    for relation in prometheus.relations:
+        address, port = kubernetes_master.get_api_endpoint(relation)
+        k8s_password = get_password('basic_auth.csv', 'admin')
 
-    templates_dir = Path('templates')
-    for job_file in Path('templates/prometheus').glob('*.yaml.j2'):
-        prometheus.register_job(
-            job_name=job_file.name.split('.')[0],
-            job_data=yaml.safe_load(
-                render(source=job_file.relative_to(templates_dir),
-                       target=None,  # don't write file, just return rendered
-                       context={
-                           'k8s_api_address': address,
-                           'k8s_api_port': port,
-                           'k8s_password': k8s_password,
-                       })
-            ),
-        )
+        templates_dir = Path('templates')
+        for job_file in Path('templates/prometheus').glob('*.yaml.j2'):
+            prometheus.register_job(
+                relation=relation,
+                job_name=job_file.name.split('.')[0],
+                job_data=yaml.safe_load(
+                    render(source=job_file.relative_to(templates_dir),
+                           target=None,  # don't write file, just return data
+                           context={
+                               'k8s_api_address': address,
+                               'k8s_api_port': port,
+                               'k8s_password': k8s_password,
+                           })
+                ),
+            )
 
 
 def detect_telegraf():
