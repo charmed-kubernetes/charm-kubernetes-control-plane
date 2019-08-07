@@ -57,6 +57,8 @@ from charmhelpers.core.host import service_stop, service_resume
 from charmhelpers.core.templating import render
 from charmhelpers.contrib.charmsupport import nrpe
 
+from charms.layer import kubernetes_master
+
 from charms.layer.hacluster import add_service_to_hacluster
 from charms.layer.hacluster import remove_service_from_hacluster
 from charms.layer.kubernetes_common import kubeclientconfig_path
@@ -84,7 +86,6 @@ from charms.layer.kubernetes_common import server_crt_path
 from charms.layer.kubernetes_common import server_key_path
 from charms.layer.kubernetes_common import client_crt_path
 from charms.layer.kubernetes_common import client_key_path
-from charms.layer.kubernetes_common import get_unit_number
 from charms.layer.kubernetes_common import kubectl
 
 
@@ -851,30 +852,8 @@ def push_service_data():
     public interface '''
     kube_api = endpoint_from_flag('kube-api-endpoint.available')
 
-    # Note that we do not need to worry about the loadbalancer case because
-    # the worker charm will be related to the loadbalancer in that case and
-    # get the information from there instead of the kubernetes-master charm.
-
-    # if the user gave us IPs for the load balancer, assume they know
-    # what they are talking about and use that instead of our information.
-    address = None
-    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
-    hacluster = endpoint_from_flag('ha.connected')
-    if forced_lb_ips:
-        address = forced_lb_ips
-    elif hacluster:
-        vips = hookenv.config('ha-cluster-vip').split()
-        dns_record = hookenv.config('ha-cluster-dns')
-        if vips:
-            # each worker unit will pick one based on unit number
-            address = vips
-        elif dns_record:
-            address = dns_record
-
-    if address:
-        kube_api.configure(6443, address, address)
-    else:
-        kube_api.configure(6443)
+    address, port = kubernetes_master.get_api_endpoint(kube_api.relations[0])
+    kube_api.configure(port, address, address)
 
 
 @when('certificates.available', 'kube-api-endpoint.available')
@@ -906,6 +885,9 @@ def send_data():
         'kubernetes.default.svc.{0}'.format(domain)
     ]
 
+    # NB: this section can't be refactored to use
+    # kubernetes_master.get_api_endpoint because it needs to include all LB
+    # addresses, rather than round-robining them
     # if the user gave us IPs for the load balancer, assume they know
     # what they are talking about and use that instead of our information.
     forced_lb_ips = hookenv.config('loadbalancer-ips').split()
@@ -1093,53 +1075,6 @@ def addons_ready():
     except CalledProcessError:
         hookenv.log("Addons are not ready yet.")
         return False
-
-
-@when('loadbalancer.available', 'certificates.ca.available',
-      'certificates.client.cert.available', 'authentication.setup')
-def loadbalancer_kubeconfig():
-    loadbalancer = endpoint_from_flag('loadbalancer.available')
-    # Get the potential list of loadbalancers from the relation object.
-    hosts = loadbalancer.get_addresses_ports()
-    # if there is a hacluster relation, use that vip/dns for the kubeconfig
-    hacluster_vip = get_hacluster_ip_or_hostname()
-    # if the user gave us IPs for the load balancer, assume they know
-    # what they are talking about and use that instead of our information.
-    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
-    if forced_lb_ips:
-        address = forced_lb_ips[get_unit_number() % len(forced_lb_ips)]
-    else:
-        if hacluster_vip:
-            address = hacluster_vip
-        else:
-            # Get the public address of the first loadbalancer so
-            # users can access the cluster.
-            address = hosts[0].get('public-address')
-
-    # Get the port of the loadbalancer so users can access the cluster.
-    port = hosts[0].get('port')
-    server = 'https://{0}:{1}'.format(address, port)
-    build_kubeconfig(server)
-
-
-@when('certificates.ca.available', 'certificates.client.cert.available',
-      'authentication.setup')
-@when_not('loadbalancer.available')
-def create_self_config():
-    '''Create a kubernetes configuration for the master unit.'''
-    # if the user gave us IPs for the load balancer, assume they know
-    # what they are talking about and use that instead of our information.
-    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
-    if forced_lb_ips:
-        address = forced_lb_ips[get_unit_number() % len(forced_lb_ips)]
-    else:
-        hacluster_vip = get_hacluster_ip_or_hostname()
-        if hacluster_vip:
-            address = hacluster_vip
-        else:
-            address = hookenv.unit_get('public-address')
-    server = 'https://{0}:{1}'.format(address, 6443)
-    build_kubeconfig(server)
 
 
 @when('ceph-storage.available')
@@ -1487,10 +1422,15 @@ def shutdown():
         service_stop('snap.%s.daemon' % service)
 
 
-def build_kubeconfig(server):
+@when('certificates.ca.available',
+      'certificates.client.cert.available',
+      'authentication.setup')
+def build_kubeconfig():
     '''Gather the relevant data for Kubernetes configuration objects and create
     a config object with that information.'''
 
+    address, port = kubernetes_master.get_api_endpoint()
+    server = 'https://{0}:{1}'.format(address, port)
     ca_exists = ca_crt_path.exists()
     client_pass = get_password('basic_auth.csv', 'admin')
     # Do we have everything we need?
@@ -2282,13 +2222,9 @@ def keystone_config():
 
         # we basically just call the other things we need to update
         etcd = endpoint_from_flag('etcd.available')
-        lb = endpoint_from_flag('loadbalancer.available')
 
         configure_apiserver(etcd.get_connection_string())
-        if lb:
-            loadbalancer_kubeconfig()
-        else:
-            create_self_config()
+        build_kubeconfig()
         generate_keystone_configmap()
         set_state('keystone.credentials.configured')
 
@@ -2372,20 +2308,6 @@ def _write_encryption_config():
             }],
         })
     )
-
-
-def get_hacluster_ip_or_hostname():
-    hacluster = endpoint_from_flag('ha.connected')
-    if hacluster:
-        vips = hookenv.config('ha-cluster-vip').split()
-        dns_record = hookenv.config('ha-cluster-dns')
-        if vips:
-            # each unit will pick one based on unit number
-            return vips[get_unit_number() % len(vips)]
-        elif dns_record:
-            return dns_record
-
-    return None
 
 
 @when_any('config.changed.ha-cluster-vip', 'config.changed.ha-cluster-dns')
@@ -2585,22 +2507,8 @@ def add_systemd_iptables_patch():
 def register_prometheus_jobs():
     prometheus = endpoint_from_flag('endpoint.prometheus.joined')
     # tls = endpoint_from_flag('certificates.ca.available')
-    loadbalancer = endpoint_from_flag('loadbalancer.available')
-    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
-    hacluster_vip = get_hacluster_ip_or_hostname()
 
-    if forced_lb_ips:
-        # if the user gave us IPs for the load balancer, assume they know
-        # what they are talking about and use that instead of our information.
-        round_robin = get_unit_number() % len(forced_lb_ips)
-        k8s_api_endpoint = forced_lb_ips[round_robin]
-    elif hacluster_vip:
-        k8s_api_endpoint = hacluster_vip
-    elif loadbalancer:
-        lb_addresses = loadbalancer.get_addresses_ports()
-        k8s_api_endpoint = lb_addresses[0].get('public-address')
-    else:
-        k8s_api_endpoint = prometheus.ingress_address
+    address, port = kubernetes_master.get_api_endpoint(prometheus.relations[0])
     k8s_password = get_password('basic_auth.csv', 'admin')
 
     templates_dir = Path('templates')
@@ -2611,7 +2519,8 @@ def register_prometheus_jobs():
                 render(source=job_file.relative_to(templates_dir),
                        target=None,  # don't write file, just return rendered
                        context={
-                           'k8s_api_endpoint': k8s_api_endpoint,
+                           'k8s_api_address': address,
+                           'k8s_api_port': port,
                            'k8s_password': k8s_password,
                        })
             ),

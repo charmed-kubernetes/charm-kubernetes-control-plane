@@ -1,6 +1,6 @@
 job_name: 'kubernetes-nodes'
 kubernetes_sd_configs:
-- api_server: https://{{k8s_api_endpoint}}
+- api_server: https://{{k8s_api_address}}:{{k8s_api_port}}
   role: node
   tls_config:
     insecure_skip_verify: true
@@ -18,7 +18,7 @@ relabel_configs:
 - action: labelmap
   regex: __meta_kubernetes_node_label_(.+)
 - target_label: __address__
-  replacement: {{k8s_api_endpoint}}
+  replacement: {{k8s_api_address}}
 - source_labels: [__meta_kubernetes_node_name]
   regex: (.+)
   target_label: __metrics_path__
