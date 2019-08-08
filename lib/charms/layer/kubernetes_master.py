@@ -1,5 +1,5 @@
 from charmhelpers.core import hookenv
-from charms.reactive import endpoint_from_flag
+from charms.reactive import endpoint_from_flag, is_flag_set
 
 from charms.layer import kubernetes_common
 
@@ -12,6 +12,7 @@ def get_external_lb_endpoints():
     Return a list of any external API load-balancer endpoints that have
     been manually configured.
     """
+    ha_connected = is_flag_set('ha.connected')
     forced_lb_ips = hookenv.config('loadbalancer-ips').split()
     vips = hookenv.config('ha-cluster-vip').split()
     dns_record = hookenv.config('ha-cluster-dns')
@@ -20,9 +21,9 @@ def get_external_lb_endpoints():
         # they know what they are talking about and use that
         # instead of our information.
         return [(address, STANDARD_API_PORT) for address in forced_lb_ips]
-    elif vips:
+    elif ha_connected and vips:
         return [(vip, STANDARD_API_PORT) for vip in vips]
-    elif dns_record:
+    elif ha_connected and dns_record:
         return [(dns_record, STANDARD_API_PORT)]
     else:
         return []
