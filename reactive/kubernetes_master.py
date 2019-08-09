@@ -824,6 +824,11 @@ def create_service_configs(kube_control):
         client_token = get_token('admin')
         should_restart = True
 
+    monitoring_token = get_token('system:monitoring')
+    if not monitoring_token:
+        setup_tokens(None, 'system:monitoring', 'system:monitoring')
+        should_restart = True
+
     requests = kube_control.auth_user()
     for request in requests:
         username = request[1]['user']
@@ -2492,6 +2497,7 @@ def add_systemd_iptables_patch():
 def register_prometheus_jobs():
     prometheus = endpoint_from_flag('endpoint.prometheus.joined')
     tls = endpoint_from_flag('certificates.ca.available')
+    monitoring_token = get_token('system:monitoring')
 
     for relation in prometheus.relations:
         address, port = kubernetes_master.get_api_endpoint(relation)
@@ -2508,7 +2514,7 @@ def register_prometheus_jobs():
                            context={
                                'k8s_api_address': address,
                                'k8s_api_port': port,
-                               'k8s_password': k8s_password,
+                               'k8s_token': monitoring_token,
                            })
                 ),
                 ca_cert=tls.root_ca_cert,

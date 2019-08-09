@@ -4,16 +4,12 @@ kubernetes_sd_configs:
   role: node
   tls_config:
     ca_file: __placeholder__
-  basic_auth:
-    username: admin
-    password: {{k8s_password}}
+  bearer_token: {{k8s_token}}
 scrape_interval: 30s
 scheme: https
 tls_config:
   ca_file: __placeholder__
-basic_auth:
-  username: admin
-  password: {{k8s_password}}
+bearer_token: {{k8s_token}}
 relabel_configs:
 - action: labelmap
   regex: __meta_kubernetes_node_label_(.+)
