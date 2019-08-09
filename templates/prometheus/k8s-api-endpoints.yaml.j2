@@ -3,14 +3,14 @@ kubernetes_sd_configs:
 - api_server: https://{{k8s_api_address}}:{{k8s_api_port}}
   role: endpoints
   tls_config:
-    insecure_skip_verify: true
+    ca_file: __placeholder__
   basic_auth:
     username: admin
     password: {{k8s_password}}
 scrape_interval: 30s
 scheme: https
 tls_config:
-  insecure_skip_verify: true
+  ca_file: __placeholder__
 basic_auth:
   username: admin
   password: {{k8s_password}}

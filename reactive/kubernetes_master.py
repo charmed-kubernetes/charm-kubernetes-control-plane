@@ -2491,7 +2491,7 @@ def add_systemd_iptables_patch():
       'certificates.ca.available')
 def register_prometheus_jobs():
     prometheus = endpoint_from_flag('endpoint.prometheus.joined')
-    # tls = endpoint_from_flag('certificates.ca.available')
+    tls = endpoint_from_flag('certificates.ca.available')
 
     for relation in prometheus.relations:
         address, port = kubernetes_master.get_api_endpoint(relation)
@@ -2503,7 +2503,7 @@ def register_prometheus_jobs():
                 relation=relation,
                 job_name=job_file.name.split('.')[0],
                 job_data=yaml.safe_load(
-                    render(source=job_file.relative_to(templates_dir),
+                    render(source=str(job_file.relative_to(templates_dir)),
                            target=None,  # don't write file, just return data
                            context={
                                'k8s_api_address': address,
@@ -2511,6 +2511,7 @@ def register_prometheus_jobs():
                                'k8s_password': k8s_password,
                            })
                 ),
+                ca_cert=tls.root_ca_cert,
             )
 
 
