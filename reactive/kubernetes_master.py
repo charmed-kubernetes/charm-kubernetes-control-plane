@@ -107,6 +107,7 @@ db = unitdata.kv()
 checksum_prefix = 'kubernetes-master.resource-checksums.'
 configure_prefix = 'kubernetes-master.prev_args.'
 keystone_root = '/root/cdk/keystone'
+kubecontrollermanagerconfig_path = '/root/cdk/kubecontrollermanagerconfig'
 
 register_trigger(when='endpoint.aws.ready',  # when set
                  set_flag='kubernetes-master.aws.changed')
@@ -1550,6 +1551,19 @@ def build_kubeconfig(server):
             proxy_token = get_token('system:kube-proxy')
         create_kubeconfig(kubeproxyconfig_path, server, ca_crt_path,
                           token=proxy_token, user='kube-proxy')
+
+        controller_manager_token = get_token('system:kube-controller-manager')
+        if not controller_manager_token:
+            setup_tokens(None, 'system:kube-controller-manager',
+                         'kube-controller-manager')
+            controller_manager_token = \
+                          get_token('system:kube-controller-manager')
+        address = hookenv.unit_get('public-address')
+        server = 'https://{0}:{1}'.format(address, 6443)
+        create_kubeconfig(kubecontrollermanagerconfig_path,
+                          server, ca_crt_path,
+                          token=controller_manager_token,
+                          user='kube-controller-manager')
 
 
 def get_dns_ip():
