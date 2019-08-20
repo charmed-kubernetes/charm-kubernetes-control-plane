@@ -237,6 +237,12 @@ def add_rbac_roles():
                                                      'kube-proxy')
                     ftokens.write(towrite)
                     continue
+                if record[2] == 'kube_controller_manager':
+                    towrite = '{0},{1},{2}\n'.format(record[0],
+                                                     'system:kube-controller-manager',
+                                                     'kube-controller-manager')
+                    ftokens.write(towrite)
+                    continue
                 if record[2] == 'kubelet' and record[1] == 'kubelet':
                     continue
 
