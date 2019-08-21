@@ -1341,9 +1341,13 @@ def create_rbac_resources():
     # common name of the cert used to authenticate the proxied request.
     # The CN for /root/cdk/client.crt is 'system:kube-apiserver'
     # (see the send_data handler, above).
-    proxy_user = 'system:kube-apiserver'
+    proxy_users = [
+        'client',
+        'system:kube-apiserver'
+    ]
+
     context = {'juju_application': hookenv.service_name(),
-               'proxy_user': proxy_user}
+               'proxy_users': proxy_users}
     render('rbac-proxy.yaml', rbac_proxy_path, context)
 
     hookenv.log('Creating proxy-related RBAC resources.')
@@ -1352,7 +1356,6 @@ def create_rbac_resources():
     else:
         msg = 'Failed to apply {}, will retry.'.format(rbac_proxy_path)
         hookenv.log(msg)
-
 
 @when('leadership.is_leader',
       'kubernetes-master.components.started',
@@ -1739,7 +1742,7 @@ def configure_apiserver(etcd_connection_string):
     if kube_version > (1, 6) and \
        hookenv.config('enable-metrics'):
         api_opts['requestheader-client-ca-file'] = str(ca_crt_path)
-        api_opts['requestheader-allowed-names'] = 'system:kube-apiserver'
+        api_opts['requestheader-allowed-names'] = 'system:kube-apiserver,client'
         api_opts['requestheader-extra-headers-prefix'] = 'X-Remote-Extra-'
         api_opts['requestheader-group-headers'] = 'X-Remote-Group'
         api_opts['requestheader-username-headers'] = 'X-Remote-User'
