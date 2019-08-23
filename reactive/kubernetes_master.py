@@ -729,8 +729,12 @@ def start_master():
     # kube-proxy
     cni = endpoint_from_flag('cni.available')
     cluster_cidr = cni.get_config()['cidr']
+    # Set bind address to work around node IP error when there's no kubelet
+    # https://bugs.launchpad.net/charm-kubernetes-master/+bug/1841114
+    bind_address = get_ingress_address('kube-control')
     configure_kube_proxy(configure_prefix,
-                         ['127.0.0.1:8080'], cluster_cidr)
+                         ['127.0.0.1:8080'], cluster_cidr,
+                         bind_address=bind_address)
     service_restart('snap.kube-proxy.daemon')
 
     set_state('kubernetes-master.components.started')
