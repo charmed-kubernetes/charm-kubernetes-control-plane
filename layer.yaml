@@ -26,6 +26,8 @@ includes:
   - 'interface:vsphere-integration'
   - 'interface:azure-integration'
   - 'interface:keystone-credentials'
+  - 'interface:prometheus-manual'
+  - 'interface:grafana-dashboard'
 options:
   basic:
     packages:

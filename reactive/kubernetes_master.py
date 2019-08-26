@@ -57,6 +57,8 @@ from charmhelpers.core.host import service_stop, service_resume
 from charmhelpers.core.templating import render
 from charmhelpers.contrib.charmsupport import nrpe
 
+from charms.layer import kubernetes_master
+
 from charms.layer.hacluster import add_service_to_hacluster
 from charms.layer.hacluster import remove_service_from_hacluster
 from charms.layer.kubernetes_common import kubeclientconfig_path
@@ -84,7 +86,6 @@ from charms.layer.kubernetes_common import server_crt_path
 from charms.layer.kubernetes_common import server_key_path
 from charms.layer.kubernetes_common import client_crt_path
 from charms.layer.kubernetes_common import client_key_path
-from charms.layer.kubernetes_common import get_unit_number
 from charms.layer.kubernetes_common import kubectl
 
 
@@ -827,6 +828,11 @@ def create_service_configs(kube_control):
         client_token = get_token('admin')
         should_restart = True
 
+    monitoring_token = get_token('system:monitoring')
+    if not monitoring_token:
+        setup_tokens(None, 'system:monitoring', 'system:monitoring')
+        should_restart = True
+
     requests = kube_control.auth_user()
     for request in requests:
         username = request[1]['user']
@@ -855,30 +861,15 @@ def push_service_data():
     public interface '''
     kube_api = endpoint_from_flag('kube-api-endpoint.available')
 
-    # Note that we do not need to worry about the loadbalancer case because
-    # the worker charm will be related to the loadbalancer in that case and
-    # get the information from there instead of the kubernetes-master charm.
-
-    # if the user gave us IPs for the load balancer, assume they know
-    # what they are talking about and use that instead of our information.
-    address = None
-    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
-    hacluster = endpoint_from_flag('ha.connected')
-    if forced_lb_ips:
-        address = forced_lb_ips
-    elif hacluster:
-        vips = hookenv.config('ha-cluster-vip').split()
-        dns_record = hookenv.config('ha-cluster-dns')
-        if vips:
-            # each worker unit will pick one based on unit number
-            address = vips
-        elif dns_record:
-            address = dns_record
-
-    if address:
-        kube_api.configure(6443, address, address)
+    external_endpoints = kubernetes_master.get_external_lb_endpoints()
+    if external_endpoints:
+        addresses = [e[0] for e in external_endpoints]
+        kube_api.configure(kubernetes_master.STANDARD_API_PORT,
+                           addresses, addresses)
     else:
-        kube_api.configure(6443)
+        # no external addresses configured, so rely on the interface layer
+        # to use the ingress address for each relation
+        kube_api.configure(kubernetes_master.STANDARD_API_PORT)
 
 
 @when('certificates.available', 'kube-api-endpoint.available')
@@ -911,27 +902,8 @@ def send_data():
         'kubernetes.default.svc.{0}'.format(domain)
     ]
 
-    # if the user gave us IPs for the load balancer, assume they know
-    # what they are talking about and use that instead of our information.
-    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
-    if forced_lb_ips:
-        sans.extend(forced_lb_ips)
-    else:
-        loadbalancer = endpoint_from_flag('loadbalancer.available')
-        # we don't use get_hacluster_ip_or_hostname only here because
-        # we want the cert to be valid for all the vips
-        hacluster = endpoint_from_flag('ha.connected')
-        if hacluster:
-            vips = hookenv.config('ha-cluster-vip').split()
-            dns_record = hookenv.config('ha-cluster-dns')
-            if vips:
-                sans.extend(vips)
-            elif dns_record:
-                sans.append(dns_record)
-        elif loadbalancer:
-            # Get the list of loadbalancers from the relation object.
-            hosts = loadbalancer.get_addresses_ports()
-            sans.extend([host.get('public-address') for host in hosts])
+    lb_addrs = [e[0] for e in kubernetes_master.get_lb_endpoints()]
+    sans.extend(lb_addrs)
 
     # maybe they have extra names they want as SANs
     extra_sans = hookenv.config('extra_sans')
@@ -982,7 +954,8 @@ def configure_cdk_addons():
     # when configuring the cdk-addons snap until 1.17 is released.
     registry = hookenv.config('addons-registry')
     if registry and get_version('kube-apiserver') < (1, 17):
-        hookenv.log('addons-registry is deprecated; use image-registry instead')
+        hookenv.log('addons-registry is deprecated; '
+                    'use image-registry instead')
     else:
         registry = hookenv.config('image-registry')
     dbEnabled = str(hookenv.config('enable-dashboard-addons')).lower()
@@ -1097,53 +1070,6 @@ def addons_ready():
     except CalledProcessError:
         hookenv.log("Addons are not ready yet.")
         return False
-
-
-@when('loadbalancer.available', 'certificates.ca.available',
-      'certificates.client.cert.available', 'authentication.setup')
-def loadbalancer_kubeconfig():
-    loadbalancer = endpoint_from_flag('loadbalancer.available')
-    # Get the potential list of loadbalancers from the relation object.
-    hosts = loadbalancer.get_addresses_ports()
-    # if there is a hacluster relation, use that vip/dns for the kubeconfig
-    hacluster_vip = get_hacluster_ip_or_hostname()
-    # if the user gave us IPs for the load balancer, assume they know
-    # what they are talking about and use that instead of our information.
-    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
-    if forced_lb_ips:
-        address = forced_lb_ips[get_unit_number() % len(forced_lb_ips)]
-    else:
-        if hacluster_vip:
-            address = hacluster_vip
-        else:
-            # Get the public address of the first loadbalancer so
-            # users can access the cluster.
-            address = hosts[0].get('public-address')
-
-    # Get the port of the loadbalancer so users can access the cluster.
-    port = hosts[0].get('port')
-    server = 'https://{0}:{1}'.format(address, port)
-    build_kubeconfig(server)
-
-
-@when('certificates.ca.available', 'certificates.client.cert.available',
-      'authentication.setup')
-@when_not('loadbalancer.available')
-def create_self_config():
-    '''Create a kubernetes configuration for the master unit.'''
-    # if the user gave us IPs for the load balancer, assume they know
-    # what they are talking about and use that instead of our information.
-    forced_lb_ips = hookenv.config('loadbalancer-ips').split()
-    if forced_lb_ips:
-        address = forced_lb_ips[get_unit_number() % len(forced_lb_ips)]
-    else:
-        hacluster_vip = get_hacluster_ip_or_hostname()
-        if hacluster_vip:
-            address = hacluster_vip
-        else:
-            address = hookenv.unit_get('public-address')
-    server = 'https://{0}:{1}'.format(address, 6443)
-    build_kubeconfig(server)
 
 
 @when('ceph-storage.available')
@@ -1494,10 +1420,15 @@ def shutdown():
         service_stop('snap.%s.daemon' % service)
 
 
-def build_kubeconfig(server):
+@when('certificates.ca.available',
+      'certificates.client.cert.available',
+      'authentication.setup')
+def build_kubeconfig():
     '''Gather the relevant data for Kubernetes configuration objects and create
     a config object with that information.'''
 
+    address, port = kubernetes_master.get_api_endpoint()
+    server = 'https://{0}:{1}'.format(address, port)
     ca_exists = ca_crt_path.exists()
     client_pass = get_password('basic_auth.csv', 'admin')
     # Do we have everything we need?
@@ -2289,13 +2220,9 @@ def keystone_config():
 
         # we basically just call the other things we need to update
         etcd = endpoint_from_flag('etcd.available')
-        lb = endpoint_from_flag('loadbalancer.available')
 
         configure_apiserver(etcd.get_connection_string())
-        if lb:
-            loadbalancer_kubeconfig()
-        else:
-            create_self_config()
+        build_kubeconfig()
         generate_keystone_configmap()
         set_state('keystone.credentials.configured')
 
@@ -2379,20 +2306,6 @@ def _write_encryption_config():
             }],
         })
     )
-
-
-def get_hacluster_ip_or_hostname():
-    hacluster = endpoint_from_flag('ha.connected')
-    if hacluster:
-        vips = hookenv.config('ha-cluster-vip').split()
-        dns_record = hookenv.config('ha-cluster-dns')
-        if vips:
-            # each unit will pick one based on unit number
-            return vips[get_unit_number() % len(vips)]
-        elif dns_record:
-            return dns_record
-
-    return None
 
 
 @when_any('config.changed.ha-cluster-vip', 'config.changed.ha-cluster-dns')
@@ -2583,3 +2496,68 @@ def add_systemd_iptables_patch():
 
     # enable and run the service
     service_resume(service_name)
+
+
+@when('leadership.is_leader',
+      'kubernetes-master.components.started',
+      'endpoint.prometheus.joined',
+      'certificates.ca.available')
+def register_prometheus_jobs():
+    prometheus = endpoint_from_flag('endpoint.prometheus.joined')
+    tls = endpoint_from_flag('certificates.ca.available')
+    monitoring_token = get_token('system:monitoring')
+
+    for relation in prometheus.relations:
+        address, port = kubernetes_master.get_api_endpoint(relation)
+        k8s_password = get_password('basic_auth.csv', 'admin')
+
+        templates_dir = Path('templates')
+        for job_file in Path('templates/prometheus').glob('*.yaml.j2'):
+            prometheus.register_job(
+                relation=relation,
+                job_name=job_file.name.split('.')[0],
+                job_data=yaml.safe_load(
+                    render(source=str(job_file.relative_to(templates_dir)),
+                           target=None,  # don't write file, just return data
+                           context={
+                               'k8s_api_address': address,
+                               'k8s_api_port': port,
+                               'k8s_token': monitoring_token,
+                           })
+                ),
+                ca_cert=tls.root_ca_cert,
+            )
+
+
+def detect_telegraf():
+    # Telegraf uses the implicit juju-info relation, which makes it difficult
+    # to tell if it's related. The "best" option is to look for the subordinate
+    # charm on disk.
+    for charm_dir in Path('/var/lib/juju/agents').glob('unit-*/charm'):
+        metadata = yaml.safe_load((charm_dir / 'metadata.yaml').read_text())
+        if 'telegraf' in metadata['name']:
+            return True
+    else:
+        return False
+
+
+@when('leadership.is_leader',
+      'kubernetes-master.components.started',
+      'endpoint.grafana.joined')
+def register_grafana_dashboards():
+    grafana = endpoint_from_flag('endpoint.grafana.joined')
+
+    # load conditional dashboards
+    dash_dir = Path('templates/grafana/conditional')
+    if is_flag_set('endpoint.prometheus.joined'):
+        dashboard = (dash_dir / 'prometheus.json').read_text()
+        grafana.register_dashboard('prometheus', json.loads(dashboard))
+    if detect_telegraf():
+        dashboard = (dash_dir / 'telegraf.json').read_text()
+        grafana.register_dashboard('telegraf', json.loads(dashboard))
+
+    # load automatic dashboards
+    dash_dir = Path('templates/grafana/autoload')
+    for dash_file in dash_dir.glob('*.json'):
+        dashboard = dash_file.read_text()
+        grafana.register_dashboard('telegraf', json.loads(dashboard))
