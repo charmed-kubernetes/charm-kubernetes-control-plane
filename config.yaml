@@ -54,7 +54,7 @@ options:
       v1.17 is released. After that, the 'addons-registry' option will have no effect.
   image-registry:
     type: string
-    default: "image-registry.canonical.com:5000/cdk"
+    default: "rocks.canonical.com:5000/cdk"
     description: |
       Container image registry to use for CDK. This includes addons like the Kubernetes dashboard,
       metrics server, ingress, and dns along with non-addon images including the pause
