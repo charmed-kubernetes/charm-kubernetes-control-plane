@@ -1294,6 +1294,7 @@ def create_rbac_resources():
         msg = 'Failed to apply {}, will retry.'.format(rbac_proxy_path)
         hookenv.log(msg)
 
+
 @when('leadership.is_leader',
       'kubernetes-master.components.started',
       'kubernetes-master.remove.rbac')
@@ -2633,15 +2634,11 @@ def enable_aws_iam_webhook():
     # if etcd isn't available yet, we'll set this up later
     # when we start the api server.
     if is_flag_set('etcd.available'):
-        # we basically just call the other things we need to update
+        # call the other things we need to update
         etcd = endpoint_from_flag('etcd.available')
-        lb = endpoint_from_flag('loadbalancer.available')
 
         configure_apiserver(etcd.get_connection_string())
-        if lb:
-            loadbalancer_kubeconfig()
-        else:
-            create_self_config()
+        build_kubeconfig()
     set_flag('kubernetes-master.aws-iam.configured')
 
 
