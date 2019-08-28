@@ -1558,7 +1558,7 @@ def build_kubeconfig(server):
                          'kube-controller-manager')
             controller_manager_token = \
                           get_token('system:kube-controller-manager')
-        address = hookenv.unit_get('public-address')
+        address = get_ingress_address('kube-api-endpoint')
         server = 'https://{0}:{1}'.format(address, 6443)
         create_kubeconfig(kubecontrollermanagerconfig_path,
                           server, ca_crt_path,
