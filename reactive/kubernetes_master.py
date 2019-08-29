@@ -108,6 +108,7 @@ db = unitdata.kv()
 checksum_prefix = 'kubernetes-master.resource-checksums.'
 configure_prefix = 'kubernetes-master.prev_args.'
 keystone_root = '/root/cdk/keystone'
+kubecontrollermanagerconfig_path = '/root/cdk/kubecontrollermanagerconfig'
 
 register_trigger(when='endpoint.aws.ready',  # when set
                  set_flag='kubernetes-master.aws.changed')
@@ -236,6 +237,12 @@ def add_rbac_roles():
                     towrite = '{0},{1},{2}\n'.format(record[0],
                                                      'system:kube-proxy',
                                                      'kube-proxy')
+                    ftokens.write(towrite)
+                    continue
+                if record[2] == 'kube_controller_manager':
+                    towrite = '{0},{1},{2}\n'.format(record[0],
+                                                     'system:kube-controller-manager',
+                                                     'kube-controller-manager')
                     ftokens.write(towrite)
                     continue
                 if record[2] == 'kubelet' and record[1] == 'kubelet':
@@ -1493,6 +1500,19 @@ def build_kubeconfig():
         create_kubeconfig(kubeproxyconfig_path, server, ca_crt_path,
                           token=proxy_token, user='kube-proxy')
 
+        controller_manager_token = get_token('system:kube-controller-manager')
+        if not controller_manager_token:
+            setup_tokens(None, 'system:kube-controller-manager',
+                         'kube-controller-manager')
+            controller_manager_token = \
+                          get_token('system:kube-controller-manager')
+        address = get_ingress_address('kube-api-endpoint')
+        server = 'https://{0}:{1}'.format(address, 6443)
+        create_kubeconfig(kubecontrollermanagerconfig_path,
+                          server, ca_crt_path,
+                          token=controller_manager_token,
+                          user='kube-controller-manager')
+
 
 def get_dns_ip():
     return get_service_ip('kube-dns', namespace='kube-system')
@@ -1744,7 +1764,10 @@ def configure_controller_manager():
     controller_opts['v'] = '2'
     controller_opts['root-ca-file'] = str(ca_crt_path)
     controller_opts['logtostderr'] = 'true'
-    controller_opts['master'] = 'http://127.0.0.1:8080'
+    controller_opts['kubeconfig'] = kubecontrollermanagerconfig_path
+    controller_opts['authorization-kubeconfig'] = kubecontrollermanagerconfig_path
+    controller_opts['authentication-kubeconfig'] = kubecontrollermanagerconfig_path
+    controller_opts['use-service-account-credentials'] = 'true'
     controller_opts['service-account-private-key-file'] = \
         '/root/cdk/serviceaccount.key'
     controller_opts['tls-cert-file'] = str(server_crt_path)
