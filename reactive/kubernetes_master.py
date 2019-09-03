@@ -109,6 +109,7 @@ checksum_prefix = 'kubernetes-master.resource-checksums.'
 configure_prefix = 'kubernetes-master.prev_args.'
 keystone_root = '/root/cdk/keystone'
 kubecontrollermanagerconfig_path = '/root/cdk/kubecontrollermanagerconfig'
+aws_iam_webhook = '/root/cdk/aws-iam-webhook.yaml'
 
 register_trigger(when='endpoint.aws.ready',  # when set
                  set_flag='kubernetes-master.aws.changed')
@@ -538,6 +539,12 @@ def set_final_status():
     ks = endpoint_from_flag('keystone-credentials.available.auth')
     if ks and ks.api_version() == '2':
         msg = 'Keystone auth v2 detected. v3 is required.'
+        hookenv.status_set('blocked', msg)
+        return
+
+    aws_iam = endpoint_from_flag('endpoint.aws-iam.ready')
+    if aws_iam and ks:
+        msg = 'Keystone and AWS IAM detected. Must select only one.'
         hookenv.status_set('blocked', msg)
         return
 
@@ -1287,6 +1294,7 @@ def create_rbac_resources():
         msg = 'Failed to apply {}, will retry.'.format(rbac_proxy_path)
         hookenv.log(msg)
 
+
 @when('leadership.is_leader',
       'kubernetes-master.components.started',
       'kubernetes-master.remove.rbac')
@@ -1471,6 +1479,11 @@ def build_kubeconfig():
             # just not yet because we don't have creds
             hookenv.log('Keystone endpoint not found, will retry.')
 
+        cluster_id = None
+        aws_iam = endpoint_from_flag('endpoint.aws-iam.available')
+        if aws_iam:
+            cluster_id = aws_iam.get_cluster_id()
+
         # Create an absolute path for the kubeconfig file.
         kubeconfig_path = os.path.join(os.sep, 'home', 'ubuntu', 'config')
 
@@ -1480,10 +1493,11 @@ def build_kubeconfig():
         if ks:
             create_kubeconfig(kubeconfig_path, server, ca_crt_path,
                               user='admin', password=client_pass,
-                              keystone=True)
+                              keystone=True, aws_iam_cluster_id=cluster_id)
         else:
             create_kubeconfig(kubeconfig_path, server, ca_crt_path,
-                              user='admin', password=client_pass)
+                              user='admin', password=client_pass,
+                              aws_iam_cluster_id=cluster_id)
 
         # Make the config file readable by the ubuntu users so juju scp works.
         cmd = ['chown', 'ubuntu:ubuntu', kubeconfig_path]
@@ -1647,43 +1661,57 @@ def configure_apiserver():
         admission_control.append('NodeRestriction')
 
     ks = endpoint_from_flag('keystone-credentials.available.auth')
-    ks_ip = None
-    if ks:
-        ks_ip = get_service_ip('k8s-keystone-auth-service', errors_fatal=False)
-    if ks and ks_ip:
-        os.makedirs(keystone_root, exist_ok=True)
+    aws = endpoint_from_flag('endpoint.aws-iam.ready')
 
-        keystone_webhook = keystone_root + '/webhook.yaml'
-        context = {}
-        context['keystone_service_cluster_ip'] = ks_ip
-        render('keystone-api-server-webhook.yaml', keystone_webhook, context)
-        api_opts['authentication-token-webhook-config-file'] = keystone_webhook
+    # only one webhook at a time currently:
+    # see https://github.com/kubernetes/kubernetes/issues/65874
+    if ks and aws:
+        hookenv.log('unable to have BOTH Keystone and '
+                    'AWS IAM webhook auth at the same time!')
 
-        if hookenv.config('enable-keystone-authorization'):
-            # if user wants authorization, enable it
-            if 'Webhook' not in auth_mode:
-                auth_mode += ",Webhook"
-            api_opts['authorization-webhook-config-file'] = keystone_webhook
-        set_state('keystone.apiserver.configured')
-    else:
-        if ks and not ks_ip:
-            hookenv.log('Unable to find k8s-keystone-auth-service '
-                        'service. Will retry')
-            # Note that we can get into a nasty state here
-            # if the user has specified webhook and they're relying on
-            # keystone auth to handle that, the api server will fail to start
-            # because we push it Webhook and no webhook config. We can't
-            # generate the config because we can't talk to the apiserver to
-            # get the ip of the service to put into the webhook template. A
-            # chicken and egg problem. To fix this, remove Webhook if keystone
-            # is related and trying to come up until we can find the
-            # service IP.
-            if 'Webhook' in auth_mode:
-                auth_mode = ','.join([i for i in auth_mode.split(',')
-                                      if i != 'Webhook'])
-        elif is_state('leadership.set.keystone-cdk-addons-configured'):
-            hookenv.log('Unable to find keystone endpoint. Will retry')
-        remove_state('keystone.apiserver.configured')
+    elif aws:
+        api_opts['authentication-token-webhook-config-file'] = aws_iam_webhook
+    elif ks:
+        ks_ip = None
+        if ks:
+            ks_ip = get_service_ip('k8s-keystone-auth-service',
+                                   errors_fatal=False)
+        if ks and ks_ip:
+            os.makedirs(keystone_root, exist_ok=True)
+
+            keystone_webhook = keystone_root + '/webhook.yaml'
+            context = {}
+            context['keystone_service_cluster_ip'] = ks_ip
+            render('keystone-api-server-webhook.yaml',
+                   keystone_webhook,
+                   context)
+            api_opts['authentication-token-webhook-config-file'] = keystone_webhook # noqa
+
+            if hookenv.config('enable-keystone-authorization'):
+                # if user wants authorization, enable it
+                if 'Webhook' not in auth_mode:
+                    auth_mode += ",Webhook"
+                api_opts['authorization-webhook-config-file'] = keystone_webhook # noqa
+            set_state('keystone.apiserver.configured')
+        else:
+            if ks and not ks_ip:
+                hookenv.log('Unable to find k8s-keystone-auth-service '
+                            'service. Will retry')
+                # Note that we can get into a nasty state here
+                # if the user has specified webhook and they're relying on
+                # keystone auth to handle that, the api server will fail to
+                # start because we push it Webhook and no webhook config.
+                # We can't generate the config because we can't talk to the
+                # apiserver to get the ip of the service to put into the
+                # webhook template. A chicken and egg problem. To fix this,
+                # remove Webhook if keystone is related and trying to come
+                # up until we can find the service IP.
+                if 'Webhook' in auth_mode:
+                    auth_mode = ','.join([i for i in auth_mode.split(',')
+                                         if i != 'Webhook'])
+            elif is_state('leadership.set.keystone-cdk-addons-configured'):
+                hookenv.log('Unable to find keystone endpoint. Will retry')
+            remove_state('keystone.apiserver.configured')
 
     api_opts['authorization-mode'] = auth_mode
 
@@ -2598,3 +2626,32 @@ def register_grafana_dashboards():
     for dash_file in dash_dir.glob('*.json'):
         dashboard = dash_file.read_text()
         grafana.register_dashboard('telegraf', json.loads(dashboard))
+
+
+@when('endpoint.aws-iam.ready')
+@when_not('kubernetes-master.aws-iam.configured')
+def enable_aws_iam_webhook():
+    # if etcd isn't available yet, we'll set this up later
+    # when we start the api server.
+    if is_flag_set('etcd.available'):
+        # call the other things we need to update
+        etcd = endpoint_from_flag('etcd.available')
+
+        configure_apiserver(etcd.get_connection_string())
+        build_kubeconfig()
+    set_flag('kubernetes-master.aws-iam.configured')
+
+
+@when('kubernetes-master.components.started', 'endpoint.aws-iam.available')
+def api_server_started():
+    aws_iam = endpoint_from_flag('endpoint.aws-iam.available')
+    if aws_iam:
+        aws_iam.set_api_server_status(True)
+
+
+@when_not('kubernetes-master.components.started')
+@when('endpoint.aws-iam.available')
+def api_server_stopped():
+    aws_iam = endpoint_from_flag('endpoint.aws-iam.available')
+    if aws_iam:
+        aws_iam.set_api_server_status(False)
