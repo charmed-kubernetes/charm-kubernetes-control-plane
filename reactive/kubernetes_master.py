@@ -2635,9 +2635,7 @@ def enable_aws_iam_webhook():
     # when we start the api server.
     if is_flag_set('etcd.available'):
         # call the other things we need to update
-        etcd = endpoint_from_flag('etcd.available')
-
-        configure_apiserver(etcd.get_connection_string())
+        clear_flag('kubernetes-master.apiserver.configured')
         build_kubeconfig()
     set_flag('kubernetes-master.aws-iam.configured')
 
