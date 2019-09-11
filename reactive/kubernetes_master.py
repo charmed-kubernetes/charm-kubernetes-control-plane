@@ -123,6 +123,22 @@ register_trigger(when='endpoint.gcp.ready',  # when set
                  set_flag='kubernetes-master.gcp.changed')
 register_trigger(when_not='endpoint.gcp.ready',  # when cleared
                  set_flag='kubernetes-master.gcp.changed')
+register_trigger(when='kubernetes-master.ceph.configured',
+                 set_flag='cdk-addons.reconfigure')
+register_trigger(when_not='kubernetes-master.ceph.configured',
+                 set_flag='cdk-addons.reconfigure')
+register_trigger(when='keystone-credentials.available.auth',
+                 set_flag='cdk-addons.reconfigure')
+register_trigger(when_not='keystone-credentials.available.auth',
+                 set_flag='cdk-addons.reconfigure')
+register_trigger(when='kubernetes-master.aws.changed',
+                 set_flag='cdk-addons.reconfigure')
+register_trigger(when='kubernetes-master.azure.changed',
+                 set_flag='cdk-addons.reconfigure')
+register_trigger(when='kubernetes-master.gcp.changed',
+                 set_flag='cdk-addons.reconfigure')
+register_trigger(when='kubernetes-master.openstack.changed',
+                 set_flag='cdk-addons.reconfigure')
 
 
 def set_upgrade_needed(forced=False):
@@ -960,17 +976,18 @@ def update_certificates():
     clear_flag('config.changed.extra_sans')
 
 
-@when_any('kubernetes-master.components.started',
-          'kubernetes-master.ceph.configured',
-          'keystone-credentials.available.auth',
-          'kubernetes-master.aws.changed',
-          'kubernetes-master.azure.changed',
-          'kubernetes-master.gcp.changed',
-          'kubernetes-master.openstack.changed')
-@when('leadership.is_leader',
+@when('kubernetes-master.components.started',
+      'cdk-addons.reconfigure')
+def reconfigure_cdk_addons():
+    configure_cdk_addons()
+
+
+@when('kubernetes-master.components.started',
+      'leadership.is_leader',
       'leadership.set.cluster_tag')
 def configure_cdk_addons():
     ''' Configure CDK addons '''
+    remove_state('cdk-addons.reconfigure')
     remove_state('cdk-addons.configured')
     remove_state('kubernetes-master.aws.changed')
     remove_state('kubernetes-master.azure.changed')
