@@ -721,6 +721,7 @@ def add_systemd_file_watcher():
 @when('etcd.available', 'tls_client.certs.saved',
       'authentication.setup',
       'leadership.set.auto_storage_backend',
+      'leadership.set.cluster_tag',
       'cni.available')
 @when_not('kubernetes-master.components.started',
           'kubernetes-master.cloud.pending',
@@ -966,7 +967,8 @@ def update_certificates():
           'kubernetes-master.azure.changed',
           'kubernetes-master.gcp.changed',
           'kubernetes-master.openstack.changed')
-@when('leadership.is_leader')
+@when('leadership.is_leader',
+      'leadership.set.cluster_tag')
 def configure_cdk_addons():
     ''' Configure CDK addons '''
     remove_state('cdk-addons.configured')
@@ -1060,7 +1062,8 @@ def configure_cdk_addons():
         'enable-azure=' + enable_azure,
         'enable-gcp=' + enable_gcp,
         'enable-openstack=' + enable_openstack,
-        'monitorstorage=' + hookenv.config('monitoring-storage')
+        'monitorstorage=' + hookenv.config('monitoring-storage'),
+        'cluster-tag='+leader_get('cluster_tag'),
     ]
     if openstack:
         args.extend([
@@ -1803,6 +1806,7 @@ def configure_controller_manager():
         '/root/cdk/serviceaccount.key'
     controller_opts['tls-cert-file'] = str(server_crt_path)
     controller_opts['tls-private-key-file'] = str(server_key_path)
+    controller_opts['cluster-name'] = leader_get('cluster_tag')
 
     cm_cloud_config_path = cloud_config_path('kube-controller-manager')
     if is_state('endpoint.aws.ready'):
