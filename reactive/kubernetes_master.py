@@ -1659,12 +1659,13 @@ def configure_apiserver():
     api_opts['etcd-servers'] = etcd_connection_string
 
     # Many admission plugins are enabled by default as of 1.10.
-    # See https://kubernetes.io/docs/reference/command-line-tools-reference/kube-apiserver/#options
+    # Source: https://bit.ly/2meP9XT
     #
     # Current enabled-by-default plugins are:
-    # NamespaceLifecycle, LimitRanger, ServiceAccount, TaintNodesByCondition, Priority,
-    # DefaultTolerationSeconds, DefaultStorageClass, PersistentVolumeClaimResize,
-    # MutatingAdmissionWebhook, ValidatingAdmissionWebhook, ResourceQuota
+    # NamespaceLifecycle, LimitRanger, ServiceAccount, TaintNodesByCondition,
+    # Priority, DefaultTolerationSeconds, DefaultStorageClass,
+    # PersistentVolumeClaimResize, MutatingAdmissionWebhook,
+    # ValidatingAdmissionWebhook, ResourceQuota
     #
     # The list below need only include the plugins we want to enable
     # in addition to the defaults.
