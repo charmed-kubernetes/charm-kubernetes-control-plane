@@ -44,7 +44,7 @@ from charms.reactive import is_state, is_flag_set
 from charms.reactive import endpoint_from_flag
 from charms.reactive import when, when_any, when_not, when_none
 from charms.reactive import register_trigger
-from charms.reactive.helpers import data_changed, any_file_changed
+from charms.reactive import data_changed, any_file_changed
 
 from charms.layer import tls_client
 from charms.layer import vaultlocker
@@ -123,6 +123,22 @@ register_trigger(when='endpoint.gcp.ready',  # when set
                  set_flag='kubernetes-master.gcp.changed')
 register_trigger(when_not='endpoint.gcp.ready',  # when cleared
                  set_flag='kubernetes-master.gcp.changed')
+register_trigger(when='kubernetes-master.ceph.configured',
+                 set_flag='cdk-addons.reconfigure')
+register_trigger(when_not='kubernetes-master.ceph.configured',
+                 set_flag='cdk-addons.reconfigure')
+register_trigger(when='keystone-credentials.available.auth',
+                 set_flag='cdk-addons.reconfigure')
+register_trigger(when_not='keystone-credentials.available.auth',
+                 set_flag='cdk-addons.reconfigure')
+register_trigger(when='kubernetes-master.aws.changed',
+                 set_flag='cdk-addons.reconfigure')
+register_trigger(when='kubernetes-master.azure.changed',
+                 set_flag='cdk-addons.reconfigure')
+register_trigger(when='kubernetes-master.gcp.changed',
+                 set_flag='cdk-addons.reconfigure')
+register_trigger(when='kubernetes-master.openstack.changed',
+                 set_flag='cdk-addons.reconfigure')
 
 
 def set_upgrade_needed(forced=False):
@@ -241,9 +257,9 @@ def add_rbac_roles():
                     ftokens.write(towrite)
                     continue
                 if record[2] == 'kube_controller_manager':
-                    towrite = '{0},{1},{2}\n'.format(record[0],
-                                                     'system:kube-controller-manager',
-                                                     'kube-controller-manager')
+                    towrite = '{0},{1},{2}\n'.format(
+                        record[0], 'system:kube-controller-manager',
+                        'kube-controller-manager')
                     ftokens.write(towrite)
                     continue
                 if record[2] == 'kubelet' and record[1] == 'kubelet':
@@ -721,6 +737,7 @@ def add_systemd_file_watcher():
 @when('etcd.available', 'tls_client.certs.saved',
       'authentication.setup',
       'leadership.set.auto_storage_backend',
+      'leadership.set.cluster_tag',
       'cni.available')
 @when_not('kubernetes-master.components.started',
           'kubernetes-master.cloud.pending',
@@ -959,16 +976,19 @@ def update_certificates():
     clear_flag('config.changed.extra_sans')
 
 
-@when_any('kubernetes-master.components.started',
-          'kubernetes-master.ceph.configured',
-          'keystone-credentials.available.auth',
-          'kubernetes-master.aws.changed',
-          'kubernetes-master.azure.changed',
-          'kubernetes-master.gcp.changed',
-          'kubernetes-master.openstack.changed')
-@when('leadership.is_leader')
+@when('kubernetes-master.components.started',
+      'leadership.is_leader',
+      'cdk-addons.reconfigure')
+def reconfigure_cdk_addons():
+    configure_cdk_addons()
+
+
+@when('kubernetes-master.components.started',
+      'leadership.is_leader',
+      'leadership.set.cluster_tag')
 def configure_cdk_addons():
     ''' Configure CDK addons '''
+    remove_state('cdk-addons.reconfigure')
     remove_state('cdk-addons.configured')
     remove_state('kubernetes-master.aws.changed')
     remove_state('kubernetes-master.azure.changed')
@@ -1060,7 +1080,8 @@ def configure_cdk_addons():
         'enable-azure=' + enable_azure,
         'enable-gcp=' + enable_gcp,
         'enable-openstack=' + enable_openstack,
-        'monitorstorage=' + hookenv.config('monitoring-storage')
+        'monitorstorage=' + hookenv.config('monitoring-storage'),
+        'cluster-tag='+leader_get('cluster_tag'),
     ]
     if openstack:
         args.extend([
@@ -1522,7 +1543,7 @@ def build_kubeconfig():
             setup_tokens(None, 'system:kube-controller-manager',
                          'kube-controller-manager')
             controller_manager_token = \
-                          get_token('system:kube-controller-manager')
+                get_token('system:kube-controller-manager')
         address = get_ingress_address('kube-api-endpoint')
         server = 'https://{0}:{1}'.format(address, 6443)
         create_kubeconfig(kubecontrollermanagerconfig_path,
@@ -1728,7 +1749,8 @@ def configure_apiserver():
     if kube_version > (1, 6) and \
        hookenv.config('enable-metrics'):
         api_opts['requestheader-client-ca-file'] = str(ca_crt_path)
-        api_opts['requestheader-allowed-names'] = 'system:kube-apiserver,client'
+        api_opts['requestheader-allowed-names'] = \
+            'system:kube-apiserver,client'
         api_opts['requestheader-extra-headers-prefix'] = 'X-Remote-Extra-'
         api_opts['requestheader-group-headers'] = 'X-Remote-Group'
         api_opts['requestheader-username-headers'] = 'X-Remote-User'
@@ -1796,13 +1818,16 @@ def configure_controller_manager():
     controller_opts['root-ca-file'] = str(ca_crt_path)
     controller_opts['logtostderr'] = 'true'
     controller_opts['kubeconfig'] = kubecontrollermanagerconfig_path
-    controller_opts['authorization-kubeconfig'] = kubecontrollermanagerconfig_path
-    controller_opts['authentication-kubeconfig'] = kubecontrollermanagerconfig_path
+    controller_opts['authorization-kubeconfig'] = \
+        kubecontrollermanagerconfig_path
+    controller_opts['authentication-kubeconfig'] = \
+        kubecontrollermanagerconfig_path
     controller_opts['use-service-account-credentials'] = 'true'
     controller_opts['service-account-private-key-file'] = \
         '/root/cdk/serviceaccount.key'
     controller_opts['tls-cert-file'] = str(server_crt_path)
     controller_opts['tls-private-key-file'] = str(server_key_path)
+    controller_opts['cluster-name'] = leader_get('cluster_tag')
 
     cm_cloud_config_path = cloud_config_path('kube-controller-manager')
     if is_state('endpoint.aws.ready'):
@@ -2575,7 +2600,6 @@ def register_prometheus_jobs():
 
     for relation in prometheus.relations:
         address, port = kubernetes_master.get_api_endpoint(relation)
-        k8s_password = get_password('basic_auth.csv', 'admin')
 
         templates_dir = Path('templates')
         for job_file in Path('templates/prometheus').glob('*.yaml.j2'):
