@@ -977,6 +977,7 @@ def update_certificates():
 
 
 @when('kubernetes-master.components.started',
+      'leadership.is_leader',
       'cdk-addons.reconfigure')
 def reconfigure_cdk_addons():
     configure_cdk_addons()
