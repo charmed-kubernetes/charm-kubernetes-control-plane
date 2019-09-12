@@ -43,3 +43,9 @@ options:
       - snap.kube-proxy.daemon
   hacluster:
     binding_address: 'kube-api-endpoint'
+exclude:
+  - .tox
+  - __pycache__
+  - tests
+  - conftest.py
+  - tox.ini
