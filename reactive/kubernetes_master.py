@@ -1658,14 +1658,9 @@ def configure_apiserver():
     api_opts['etcd-certfile'] = etcd_cert
     api_opts['etcd-servers'] = etcd_connection_string
 
-    # Many admission plugins are enabled by default as of 1.10.
-    # Source: https://bit.ly/2meP9XT
-    #
-    # Current enabled-by-default plugins are:
-    # NamespaceLifecycle, LimitRanger, ServiceAccount, TaintNodesByCondition,
-    # Priority, DefaultTolerationSeconds, DefaultStorageClass,
-    # PersistentVolumeClaimResize, MutatingAdmissionWebhook,
-    # ValidatingAdmissionWebhook, ResourceQuota
+    # As of Kubernetes 1.10, many admission plugins are enabled by default.
+    # The default plugins can be found at https://bit.ly/2meP9XT, listed
+    # under the '--enable-admission-plugins' option.
     #
     # The list below need only include the plugins we want to enable
     # in addition to the defaults.
