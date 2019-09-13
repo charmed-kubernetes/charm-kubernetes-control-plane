@@ -1658,9 +1658,10 @@ def configure_apiserver():
     api_opts['etcd-certfile'] = etcd_cert
     api_opts['etcd-servers'] = etcd_connection_string
 
-    # As of Kubernetes 1.10, many admission plugins are enabled by default.
-    # The default plugins can be found at https://bit.ly/2meP9XT, listed
-    # under the '--enable-admission-plugins' option.
+    # In Kubernetes 1.10 and later, some admission plugins are enabled by
+    # default. The current list of default plugins can be found at 
+    # https://bit.ly/2meP9XT, listed under the '--enable-admission-plugins'
+    # option.
     #
     # The list below need only include the plugins we want to enable
     # in addition to the defaults.
