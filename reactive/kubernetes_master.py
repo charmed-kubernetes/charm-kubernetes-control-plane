@@ -1658,29 +1658,21 @@ def configure_apiserver():
     api_opts['etcd-certfile'] = etcd_cert
     api_opts['etcd-servers'] = etcd_connection_string
 
-    admission_control_pre_1_9 = [
-        'NamespaceLifecycle',
-        'LimitRanger',
-        'ServiceAccount',
-        'ResourceQuota',
-        'DefaultTolerationSeconds'
-    ]
+    # In Kubernetes 1.10 and later, some admission plugins are enabled by
+    # default. The current list of default plugins can be found at
+    # https://bit.ly/2meP9XT, listed under the '--enable-admission-plugins'
+    # option.
+    #
+    # The list below need only include the plugins we want to enable
+    # in addition to the defaults.
 
-    admission_control = [
-        'NamespaceLifecycle',
-        'LimitRanger',
-        'ServiceAccount',
+    admission_plugins = [
         'PersistentVolumeLabel',
-        'DefaultStorageClass',
-        'DefaultTolerationSeconds',
-        'MutatingAdmissionWebhook',
-        'ValidatingAdmissionWebhook',
-        'ResourceQuota'
     ]
 
     auth_mode = hookenv.config('authorization-mode')
     if 'Node' in auth_mode:
-        admission_control.append('NodeRestriction')
+        admission_plugins.append('NodeRestriction')
 
     ks = endpoint_from_flag('keystone-credentials.available.auth')
     aws = endpoint_from_flag('endpoint.aws-iam.ready')
@@ -1736,15 +1728,9 @@ def configure_apiserver():
             remove_state('keystone.apiserver.configured')
 
     api_opts['authorization-mode'] = auth_mode
+    api_opts['enable-admission-plugins'] = ','.join(admission_plugins)
 
     kube_version = get_version('kube-apiserver')
-    if kube_version < (1, 6):
-        hookenv.log('Removing DefaultTolerationSeconds from admission-control')
-        admission_control_pre_1_9.remove('DefaultTolerationSeconds')
-    if kube_version < (1, 9):
-        api_opts['admission-control'] = ','.join(admission_control_pre_1_9)
-    else:
-        api_opts['admission-control'] = ','.join(admission_control)
 
     if kube_version > (1, 6) and \
        hookenv.config('enable-metrics'):
