@@ -581,6 +581,13 @@ def set_final_status():
         hookenv.status_set('blocked', msg)
         return
 
+    vault_kv_related = 'vault-kv' in goal_state.get('relations', {})
+    vault_kv_ready = is_state('layer.vault-kv.ready')
+    if vault_kv_related and not vault_kv_ready:
+        hookenv.status_set('waiting', 'Waiting for encryption info from Vault '
+                                      'to secure secrets')
+        return
+
     if is_state('kubernetes-master.components.started'):
         # All services should be up and running at this point. Double-check...
         failing_services = master_services_down()
