@@ -1659,7 +1659,7 @@ def configure_apiserver():
     api_opts['etcd-servers'] = etcd_connection_string
 
     # In Kubernetes 1.10 and later, some admission plugins are enabled by
-    # default. The current list of default plugins can be found at 
+    # default. The current list of default plugins can be found at
     # https://bit.ly/2meP9XT, listed under the '--enable-admission-plugins'
     # option.
     #
