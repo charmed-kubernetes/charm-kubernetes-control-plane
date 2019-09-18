@@ -500,6 +500,22 @@ def set_app_version():
     hookenv.application_version_set(version.split(b' v')[-1].rstrip())
 
 
+@hookenv.atstart
+def check_vault_pending():
+    try:
+        goal_state = hookenv.goal_state()
+    except NotImplementedError:
+        goal_state = {}
+    vault_kv_goal = 'vault-kv' in goal_state.get('relations', {})
+    vault_kv_connected = is_state('vault-kv.connected')
+    vault_kv_related = vault_kv_goal or vault_kv_connected
+    vault_kv_ready = is_state('layer.vault-kv.ready')
+    if vault_kv_related and not vault_kv_ready:
+        set_flag('kubernetes-master.vault-kv.pending')
+    else:
+        clear_flag('kubernetes-master.vault-kv.pending')
+
+
 @hookenv.atexit
 def set_final_status():
     ''' Set the final status of the charm as we leave hook execution '''
@@ -581,9 +597,7 @@ def set_final_status():
         hookenv.status_set('blocked', msg)
         return
 
-    vault_kv_related = 'vault-kv' in goal_state.get('relations', {})
-    vault_kv_ready = is_state('layer.vault-kv.ready')
-    if vault_kv_related and not vault_kv_ready:
+    if is_state('kubernetes-master.vault-kv.pending'):
         hookenv.status_set('waiting', 'Waiting for encryption info from Vault '
                                       'to secure secrets')
         return
@@ -749,6 +763,7 @@ def add_systemd_file_watcher():
 @when_not('kubernetes-master.components.started',
           'kubernetes-master.cloud.pending',
           'kubernetes-master.cloud.blocked',
+          'kubernetes-master.vault-kv.pending',
           'tls_client.certs.changed',
           'tls_client.ca.written')
 def start_master():
