@@ -2378,7 +2378,7 @@ def haconfig_changed():
     clear_flag('hacluster-configured')
 
 
-@when('ha.connected')
+@when('ha.connected', 'kubernetes-master.components.started')
 @when_not('hacluster-configured')
 def configure_hacluster():
     for service in master_services:
