@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: proxy-clusterrole-{{ juju_application }}
+  name: proxy-clusterrole-cdk-{{ juju_application }}
 rules:
 - apiGroups: [""]
   resources:
@@ -12,11 +12,11 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: proxy-role-binding-{{ juju_application }}
+  name: proxy-role-binding-cdk-{{ juju_application }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: proxy-clusterrole-{{ juju_application }}
+  name: proxy-clusterrole-cdk-{{ juju_application }}
 subjects: {% for proxy_user in proxy_users %}
 - apiGroup: rbac.authorization.k8s.io
   kind: User
