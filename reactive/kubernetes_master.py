@@ -102,6 +102,8 @@ master_services = ['kube-apiserver',
                    'kube-scheduler',
                    'kube-proxy']
 
+cohort_snaps = snap_resources + ['kubelet']
+
 
 os.environ['PATH'] += os.pathsep + os.path.join(os.sep, 'snap', 'bin')
 db = unitdata.kv()
@@ -349,6 +351,33 @@ def install_snaps():
     db.set('snap.resources.fingerprint.initialised', True)
     set_state('kubernetes-master.snaps.installed')
     remove_state('kubernetes-master.components.started')
+
+
+@when('kubernetes-master.snaps.installed',
+      'leadership.is_leader',
+      'kube-control.connected')
+@when_not('kubernetes-master.cohorts.up-to-date')
+def create_or_update_cohorts():
+    kube_control = endpoint_from_flag('kube-control.connected')
+    cohort_keys = {}
+    for snapname in cohort_snaps:
+        cohort_key = snap.create_cohort_snapshop(snap)
+        if snap.is_installed(snapname):  # we also manage workers' cohorts
+            snap.join_cohort_snapshop(snapname, cohort_key)
+        cohort_key[snapname] = cohort_key
+    leader_set('cohort_keys', json.dumps(cohort_keys))
+    # TODO: worker should be delayed until other master (if any) is updated
+    kube_control.set_cohort_keys(cohort_keys)
+    set_flag('kubernetes-master.cohorts.up-to-date')
+
+
+@when('kubernetes-master.snaps.installed',
+      'leadership.is_leader')
+def check_cohort_updates():
+    for snapname in cohort_snaps:
+        if snap.is_refresh_available(snapname):
+            clear_flag('kubernetes-master.cohorts.up-to-date')
+            return
 
 
 @when('etcd.available')
