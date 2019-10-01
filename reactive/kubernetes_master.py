@@ -1634,13 +1634,6 @@ def configure_apiserver():
         return
 
     api_opts = {}
-    # at one point in time, this code would set ca-client-cert,
-    # but this was removed. This was before configure_kubernetes_service
-    # kept track of old arguments and removed them, so client-ca-cert
-    # was able to hang around forever stored in the snap configuration.
-    # This removes that stale configuration from the snap if it still
-    # exists.
-    api_opts['client-ca-file'] = 'null'
 
     if is_privileged():
         api_opts['allow-privileged'] = 'true'
@@ -1704,7 +1697,6 @@ def configure_apiserver():
     if ks and aws:
         hookenv.log('unable to have BOTH Keystone and '
                     'AWS IAM webhook auth at the same time!')
-
     elif aws:
         api_opts['authentication-token-webhook-config-file'] = aws_iam_webhook
     elif ks:
