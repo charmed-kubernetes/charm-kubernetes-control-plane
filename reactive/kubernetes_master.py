@@ -361,9 +361,9 @@ def create_or_update_cohorts():
     kube_control = endpoint_from_flag('kube-control.connected')
     cohort_keys = {}
     for snapname in cohort_snaps:
-        cohort_key = snap.create_cohort_snapshop(snap)
+        cohort_key = snap.create_cohort_snapshot(snapname)
         if snap.is_installed(snapname):  # we also manage workers' cohorts
-            snap.join_cohort_snapshop(snapname, cohort_key)
+            snap.join_cohort_snapshot(snapname, cohort_key)
         cohort_key[snapname] = cohort_key
     leader_set('cohort_keys', json.dumps(cohort_keys))
     # TODO: worker should be delayed until other master (if any) is updated
