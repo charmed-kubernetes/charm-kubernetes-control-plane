@@ -1294,9 +1294,9 @@ def ceph_storage():
 
 @when('nrpe-external-master.available')
 @when_not('nrpe-external-master.initial-config')
-def initial_nrpe_config(nagios=None):
+def initial_nrpe_config():
     set_state('nrpe-external-master.initial-config')
-    update_nrpe_config(nagios)
+    update_nrpe_config()
 
 
 @when('config.changed.authorization-mode')
