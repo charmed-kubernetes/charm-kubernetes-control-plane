@@ -88,7 +88,8 @@ from charms.layer.kubernetes_common import client_crt_path
 from charms.layer.kubernetes_common import client_key_path
 from charms.layer.kubernetes_common import kubectl
 
-from charms.layer.nagios import install_nagios_plugin, remove_nagios_plugin
+from charms.layer.nagios import install_nagios_plugin_from_file
+from charms.layer.nagios import remove_nagios_plugin
 
 
 # Override the default nagios shortname regex to allow periods, which we
@@ -1369,15 +1370,15 @@ def remove_rbac_resources():
 def update_nrpe_config():
     services = ['snap.{}.daemon'.format(s) for s in master_services]
 
-    plugin_path = install_nagios_plugin('templates/nagios_plugin.py',
-                                        'check_k8s_master.py')
+    plugin = install_nagios_plugin_from_file('templates/nagios_plugin.py',
+                                             'check_k8s_master.py')
     hostname = nrpe.get_nagios_hostname()
     current_unit = nrpe.get_nagios_unit_name()
     nrpe_setup = nrpe.NRPE(hostname=hostname)
     nrpe.add_init_service_checks(nrpe_setup, services, current_unit)
     nrpe_setup.add_check('k8s-api-server',
                          'Verify that the Kubernetes API server is accessible',
-                         plugin_path)
+                         str(plugin))
     nrpe_setup.write()
 
 
