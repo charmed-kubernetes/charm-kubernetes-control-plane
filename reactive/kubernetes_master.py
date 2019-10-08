@@ -2478,6 +2478,13 @@ def send_registry_location():
     registry_location = hookenv.config('image-registry')
     kube_control = endpoint_from_flag('kube-control.connected')
     kube_control.set_registry_location(registry_location)
+
+    runtime = endpoint_from_flag('endpoint.container-runtime.available')
+    if runtime:
+        runtime.set_config(
+            pause_image_override= \
+                '{}/pause-{}:3.1'.format(registry_location, arch()))
+
     set_flag('kubernetes-master.sent-registry')
 
 
