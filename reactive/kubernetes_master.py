@@ -2481,9 +2481,10 @@ def send_registry_location():
 
     runtime = endpoint_from_flag('endpoint.container-runtime.available')
     if runtime:
+        uri = '{}/pause-{}:3.1'.format(registry_location, arch())
         runtime.set_config(
-            pause_image_override= \
-                '{}/pause-{}:3.1'.format(registry_location, arch()))
+            pause_image_override=uri
+        )
 
     set_flag('kubernetes-master.sent-registry')
 
