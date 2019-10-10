@@ -18,5 +18,6 @@ layer = MagicMock()
 sys.modules['charms.layer'] = layer
 sys.modules['charms.layer.hacluster'] = layer.hacluster
 sys.modules['charms.layer.kubernetes_common'] = layer.kubernetes_common
+sys.modules['charms.layer.nagios'] = layer.nagios
 
 os.environ['JUJU_MODEL_UUID'] = 'test-1234'

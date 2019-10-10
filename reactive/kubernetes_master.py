@@ -88,6 +88,9 @@ from charms.layer.kubernetes_common import client_crt_path
 from charms.layer.kubernetes_common import client_key_path
 from charms.layer.kubernetes_common import kubectl
 
+from charms.layer.nagios import install_nagios_plugin_from_file
+from charms.layer.nagios import remove_nagios_plugin
+
 
 # Override the default nagios shortname regex to allow periods, which we
 # need because our bin names contain them (e.g. 'snap.foo.daemon'). The
@@ -230,6 +233,9 @@ def check_for_upgrade_needed():
             leader_set(auto_dns_provider='kube-dns')
         elif was_kube_dns is False:
             leader_set(auto_dns_provider='none')
+
+    if is_flag_set('nrpe-external-master.available'):
+        update_nrpe_config()
 
 
 def add_rbac_roles():
@@ -1289,9 +1295,9 @@ def ceph_storage():
 
 @when('nrpe-external-master.available')
 @when_not('nrpe-external-master.initial-config')
-def initial_nrpe_config(nagios=None):
+def initial_nrpe_config():
     set_state('nrpe-external-master.initial-config')
-    update_nrpe_config(nagios)
+    update_nrpe_config()
 
 
 @when('config.changed.authorization-mode')
@@ -1361,30 +1367,30 @@ def remove_rbac_resources():
 @when('nrpe-external-master.available')
 @when_any('config.changed.nagios_context',
           'config.changed.nagios_servicegroups')
-def update_nrpe_config(unused=None):
-    services = (
-        'snap.kube-apiserver.daemon',
-        'snap.kube-controller-manager.daemon',
-        'snap.kube-scheduler.daemon'
-    )
+def update_nrpe_config():
+    services = ['snap.{}.daemon'.format(s) for s in master_services]
+
+    plugin = install_nagios_plugin_from_file('templates/nagios_plugin.py',
+                                             'check_k8s_master.py')
     hostname = nrpe.get_nagios_hostname()
     current_unit = nrpe.get_nagios_unit_name()
     nrpe_setup = nrpe.NRPE(hostname=hostname)
     nrpe.add_init_service_checks(nrpe_setup, services, current_unit)
+    nrpe_setup.add_check('k8s-api-server',
+                         'Verify that the Kubernetes API server is accessible',
+                         str(plugin))
     nrpe_setup.write()
 
 
 @when_not('nrpe-external-master.available')
 @when('nrpe-external-master.initial-config')
-def remove_nrpe_config(nagios=None):
+def remove_nrpe_config():
     remove_state('nrpe-external-master.initial-config')
 
     # List of systemd services for which the checks will be removed
-    services = (
-        'snap.kube-apiserver.daemon',
-        'snap.kube-controller-manager.daemon',
-        'snap.kube-scheduler.daemon'
-    )
+    services = ['snap.{}.daemon'.format(s) for s in master_services]
+
+    remove_nagios_plugin('check_k8s_master.py')
 
     # The current nrpe-external-master interface doesn't handle a lot of logic,
     # use the charm-helpers code for now.
@@ -1393,6 +1399,7 @@ def remove_nrpe_config(nagios=None):
 
     for service in services:
         nrpe_setup.remove_check(shortname=service)
+    nrpe_setup.remove_check(shortname='k8s-api-server')
 
 
 def is_privileged():
