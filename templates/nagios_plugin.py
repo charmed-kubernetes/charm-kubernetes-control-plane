@@ -31,14 +31,6 @@ def test_connection(host, port):
         s.close()
 
 
-def verify_local_connection_to_apiserver():
-    try:
-        test_connection('localhost', 8080)
-    except Exception:
-        raise nagios_plugin3.CriticalError("Unable to reach "
-                                           "API server on local port")
-
-
 def verify_remote_connection_to_apiserver():
     try:
         test_connection(socket.gethostbyname(socket.gethostname()), 6443)
@@ -49,7 +41,6 @@ def verify_remote_connection_to_apiserver():
 
 def main():
     nagios_plugin3.try_check(check_snaps_installed)
-    nagios_plugin3.try_check(verify_local_connection_to_apiserver)
     nagios_plugin3.try_check(verify_remote_connection_to_apiserver)
     print("OK - API server is up and accessible")
 
