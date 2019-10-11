@@ -2477,8 +2477,11 @@ def get_dns_provider():
 def send_registry_location():
     registry_location = hookenv.config('image-registry')
     kube_control = endpoint_from_flag('kube-control.connected')
+
+    # Send registry to workers
     kube_control.set_registry_location(registry_location)
 
+    # Construct and send the sandbox image (pause container) to our runtime
     runtime = endpoint_from_flag('endpoint.container-runtime.available')
     if runtime:
         uri = '{}/pause-{}:3.1'.format(registry_location, arch())
