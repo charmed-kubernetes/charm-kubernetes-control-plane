@@ -2483,7 +2483,7 @@ def send_registry_location():
     if runtime:
         uri = '{}/pause-{}:3.1'.format(registry_location, arch())
         runtime.set_config(
-            pause_image_override=uri
+            sandbox_image=uri
         )
 
     set_flag('kubernetes-master.sent-registry')
