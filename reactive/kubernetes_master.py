@@ -1385,8 +1385,6 @@ def update_nrpe_config():
 @when_not('nrpe-external-master.available')
 @when('nrpe-external-master.initial-config')
 def remove_nrpe_config():
-    remove_state('nrpe-external-master.initial-config')
-
     # List of systemd services for which the checks will be removed
     services = ['snap.{}.daemon'.format(s) for s in master_services]
 
@@ -1400,6 +1398,7 @@ def remove_nrpe_config():
     for service in services:
         nrpe_setup.remove_check(shortname=service)
     nrpe_setup.remove_check(shortname='k8s-api-server')
+    remove_state('nrpe-external-master.initial-config')
 
 
 def is_privileged():
