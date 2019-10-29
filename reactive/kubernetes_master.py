@@ -2669,6 +2669,13 @@ def register_grafana_dashboards():
         dashboard = dash_file.read_text()
         grafana.register_dashboard('telegraf', json.loads(dashboard))
 
+    # load default kubernetes dashboards
+    dash_dir = Path('templates/grafana/kubernetes')
+    for dash_file in dash_dir.glob('*.json'):
+        dashboard = dash_file.read_text()
+        grafana.register_dashboard(
+            dash_file.as_posix().split('.')[0], json.loads(dashboard))
+
 
 @when('endpoint.aws-iam.ready')
 @when_not('kubernetes-master.aws-iam.configured')
