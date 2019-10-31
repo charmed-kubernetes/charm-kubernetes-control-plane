@@ -1,4 +1,4 @@
-{
+{ "dashboard": {
   "__inputs": [],
   "__requires": [
     {
@@ -2519,7 +2519,7 @@
       },
       {
         "allValue": null,
-        "datasource": "$cluster",
+        "datasource": "prometheus - Juju generated source",
         "hide": 2,
         "includeAll": false,
         "label": "",
@@ -2548,7 +2548,7 @@
       },
       {
         "allValue": null,
-        "datasource": "$cluster",
+        "datasource": "prometheus - Juju generated source",
         "hide": 0,
         "includeAll": true,
         "label": null,
@@ -2567,7 +2567,7 @@
       },
       {
         "allValue": null,
-        "datasource": "$cluster",
+        "datasource": "prometheus - Juju generated source",
         "hide": 0,
         "includeAll": true,
         "label": null,
@@ -2617,4 +2617,4 @@
   },
   "timezone": "browser",
   "title": "K8s Cluster"
-}
+}}

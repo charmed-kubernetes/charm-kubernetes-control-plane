@@ -1,4 +1,4 @@
-{
+{ "dashboard": {
   "__inputs": [],
   "__requires": [
     {
@@ -1056,4 +1056,4 @@
   },
   "timezone": "browser",
   "title": "K8s Node"
-}
+}}
