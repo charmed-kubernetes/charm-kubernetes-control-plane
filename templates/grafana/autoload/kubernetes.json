@@ -105,7 +105,7 @@
                 "tableColumn":"",
                 "targets":[
                     {
-                        "expr":"sum (container_memory_working_set_bytes{id=\"/\",environment=\"$environment\"}) / sum (machine_memory_bytes{environment=\"$environment\"}) * 100",
+                        "expr":"sum (container_memory_working_set_bytes{id=\"/\"}) / sum (machine_memory_bytes{}) * 100",
                         "format":"time_series",
                         "interval":"10s",
                         "intervalFactor":1,
@@ -195,7 +195,7 @@
                 "tableColumn":"",
                 "targets":[
                     {
-                        "expr":"sum (rate (container_cpu_usage_seconds_total{id=\"/\",environment=\"$environment\"}[1m])) / sum (machine_cpu_cores{environment=\"$environment\"}) * 100",
+                        "expr":"sum (rate (container_cpu_usage_seconds_total{id=\"/\"}[1m])) / sum (machine_cpu_cores{}) * 100",
                         "format":"time_series",
                         "interval":"10s",
                         "intervalFactor":1,
@@ -284,7 +284,7 @@
                 "tableColumn":"",
                 "targets":[
                     {
-                        "expr":"sum (container_fs_usage_bytes{environment=\"$environment\"}) / sum (container_fs_limit_bytes{id=\"/\",environment=\"$environment\"}) * 100",
+                        "expr":"sum (container_fs_usage_bytes{}) / sum (container_fs_limit_bytes{id=\"/\"}) * 100",
                         "format":"time_series",
                         "interval":"10s",
                         "intervalFactor":1,
@@ -374,7 +374,7 @@
                 "tableColumn":"",
                 "targets":[
                     {
-                        "expr":"sum (container_memory_working_set_bytes{id=\"/\",environment=\"$environment\"})",
+                        "expr":"sum (container_memory_working_set_bytes{id=\"/\"})",
                         "format":"time_series",
                         "interval":"10s",
                         "intervalFactor":1,
@@ -463,7 +463,7 @@
                 "tableColumn":"",
                 "targets":[
                     {
-                        "expr":"sum (machine_memory_bytes{environment=\"$environment\"})",
+                        "expr":"sum (machine_memory_bytes{})",
                         "format":"time_series",
                         "interval":"10s",
                         "intervalFactor":1,
@@ -551,7 +551,7 @@
                 "tableColumn":"",
                 "targets":[
                     {
-                        "expr":"sum (rate (container_cpu_usage_seconds_total{id=\"/\",environment=\"$environment\"}[1m]))",
+                        "expr":"sum (rate (container_cpu_usage_seconds_total{id=\"/\"}[1m]))",
                         "format":"time_series",
                         "interval":"10s",
                         "intervalFactor":1,
@@ -639,7 +639,7 @@
                 "tableColumn":"",
                 "targets":[
                     {
-                        "expr":"sum (machine_cpu_cores{environment=\"$environment\"})",
+                        "expr":"sum (machine_cpu_cores{})",
                         "format":"time_series",
                         "interval":"10s",
                         "intervalFactor":1,
@@ -727,7 +727,7 @@
                 "tableColumn":"",
                 "targets":[
                     {
-                        "expr":"sum (container_fs_usage_bytes{id=\"/\",environment=\"$environment\"})",
+                        "expr":"sum (container_fs_usage_bytes{id=\"/\"})",
                         "format":"time_series",
                         "interval":"10s",
                         "intervalFactor":1,
@@ -816,7 +816,7 @@
                 "tableColumn":"",
                 "targets":[
                     {
-                        "expr":"sum (container_fs_limit_bytes{id=\"/\",environment=\"$environment\"})",
+                        "expr":"sum (container_fs_limit_bytes{id=\"/\"})",
                         "format":"time_series",
                         "interval":"10s",
                         "intervalFactor":1,
@@ -856,7 +856,7 @@
                         "dashLength":10,
                         "dashes":false,
                         "datasource":"prometheus - Juju generated source",
-                        "description":"From: https://wiki.canonical.com/InformationInfrastructure/IS/Kubernetes/Playbook#ControllerCPUIdle_Alert_.2F_Why_is_the_comms_cluster_meltingdown.3F\n\n\"If the comms team pods all go down it is due to the api-server being wedged.\n\nTo fix ssh to the kubernetes-master/0 unit and check the current cpu idle. If it's consistently under 10 then restart the controller like\n\nsudo systemctl restart snap.kube-apiserver.daemon.service\n\nIf DNS is also not working for the pods. You can verify by running kubectl -n kube-system describe kube-dns | grep replica, if it's 0 then DNS has disappeared. To fix this edit the deployment and bump the replica up to 1.\n\nkubectl edit --namespace kube-system deployment/kube-dns\"",
+                        "description":"",
                         "fill":1,
                         "gridPos":{
                             "h":7,
@@ -864,7 +864,7 @@
                             "x":0,
                             "y":10
                         },
-                        "id":48,
+                        "id":31,
                         "legend":{
                             "avg":false,
                             "current":false,
@@ -892,7 +892,7 @@
                         "steppedLine":false,
                         "targets":[
                             {
-                                "expr":"cpu_usage_idle{cpu=\"cpu-total\",environment=\"$environment\",host=~\".*kubernetes-master.*\"}",
+                                "expr":"cpu_usage_idle{cpu=\"cpu-total\",host=~\".*kubernetes-master.*\"}",
                                 "format":"time_series",
                                 "intervalFactor":2,
                                 "legendFormat":"{{host}}",
@@ -954,9 +954,119 @@
                     "h":1,
                     "w":24,
                     "x":0,
-                    "y":10
+                    "y":9
                 },
                 "id":51,
+                "panels":[
+                    {
+                        "aliasColors":{
+
+                        },
+                        "bars":false,
+                        "dashLength":10,
+                        "dashes":false,
+                        "datasource":"prometheus - Juju generated source",
+                        "description":"",
+                        "fill":1,
+                        "gridPos":{
+                            "h":7,
+                            "w":24,
+                            "x":0,
+                            "y":10
+                        },
+                        "id":48,
+                        "legend":{
+                            "avg":false,
+                            "current":false,
+                            "max":false,
+                            "min":false,
+                            "show":true,
+                            "total":false,
+                            "values":false
+                        },
+                        "lines":true,
+                        "linewidth":1,
+                        "links":[
+
+                        ],
+                        "nullPointMode":"null",
+                        "percentage":false,
+                        "pointradius":5,
+                        "points":false,
+                        "renderer":"flot",
+                        "seriesOverrides":[
+
+                        ],
+                        "spaceLength":10,
+                        "stack":false,
+                        "steppedLine":false,
+                        "targets":[
+                            {
+                                "expr":"cpu_usage_idle{cpu=\"cpu-total\",host=~\".*kubernetes-worker.*\"}",
+                                "format":"time_series",
+                                "intervalFactor":2,
+                                "legendFormat":"{{host}}",
+                                "refId":"A"
+                            }
+                        ],
+                        "thresholds":[
+
+                        ],
+                        "timeFrom":null,
+                        "timeShift":null,
+                        "title":"kubernetes-worker CPU idle",
+                        "tooltip":{
+                            "shared":true,
+                            "sort":0,
+                            "value_type":"individual"
+                        },
+                        "type":"graph",
+                        "xaxis":{
+                            "buckets":null,
+                            "mode":"time",
+                            "name":null,
+                            "show":true,
+                            "values":[
+
+                            ]
+                        },
+                        "yaxes":[
+                            {
+                                "format":"percent",
+                                "label":null,
+                                "logBase":1,
+                                "max":null,
+                                "min":null,
+                                "show":true
+                            },
+                            {
+                                "format":"short",
+                                "label":null,
+                                "logBase":1,
+                                "max":null,
+                                "min":null,
+                                "show":true
+                            }
+                        ],
+                        "yaxis":{
+                            "align":false,
+                            "alignLevel":null
+                        }
+                    }
+                ],
+                "repeat":null,
+                "title":"kubernetes-worker CPU idle",
+                "type":"row"
+            },
+            {
+                "collapsed":true,
+                "gridPos":{
+                    "h":1,
+                    "w":24,
+                    "x":0,
+                    "y":10
+                },
+                "id":52,
                 "panels":[
                     {
                         "aliasColors":{
@@ -1001,7 +1111,7 @@
                         "steppedLine":false,
                         "targets":[
                             {
-                                "expr":"sum(rate(apiserver_request_latencies_sum{environment=\"$environment\"}[1m])) / sum(rate(apiserver_request_latencies_count{environment=\"$environment\"}[1m]))",
+                                "expr":"sum(rate(apiserver_request_latencies_sum{}[1m])) / sum(rate(apiserver_request_latencies_count{}[1m]))",
                                 "format":"time_series",
                                 "intervalFactor":2,
                                 "legendFormat":"{{username}}",
@@ -1096,7 +1206,7 @@
                         "steppedLine":false,
                         "targets":[
                             {
-                                "expr":"sum(rate(apiserver_request_count{environment=\"$environment\"}[1m])) by (code)",
+                                "expr":"sum(rate(apiserver_request_count{}[1m])) by (code)",
                                 "format":"time_series",
                                 "intervalFactor":2,
                                 "legendFormat":"{{code}}",
@@ -1191,7 +1301,7 @@
                         "steppedLine":false,
                         "targets":[
                             {
-                                "expr":"rate(authenticated_user_requests{environment=\"$environment\"}[1m])",
+                                "expr":"rate(authenticated_user_requests{}[1m])",
                                 "format":"time_series",
                                 "intervalFactor":2,
                                 "legendFormat":"{{username}}",
@@ -1286,7 +1396,7 @@
                         "steppedLine":false,
                         "targets":[
                             {
-                                "expr":"histogram_quantile(0.95, sum(rate(apiserver_request_latencies_bucket{environment=\"$environment\"}[5m])) by (le,resource) )",
+                                "expr":"histogram_quantile(0.95, sum(rate(apiserver_request_latencies_bucket{}[5m])) by (le,resource) )",
                                 "format":"time_series",
                                 "hide":false,
                                 "intervalFactor":2,
@@ -1382,7 +1492,7 @@
                         "steppedLine":false,
                         "targets":[
                             {
-                                "expr":"histogram_quantile(0.95, sum(rate(apiserver_request_latencies_bucket{environment=\"$environment\"}[5m])) by (le,verb) )",
+                                "expr":"histogram_quantile(0.95, sum(rate(apiserver_request_latencies_bucket{}[5m])) by (le,verb) )",
                                 "format":"time_series",
                                 "hide":false,
                                 "intervalFactor":2,
@@ -1448,7 +1558,7 @@
                     "x":0,
                     "y":11
                 },
-                "id":52,
+                "id":53,
                 "panels":[
                     {
                         "aliasColors":{
@@ -1493,7 +1603,7 @@
                         "steppedLine":false,
                         "targets":[
                             {
-                                "expr":"rate(admission_quota_controller_adds{environment=\"$environment\"}[10m])",
+                                "expr":"rate(admission_quota_controller_adds{}[10m])",
                                 "format":"time_series",
                                 "intervalFactor":2,
                                 "legendFormat":"",
@@ -1584,7 +1694,7 @@
                         "steppedLine":false,
                         "targets":[
                             {
-                                "expr":"rate(admission_quota_controller_queue_latency_sum{environment=\"$environment\"}[10m]) / rate(admission_quota_controller_queue_latency_count{environment=\"$environment\"}[10m])",
+                                "expr":"rate(admission_quota_controller_queue_latency_sum{}[10m]) / rate(admission_quota_controller_queue_latency_count{}[10m])",
                                 "format":"time_series",
                                 "intervalFactor":2,
                                 "legendFormat":"",
@@ -1675,7 +1785,7 @@
                         "steppedLine":false,
                         "targets":[
                             {
-                                "expr":"rate(admission_quota_controller_work_duration_sum{environment=\"$environment\"}[10m]) / rate(admission_quota_controller_work_duration_count{environment=\"$environment\"}[10m])",
+                                "expr":"rate(admission_quota_controller_work_duration_sum{}[10m]) / rate(admission_quota_controller_work_duration_count{}[10m])",
                                 "format":"time_series",
                                 "intervalFactor":2,
                                 "legendFormat":"",
@@ -1736,7 +1846,7 @@
                     "x":0,
                     "y":12
                 },
-                "id":53,
+                "id":54,
                 "panels":[
                     {
                         "aliasColors":{
@@ -1782,7 +1892,7 @@
                         "steppedLine":false,
                         "targets":[
                             {
-                                "expr":"etcd_request_cache_get_latencies_summary{environment=\"$environment\"}",
+                                "expr":"etcd_request_cache_get_latencies_summary{}",
                                 "format":"time_series",
                                 "intervalFactor":2,
                                 "legendFormat":"Quantile {{quantile}}",
@@ -1878,7 +1988,7 @@
                         "steppedLine":false,
                         "targets":[
                             {
-                                "expr":"etcd_request_cache_add_latencies_summary{environment=\"$environment\"}",
+                                "expr":"etcd_request_cache_add_latencies_summary{}",
                                 "format":"time_series",
                                 "intervalFactor":2,
                                 "legendFormat":"Quantile {{quantile}}",
@@ -1974,7 +2084,7 @@
                         "steppedLine":false,
                         "targets":[
                             {
-                                "expr":"etcd_helper_cache_hit_count{environment=\"$environment\"} / (etcd_helper_cache_miss_count{environment=\"$environment\"} + etcd_helper_cache_hit_count{environment=\"$environment\"}) * 100",
+                                "expr":"etcd_helper_cache_hit_count{} / (etcd_helper_cache_miss_count{} + etcd_helper_cache_hit_count{}) * 100",
                                 "format":"time_series",
                                 "intervalFactor":2,
                                 "legendFormat":"Hit ratio",
@@ -2070,7 +2180,7 @@
                         "steppedLine":false,
                         "targets":[
                             {
-                                "expr":"sum(rate(etcd_request_latencies_summary_sum{environment=\"$environment\"}[1m])) by (operation) / sum(rate(etcd_request_latencies_summary_count{environment=\"$environment\"}[1m])) by (operation)",
+                                "expr":"sum(rate(etcd_request_latencies_summary_sum{}[1m])) by (operation) / sum(rate(etcd_request_latencies_summary_count{}[1m])) by (operation)",
                                 "format":"time_series",
                                 "intervalFactor":2,
                                 "legendFormat":"{{operation}}",
@@ -2135,7 +2245,7 @@
                     "x":0,
                     "y":13
                 },
-                "id":54,
+                "id":55,
                 "panels":[
                     {
                         "aliasColors":{
@@ -2191,7 +2301,7 @@
                         "steppedLine":true,
                         "targets":[
                             {
-                                "expr":"sum(rate (container_cpu_usage_seconds_total{image!=\"\",container=~\"$container\",environment=\"$environment\",juju_unit=~\"$worker\",namespace=~\"$namespace\"}[1m])) by (pod)",
+                                "expr":"sum(rate (container_cpu_usage_seconds_total{image!=\"\",container=~\"$container\",namespace=~\"$namespace\"}[1m])) by (pod)",
                                 "format":"time_series",
                                 "interval":"10s",
                                 "intervalFactor":1,
@@ -2256,7 +2366,7 @@
                     "x":0,
                     "y":14
                 },
-                "id":55,
+                "id":56,
                 "panels":[
                     {
                         "aliasColors":{
@@ -2316,12 +2426,12 @@
                         "steppedLine":true,
                         "targets":[
                             {
-                                "expr":"sum(rate (container_cpu_usage_seconds_total{image!=\"\",container!=\"POD\",container=~\"$container\",environment=\"$environment\",juju_unit=~\"$worker\",namespace=~\"$namespace\"}[1m])) without (cpu)",
+                                "expr":"sum(rate (container_cpu_usage_seconds_total{image!=\"\",container!=\"POD\",container=~\"$container\",namespace=~\"$namespace\"}[1m])) without (cpu)",
                                 "format":"time_series",
                                 "hide":false,
                                 "interval":"10s",
                                 "intervalFactor":1,
-                                "legendFormat":"{{ container }} (pod: {{pod}}",
+                                "legendFormat":"{{container}} (pod: {{pod}}",
                                 "metric":"container_cpu",
                                 "refId":"A",
                                 "step":15
@@ -2381,7 +2491,7 @@
                     "x":0,
                     "y":15
                 },
-                "id":56,
+                "id":57,
                 "panels":[
                     {
                         "aliasColors":{
@@ -2437,12 +2547,12 @@
                         "steppedLine":true,
                         "targets":[
                             {
-                                "expr":"sum (rate (container_cpu_usage_seconds_total{id=~\".*systemd.*service$\",environment=\"$environment\",juju_unit=~\"$worker\"}[1m])) by (id)",
+                                "expr":"sum (rate (container_cpu_usage_seconds_total{id=~\".*systemd.*service$\"}[1m])) by (id)",
                                 "format":"time_series",
                                 "hide":false,
                                 "interval":"10s",
                                 "intervalFactor":1,
-                                "legendFormat":"{{ id }}",
+                                "legendFormat":"{{id}}",
                                 "metric":"container_cpu",
                                 "refId":"A",
                                 "step":15
@@ -2453,7 +2563,7 @@
                         ],
                         "timeFrom":null,
                         "timeShift":null,
-                        "title":"System services CPU usage (1m avg, worker: $worker)",
+                        "title":"System services CPU usage (1m avg)",
                         "tooltip":{
                             "msResolution":true,
                             "shared":true,
@@ -2502,7 +2612,7 @@
                     "x":0,
                     "y":16
                 },
-                "id":57,
+                "id":58,
                 "panels":[
                     {
                         "aliasColors":{
@@ -2557,12 +2667,12 @@
                         "steppedLine":true,
                         "targets":[
                             {
-                                "expr":"sum (rate (container_cpu_usage_seconds_total{id!=\"/\",environment=\"$environment\",juju_unit=~\"$worker\"}[1m])) by (id)",
+                                "expr":"sum (rate (container_cpu_usage_seconds_total{id!=\"/\"}[1m])) by (id)",
                                 "format":"time_series",
                                 "hide":false,
                                 "interval":"10s",
                                 "intervalFactor":1,
-                                "legendFormat":"{{ id }}",
+                                "legendFormat":"{{id}}",
                                 "metric":"container_cpu",
                                 "refId":"A",
                                 "step":15
@@ -2573,7 +2683,7 @@
                         ],
                         "timeFrom":null,
                         "timeShift":null,
-                        "title":"All processes CPU usage (1m avg, worker: $worker)",
+                        "title":"All processes CPU usage (1m avg)",
                         "tooltip":{
                             "msResolution":true,
                             "shared":true,
@@ -2622,7 +2732,7 @@
                     "x":0,
                     "y":17
                 },
-                "id":58,
+                "id":59,
                 "panels":[
                     {
                         "aliasColors":{
@@ -2678,11 +2788,11 @@
                         "steppedLine":true,
                         "targets":[
                             {
-                                "expr":"sum (container_memory_working_set_bytes{image!=\"\",container=~\"$container\",environment=\"$environment\",juju_unit=~\"$worker\",namespace=~\"$namespace\"}) by (pod)",
+                                "expr":"sum (container_memory_working_set_bytes{image!=\"\",container=~\"$container\",namespace=~\"$namespace\"}) by (pod)",
                                 "format":"time_series",
                                 "interval":"10s",
                                 "intervalFactor":1,
-                                "legendFormat":"{{ pod }}",
+                                "legendFormat":"{{pod}}",
                                 "metric":"container_memory_usage:sort_desc",
                                 "refId":"A",
                                 "step":10
@@ -2742,7 +2852,7 @@
                     "x":0,
                     "y":18
                 },
-                "id":59,
+                "id":60,
                 "panels":[
                     {
                         "aliasColors":{
@@ -2798,11 +2908,11 @@
                         "steppedLine":true,
                         "targets":[
                             {
-                                "expr":"sum (container_memory_working_set_bytes{image!=\"\",container!=\"POD\",container=~\"$container\",environment=\"$environment\",juju_unit=~\"$worker\",namespace=~\"$namespace\"}) by (container, pod)",
+                                "expr":"sum (container_memory_working_set_bytes{image!=\"\",container!=\"POD\",container=~\"$container\",namespace=~\"$namespace\"}) by (container, pod)",
                                 "format":"time_series",
                                 "interval":"10s",
                                 "intervalFactor":1,
-                                "legendFormat":"{{ container }} (pod: {{pod}})",
+                                "legendFormat":"{{container}} (pod: {{pod}})",
                                 "metric":"container_memory_usage:sort_desc",
                                 "refId":"A",
                                 "step":10
@@ -2862,7 +2972,7 @@
                     "x":0,
                     "y":19
                 },
-                "id":60,
+                "id":61,
                 "panels":[
                     {
                         "aliasColors":{
@@ -2918,11 +3028,11 @@
                         "steppedLine":true,
                         "targets":[
                             {
-                                "expr":"sum (container_memory_working_set_bytes{id=~\".*systemd.*service$\",environment=\"$environment\",juju_unit=~\"$worker\"}) by (id)",
+                                "expr":"sum (container_memory_working_set_bytes{id=~\".*systemd.*service$\"}) by (id)",
                                 "format":"time_series",
                                 "interval":"10s",
                                 "intervalFactor":1,
-                                "legendFormat":"{{ id }}",
+                                "legendFormat":"{{id}}",
                                 "metric":"container_memory_usage:sort_desc",
                                 "refId":"A",
                                 "step":10
@@ -2982,7 +3092,7 @@
                     "x":0,
                     "y":20
                 },
-                "id":61,
+                "id":62,
                 "panels":[
                     {
                         "aliasColors":{
@@ -3038,11 +3148,11 @@
                         "steppedLine":true,
                         "targets":[
                             {
-                                "expr":"sum (container_memory_working_set_bytes{id!=\"/\",environment=\"$environment\",juju_unit=~\"$worker\"}) by (id)",
+                                "expr":"sum (container_memory_working_set_bytes{id!=\"/\"}) by (id)",
                                 "format":"time_series",
                                 "interval":"10s",
                                 "intervalFactor":1,
-                                "legendFormat":"{{ id }}",
+                                "legendFormat":"{{id}}",
                                 "metric":"container_memory_usage:sort_desc",
                                 "refId":"A",
                                 "step":10
@@ -3053,7 +3163,7 @@
                         ],
                         "timeFrom":null,
                         "timeShift":null,
-                        "title":"All processes memory usage (worker: $worker)",
+                        "title":"All processes memory usage",
                         "tooltip":{
                             "msResolution":false,
                             "shared":true,
@@ -3102,7 +3212,7 @@
                     "x":0,
                     "y":21
                 },
-                "id":62,
+                "id":63,
                 "panels":[
                     {
                         "aliasColors":{
@@ -3159,7 +3269,7 @@
                         "steppedLine":false,
                         "targets":[
                             {
-                                "expr":"sum (rate (container_network_receive_bytes_total{environment=\"$environment\",juju_unit=~\"$worker\"}[1m]))",
+                                "expr":"sum (rate (container_network_receive_bytes_total{}[1m]))",
                                 "format":"time_series",
                                 "interval":"10s",
                                 "intervalFactor":1,
@@ -3169,7 +3279,7 @@
                                 "step":15
                             },
                             {
-                                "expr":"- sum (rate (container_network_transmit_bytes_total{environment=\"$environment\",juju_unit=~\"$worker\"}[1m]))",
+                                "expr":"- sum (rate (container_network_transmit_bytes_total{}[1m]))",
                                 "format":"time_series",
                                 "interval":"10s",
                                 "intervalFactor":1,
@@ -3184,7 +3294,7 @@
                         ],
                         "timeFrom":null,
                         "timeShift":null,
-                        "title":"Network I/O pressure (worker: $worker)",
+                        "title":"Network I/O pressure",
                         "tooltip":{
                             "msResolution":false,
                             "shared":true,
@@ -3238,7 +3348,7 @@
                     "x":0,
                     "y":22
                 },
-                "id":63,
+                "id":64,
                 "panels":[
                     {
                         "aliasColors":{
@@ -3294,22 +3404,22 @@
                         "steppedLine":false,
                         "targets":[
                             {
-                                "expr":"sum (rate (container_network_receive_bytes_total{image!=\"\",pod=~\"$container.*\",environment=\"$environment\",juju_unit=~\"$worker\",namespace=~\"$namespace\"}[1m])) by (pod)",
+                                "expr":"sum (rate (container_network_receive_bytes_total{image!=\"\",pod=~\"$container.*\",namespace=~\"$namespace\"}[1m])) by (pod)",
                                 "format":"time_series",
                                 "interval":"10s",
                                 "intervalFactor":1,
-                                "legendFormat":"-> {{ pod }}",
+                                "legendFormat":"-> {{pod}}",
                                 "metric":"network",
                                 "refId":"A",
                                 "step":15
                             },
                             {
-                                "expr":"- sum (rate (container_network_transmit_bytes_total{image!=\"\",pod=~\"$container.*\",environment=\"$environment\",juju_unit=~\"$worker\",namespace=~\"$namespace\"}[1m])) by (pod)",
+                                "expr":"- sum (rate (container_network_transmit_bytes_total{image!=\"\",pod=~\"$container.*\",namespace=~\"$namespace\"}[1m])) by (pod)",
                                 "format":"time_series",
                                 "hide":false,
                                 "interval":"10s",
                                 "intervalFactor":1,
-                                "legendFormat":"<- {{ pod }}",
+                                "legendFormat":"<- {{pod}}",
                                 "metric":"network",
                                 "refId":"B",
                                 "step":15
@@ -3373,7 +3483,7 @@
                     "x":0,
                     "y":23
                 },
-                "id":64,
+                "id":65,
                 "panels":[
                     {
                         "aliasColors":{
@@ -3429,23 +3539,23 @@
                         "steppedLine":false,
                         "targets":[
                             {
-                                "expr":"sum (rate (container_network_receive_bytes_total{id!=\"/\",environment=\"$environment\",juju_unit=~\"$worker\"}[1m])) by (id)",
+                                "expr":"sum (rate (container_network_receive_bytes_total{id!=\"/\"}[1m])) by (id)",
                                 "format":"time_series",
                                 "hide":false,
                                 "interval":"10s",
                                 "intervalFactor":1,
-                                "legendFormat":"-> {{ id }}",
+                                "legendFormat":"-> {{id}}",
                                 "metric":"network",
                                 "refId":"A",
                                 "step":15
                             },
                             {
-                                "expr":"- sum (rate (container_network_transmit_bytes_total{id!=\"/\",environment=\"$environment\",juju_unit=~\"$worker\"}[1m])) by (id)",
+                                "expr":"- sum (rate (container_network_transmit_bytes_total{id!=\"/\"}[1m])) by (id)",
                                 "format":"time_series",
                                 "hide":false,
                                 "interval":"10s",
                                 "intervalFactor":1,
-                                "legendFormat":"<- {{ id }}",
+                                "legendFormat":"<- {{id}}",
                                 "metric":"network",
                                 "refId":"B",
                                 "step":15
@@ -3509,7 +3619,7 @@
                     "x":0,
                     "y":24
                 },
-                "id":65,
+                "id":66,
                 "panels":[
                     {
                         "aliasColors":{
@@ -3569,12 +3679,12 @@
                         "steppedLine":true,
                         "targets":[
                             {
-                                "expr":"sum by (container) (container_fs_usage_bytes{environment=\"$environment\",id!=\"/\"})",
+                                "expr":"sum by (container) (container_fs_usage_bytes{id!=\"/\"})",
                                 "format":"time_series",
                                 "hide":false,
                                 "interval":"10s",
                                 "intervalFactor":1,
-                                "legendFormat":"{{ container }}",
+                                "legendFormat":"{{container}}",
                                 "metric":"container_cpu",
                                 "refId":"A",
                                 "step":15
@@ -3680,12 +3790,12 @@
                         "steppedLine":true,
                         "targets":[
                             {
-                                "expr":"sum by (container) (container_fs_usage_bytes{environment=\"$environment\", id!=\"/\"}) / on (environment) group_left(id) sum (container_fs_usage_bytes{environment=\"$environment\", id=\"/\"}) * 100",
+                                "expr":"sum by (container) (container_fs_usage_bytes{id!=\"/\"}) / on (environment) group_left(id) sum (container_fs_usage_bytes{id=\"/\"}) * 100",
                                 "format":"time_series",
                                 "hide":false,
                                 "interval":"10s",
                                 "intervalFactor":1,
-                                "legendFormat":"{{ container }}",
+                                "legendFormat":"{{container}}",
                                 "metric":"container_cpu",
                                 "refId":"A",
                                 "step":15
@@ -3797,7 +3907,7 @@
                         "tableColumn":"",
                         "targets":[
                             {
-                                "expr":"sum(container_fs_usage_bytes{environment=\"prod-comms\", id=\"/\"}) - sum(container_fs_usage_bytes{environment=\"prod-comms\", id!=\"/\"})",
+                                "expr":"sum(container_fs_usage_bytes{id=\"/\"}) - sum(container_fs_usage_bytes{id!=\"/\"})",
                                 "format":"time_series",
                                 "instant":false,
                                 "intervalFactor":2,
@@ -3839,32 +3949,6 @@
                     },
                     "datasource":"prometheus - Juju generated source",
                     "hide":0,
-                    "includeAll":false,
-                    "label":null,
-                    "multi":false,
-                    "name":"environment",
-                    "options":[
-
-                    ],
-                    "query":"label_values(scheduler_binding_latency_microseconds_count,environment)",
-                    "refresh":1,
-                    "regex":"",
-                    "sort":0,
-                    "tagValuesQuery":"",
-                    "tags":[
-
-                    ],
-                    "tagsQuery":"",
-                    "type":"query",
-                    "useTags":false
-                },
-                {
-                    "allValue":".*",
-                    "current":{
-
-                    },
-                    "datasource":"prometheus - Juju generated source",
-                    "hide":0,
                     "includeAll":true,
                     "label":null,
                     "multi":false,
@@ -3872,36 +3956,10 @@
                     "options":[
 
                     ],
-                    "query":"label_values(container_memory_usage_bytes{environment=\"$environment\",namespace=~\".+\",container!=\"POD\"},namespace)",
+                    "query":"label_values(container_memory_usage_bytes{namespace=~\".+\",container!=\"POD\"},namespace)",
                     "refresh":1,
                     "regex":"",
                     "sort":1,
-                    "tagValuesQuery":"",
-                    "tags":[
-
-                    ],
-                    "tagsQuery":"",
-                    "type":"query",
-                    "useTags":false
-                },
-                {
-                    "allValue":".*",
-                    "current":{
-
-                    },
-                    "datasource":"prometheus - Juju generated source",
-                    "hide":0,
-                    "includeAll":true,
-                    "label":null,
-                    "multi":false,
-                    "name":"worker",
-                    "options":[
-
-                    ],
-                    "query":"label_values(container_memory_usage_bytes{environment=\"$environment\",namespace=~\".+\",container!=\"POD\"},juju_unit)",
-                    "refresh":1,
-                    "regex":"",
-                    "sort":0,
                     "tagValuesQuery":"",
                     "tags":[
 
@@ -3924,7 +3982,7 @@
                     "options":[
 
                     ],
-                    "query":"label_values(container_memory_usage_bytes{environment=\"$environment\",namespace=~\"$namespace\",juju_unit=~\"$worker\",container!=\"POD\"},container)",
+                    "query":"label_values(container_memory_usage_bytes{namespace=~\"$namespace\",container!=\"POD\"},container)",
                     "refresh":1,
                     "regex":"",
                     "sort":1,
