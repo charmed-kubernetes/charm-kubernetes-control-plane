@@ -2667,7 +2667,7 @@ def register_grafana_dashboards():
     dash_dir = Path('templates/grafana/autoload')
     for dash_file in dash_dir.glob('*.json'):
         dashboard = dash_file.read_text()
-        grafana.register_dashboard('telegraf', json.loads(dashboard))
+        grafana.register_dashboard(dash_file.stem, json.loads(dashboard))
 
 
 @when('endpoint.aws-iam.ready')
