@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/local/sbin/charm-env python3
 
 # Copyright 2015 The Kubernetes Authors.
 #
@@ -27,8 +27,6 @@ import ipaddress
 import traceback
 import yaml
 
-from charms.leadership import leader_get, leader_set
-
 from shutil import move, copyfile
 from pathlib import Path
 from subprocess import check_call
@@ -36,7 +34,9 @@ from subprocess import check_output
 from subprocess import CalledProcessError
 from urllib.request import Request, urlopen
 
+import charms.coordinator
 from charms.layer import snap
+from charms.leadership import leader_get, leader_set
 from charms.reactive import hook
 from charms.reactive import remove_state, clear_flag
 from charms.reactive import set_state, set_flag
@@ -354,21 +354,15 @@ def install_snaps():
 
 
 @when('kubernetes-master.snaps.installed',
-      'leadership.is_leader',
-      'kube-control.connected')
-@when_not('kubernetes-master.cohorts.up-to-date')
-def create_or_update_cohorts():
-    kube_control = endpoint_from_flag('kube-control.connected')
+      'leadership.is_leader')
+@when_not('leadership.set.cohort_keys')
+def create_or_update_cohort_keys():
     cohort_keys = {}
     for snapname in cohort_snaps:
         cohort_key = snap.create_cohort_snapshot(snapname)
-        if snap.is_installed(snapname):  # we also manage workers' cohorts
-            snap.join_cohort_snapshot(snapname, cohort_key)
-        cohort_key[snapname] = cohort_key
-    leader_set('cohort_keys', json.dumps(cohort_keys))
-    # TODO: worker should be delayed until other master (if any) is updated
-    kube_control.set_cohort_keys(cohort_keys)
-    set_flag('kubernetes-master.cohorts.up-to-date')
+        cohort_keys[snapname] = cohort_key
+    leader_set(cohort_keys=json.dumps(cohort_keys))
+    hookenv.log('Snap cohort keys have been created.')
 
 
 @when('kubernetes-master.snaps.installed',
@@ -376,8 +370,81 @@ def create_or_update_cohorts():
 def check_cohort_updates():
     for snapname in cohort_snaps:
         if snap.is_refresh_available(snapname):
-            clear_flag('kubernetes-master.cohorts.up-to-date')
+            leader_set(cohort_keys=None)
             return
+
+
+@when('kubernetes-master.snaps.installed',
+      'leadership.set.cohort_keys')
+@when_none('coordinator.granted.cohort',
+           'coordinator.requested.cohort')
+def safely_join_cohort():
+    '''Coordinate the rollout of snap refreshes.
+
+    When cohort keys change, grab a lock so that only 1 unit in the
+    application joins the new cohort at a time. This allows us to roll out
+    snap refreshes without risking all units going down at once.
+    '''
+    # NB: initial data-changed is always true
+    if data_changed('leader-cohorts', leader_get('cohort_keys')):
+        clear_flag('kubernetes-master.cohorts.joined')
+        clear_flag('kubernetes-master.cohorts.sent')
+        charms.coordinator.acquire('cohort')
+
+
+@when('kubernetes-master.snaps.installed',
+      'leadership.set.cohort_keys',
+      'coordinator.granted.cohort')
+@when_not('kubernetes-master.cohorts.joined')
+def join_or_update_cohorts():
+    '''Join or update a cohort snapshot.
+
+    All units of this application (leader and followers) need to refresh their
+    installed snaps to the current cohort snapshot.
+    '''
+    cohort_keys = json.loads(leader_get('cohort_keys'))
+    for snapname in cohort_snaps:
+        cohort_key = cohort_keys[snapname]
+        if snap.is_installed(snapname):  # we also manage workers' cohorts
+            snap.join_cohort_snapshot(snapname, cohort_key)
+    hookenv.log('{} has joined the snap cohort'.format(hookenv.local_unit()))
+
+    # If we have peers, tell them we've joined the cohort. This is needed so
+    # we don't tell workers about cohorts until all masters are refreshed.
+    kube_masters = endpoint_from_flag('kube-masters.connected')
+    if kube_masters:
+        kube_masters.set_cohort_keys(cohort_keys)
+
+    set_flag('kubernetes-master.cohorts.joined')
+
+
+@when('kubernetes-master.snaps.installed',
+      'leadership.set.cohort_keys',
+      'kubernetes-master.cohorts.joined',
+      'kube-control.connected')
+@when_not('kubernetes-master.cohorts.sent')
+def send_cohorts():
+    '''Send cohort information to workers.
+
+    If we have peers, wait until all peers are updated before sending.
+    Otherwise, we're a single unit k8s-master and can fire when connected.
+    '''
+    cohort_keys = json.loads(leader_get('cohort_keys'))
+    kube_control = endpoint_from_flag('kube-control.connected')
+    kube_masters = endpoint_from_flag('kube-masters.connected')
+
+    if kube_masters:
+        if is_flag_set('endpoint.kube-masters.cohorts.ready'):
+            kube_control.set_cohort_keys(cohort_keys)
+            hookenv.log('{} (peer) sent cohort keys to workers'.format(hookenv.local_unit()))
+        else:
+            hookenv.log('Waiting for k8s-masters to agree on cohorts.')
+            return
+    else:
+        kube_control.set_cohort_keys(cohort_keys)
+        hookenv.log('{} (single) sent cohort keys to workers'.format(hookenv.local_unit()))
+
+    set_flag('kubernetes-master.cohorts.sent')
 
 
 @when('etcd.available')

@@ -23,6 +23,9 @@ subordinate: false
 series:
   - xenial
   - bionic
+peers:
+  kube-masters:
+    interface: kube-masters
 provides:
   kube-api-endpoint:
     interface: http
