@@ -180,26 +180,16 @@ def maybe_install_kube_proxy():
         calculate_and_store_resource_checksums(checksum_prefix, snap_resources)
 
 
-@when_not('kubernetes-master.first-init.ran')
-def first_init():
-    # Do anything that we want to only do once.
-    if not is_state('kubernetes-master.cluster-name.legacy'):
-        # For new installs, this will run before check_for_upgrade_needed,
-        # but for upgrades from older code, that will run first.
-        set_state('kubernetes-master.cluster-name.new')
-    set_state('kubernetes-master.first-init.ran')
+@hook('install')
+def fresh_install():
+    # fresh installs should always send the unique cluster name to cdk-addons
+    set_state('kubernetes-master.cdk-addons.unique-cluster-name')
 
 
 @hook('upgrade-charm')
 def check_for_upgrade_needed():
     '''An upgrade charm event was triggered by Juju, react to that here.'''
     hookenv.status_set('maintenance', 'Checking resources')
-
-    # Handle upgrade path for cluster name being sent to cdk-addons.
-    if not is_state('kubernetes-master.cluster-name.new'):
-        # For new installs, first_init will run before this, but for
-        # upgrades from older code, this will run first.
-        set_state('kubernetes-master.cluster-name.legacy')
 
     # migrate to new flags
     if is_state('kubernetes-master.restarted-for-cloud'):
@@ -1100,10 +1090,13 @@ def configure_cdk_addons():
     enable_gcp = 'false'
     enable_openstack = str(is_flag_set('endpoint.openstack.ready')).lower()
     openstack = endpoint_from_flag('endpoint.openstack.ready')
-    if is_state('kubernetes-master.cluster-name.new'):
-        cluster_name = leader_get('cluster_tag')
-    elif is_state('kubernetes-master.cluster-name.legacy'):
-        cluster_name = 'kubernetes'
+
+    if is_state('kubernetes-master.cdk-addons.unique-cluster-name'):
+        cluster_tag = leader_get('cluster_tag')
+    else:
+        # allow for older upgraded charms to control when they start sending
+        # the unique cluster name to cdk-addons
+        cluster_tag = 'kubernetes'
 
     args = [
         'arch=' + arch(),
@@ -1129,7 +1122,7 @@ def configure_cdk_addons():
         'enable-gcp=' + enable_gcp,
         'enable-openstack=' + enable_openstack,
         'monitorstorage=' + hookenv.config('monitoring-storage'),
-        'cluster-tag='+cluster_name,
+        'cluster-tag='+cluster_tag,
     ]
     if openstack:
         args.extend([

@@ -2,8 +2,7 @@
 set -eux
 
 if [[ "$(action-get fix-cluster-name)" == "true" ]]; then
-    charms.reactive set_state kubernetes-master.cluster-name.new
-    charms.reactive remove_state kubernetes-master.cluster-name.legacy
+    charms.reactive set_state 'kubernetes-master.cdk-addons.unique-cluster-name'
 fi
 
 charms.reactive set_state kubernetes-master.upgrade-specified
