@@ -48,6 +48,16 @@ namespace-delete:
     - name
 upgrade:
     description: Upgrade the kubernetes snaps
+    params:
+      fix-cluster-name:
+        type: boolean
+        default: true
+        description: >-
+          If using the OpenStack cloud provider, whether to fix the cluster
+          name sent to it to include the cluster tag. This fixes an issue
+          with load balancers conflicting with other clusters in the same
+          project but will cause new load balancers to be created which will
+          require manual intervention to resolve.
 get-kubeconfig:
   description: Retrieve Kubernetes cluster config, including credentials
 apply-manifest:
