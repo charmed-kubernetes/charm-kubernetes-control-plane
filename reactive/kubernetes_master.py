@@ -436,13 +436,15 @@ def send_cohorts():
     if kube_masters:
         if is_flag_set('endpoint.kube-masters.cohorts.ready'):
             kube_control.set_cohort_keys(cohort_keys)
-            hookenv.log('{} (peer) sent cohort keys to workers'.format(hookenv.local_unit()))
+            hookenv.log('{} (peer) sent cohort keys to workers'.format(
+                hookenv.local_unit()))
         else:
             hookenv.log('Waiting for k8s-masters to agree on cohorts.')
             return
     else:
         kube_control.set_cohort_keys(cohort_keys)
-        hookenv.log('{} (single) sent cohort keys to workers'.format(hookenv.local_unit()))
+        hookenv.log('{} (single) sent cohort keys to workers'.format(
+            hookenv.local_unit()))
 
     set_flag('kubernetes-master.cohorts.sent')
 
