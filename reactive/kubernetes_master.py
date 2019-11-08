@@ -182,8 +182,8 @@ def maybe_install_kube_proxy():
 
 @hook('install')
 def fresh_install():
-    # fresh installs should always send the unique cluster name to cdk-addons
-    set_state('kubernetes-master.cdk-addons.unique-cluster-name')
+    # fresh installs should always send the unique cluster tag to cdk-addons
+    set_state('kubernetes-master.cdk-addons.unique-cluster-tag')
 
 
 @hook('upgrade-charm')
@@ -1091,11 +1091,11 @@ def configure_cdk_addons():
     enable_openstack = str(is_flag_set('endpoint.openstack.ready')).lower()
     openstack = endpoint_from_flag('endpoint.openstack.ready')
 
-    if is_state('kubernetes-master.cdk-addons.unique-cluster-name'):
+    if is_state('kubernetes-master.cdk-addons.unique-cluster-tag'):
         cluster_tag = leader_get('cluster_tag')
     else:
         # allow for older upgraded charms to control when they start sending
-        # the unique cluster name to cdk-addons
+        # the unique cluster tag to cdk-addons
         cluster_tag = 'kubernetes'
 
     args = [
