@@ -88,6 +88,9 @@ from charms.layer.kubernetes_common import client_crt_path
 from charms.layer.kubernetes_common import client_key_path
 from charms.layer.kubernetes_common import kubectl
 
+from charms.layer.nagios import install_nagios_plugin_from_file
+from charms.layer.nagios import remove_nagios_plugin
+
 
 # Override the default nagios shortname regex to allow periods, which we
 # need because our bin names contain them (e.g. 'snap.foo.daemon'). The
@@ -179,6 +182,12 @@ def maybe_install_kube_proxy():
         calculate_and_store_resource_checksums(checksum_prefix, snap_resources)
 
 
+@hook('install')
+def fresh_install():
+    # fresh installs should always send the unique cluster tag to cdk-addons
+    set_state('kubernetes-master.cdk-addons.unique-cluster-tag')
+
+
 @hook('upgrade-charm')
 def check_for_upgrade_needed():
     '''An upgrade charm event was triggered by Juju, react to that here.'''
@@ -232,6 +241,9 @@ def check_for_upgrade_needed():
             leader_set(auto_dns_provider='kube-dns')
         elif was_kube_dns is False:
             leader_set(auto_dns_provider='none')
+
+    if is_flag_set('nrpe-external-master.available'):
+        update_nrpe_config()
 
 
 def add_rbac_roles():
@@ -1177,6 +1189,13 @@ def configure_cdk_addons():
     enable_openstack = str(is_flag_set('endpoint.openstack.ready')).lower()
     openstack = endpoint_from_flag('endpoint.openstack.ready')
 
+    if is_state('kubernetes-master.cdk-addons.unique-cluster-tag'):
+        cluster_tag = leader_get('cluster_tag')
+    else:
+        # allow for older upgraded charms to control when they start sending
+        # the unique cluster tag to cdk-addons
+        cluster_tag = 'kubernetes'
+
     args = [
         'arch=' + arch(),
         'dns-ip=' + get_deprecated_dns_ip(),
@@ -1201,7 +1220,7 @@ def configure_cdk_addons():
         'enable-gcp=' + enable_gcp,
         'enable-openstack=' + enable_openstack,
         'monitorstorage=' + hookenv.config('monitoring-storage'),
-        'cluster-tag='+leader_get('cluster_tag'),
+        'cluster-tag='+cluster_tag,
     ]
     if openstack:
         args.extend([
@@ -1387,9 +1406,9 @@ def ceph_storage():
 
 @when('nrpe-external-master.available')
 @when_not('nrpe-external-master.initial-config')
-def initial_nrpe_config(nagios=None):
+def initial_nrpe_config():
     set_state('nrpe-external-master.initial-config')
-    update_nrpe_config(nagios)
+    update_nrpe_config()
 
 
 @when('config.changed.authorization-mode')
@@ -1459,30 +1478,28 @@ def remove_rbac_resources():
 @when('nrpe-external-master.available')
 @when_any('config.changed.nagios_context',
           'config.changed.nagios_servicegroups')
-def update_nrpe_config(unused=None):
-    services = (
-        'snap.kube-apiserver.daemon',
-        'snap.kube-controller-manager.daemon',
-        'snap.kube-scheduler.daemon'
-    )
+def update_nrpe_config():
+    services = ['snap.{}.daemon'.format(s) for s in master_services]
+
+    plugin = install_nagios_plugin_from_file('templates/nagios_plugin.py',
+                                             'check_k8s_master.py')
     hostname = nrpe.get_nagios_hostname()
     current_unit = nrpe.get_nagios_unit_name()
     nrpe_setup = nrpe.NRPE(hostname=hostname)
     nrpe.add_init_service_checks(nrpe_setup, services, current_unit)
+    nrpe_setup.add_check('k8s-api-server',
+                         'Verify that the Kubernetes API server is accessible',
+                         str(plugin))
     nrpe_setup.write()
 
 
 @when_not('nrpe-external-master.available')
 @when('nrpe-external-master.initial-config')
-def remove_nrpe_config(nagios=None):
-    remove_state('nrpe-external-master.initial-config')
-
+def remove_nrpe_config():
     # List of systemd services for which the checks will be removed
-    services = (
-        'snap.kube-apiserver.daemon',
-        'snap.kube-controller-manager.daemon',
-        'snap.kube-scheduler.daemon'
-    )
+    services = ['snap.{}.daemon'.format(s) for s in master_services]
+
+    remove_nagios_plugin('check_k8s_master.py')
 
     # The current nrpe-external-master interface doesn't handle a lot of logic,
     # use the charm-helpers code for now.
@@ -1491,6 +1508,8 @@ def remove_nrpe_config(nagios=None):
 
     for service in services:
         nrpe_setup.remove_check(shortname=service)
+    nrpe_setup.remove_check(shortname='k8s-api-server')
+    remove_state('nrpe-external-master.initial-config')
 
 
 def is_privileged():
@@ -1732,13 +1751,6 @@ def configure_apiserver():
         return
 
     api_opts = {}
-    # at one point in time, this code would set ca-client-cert,
-    # but this was removed. This was before configure_kubernetes_service
-    # kept track of old arguments and removed them, so client-ca-cert
-    # was able to hang around forever stored in the snap configuration.
-    # This removes that stale configuration from the snap if it still
-    # exists.
-    api_opts['client-ca-file'] = 'null'
 
     if is_privileged():
         api_opts['allow-privileged'] = 'true'
@@ -1802,7 +1814,6 @@ def configure_apiserver():
     if ks and aws:
         hookenv.log('unable to have BOTH Keystone and '
                     'AWS IAM webhook auth at the same time!')
-
     elif aws:
         api_opts['authentication-token-webhook-config-file'] = aws_iam_webhook
     elif ks:
@@ -2583,7 +2594,18 @@ def get_dns_provider():
 def send_registry_location():
     registry_location = hookenv.config('image-registry')
     kube_control = endpoint_from_flag('kube-control.connected')
+
+    # Send registry to workers
     kube_control.set_registry_location(registry_location)
+
+    # Construct and send the sandbox image (pause container) to our runtime
+    runtime = endpoint_from_flag('endpoint.container-runtime.available')
+    if runtime:
+        uri = '{}/pause-{}:3.1'.format(registry_location, arch())
+        runtime.set_config(
+            sandbox_image=uri
+        )
+
     set_flag('kubernetes-master.sent-registry')
 
 
@@ -2756,7 +2778,7 @@ def register_grafana_dashboards():
     dash_dir = Path('templates/grafana/autoload')
     for dash_file in dash_dir.glob('*.json'):
         dashboard = dash_file.read_text()
-        grafana.register_dashboard('telegraf', json.loads(dashboard))
+        grafana.register_dashboard(dash_file.stem, json.loads(dashboard))
 
 
 @when('endpoint.aws-iam.ready')
