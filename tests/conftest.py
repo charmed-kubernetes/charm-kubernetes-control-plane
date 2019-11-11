@@ -14,10 +14,12 @@ sys.modules['charmhelpers.contrib'] = ch.contrib
 sys.modules['charmhelpers.contrib.charmsupport'] = ch.contrib.charmsupport
 sys.modules['charms.reactive'] = MagicMock()
 sys.modules['charms.leadership'] = MagicMock()
-layer = MagicMock()
-sys.modules['charms.layer'] = layer
-sys.modules['charms.layer.hacluster'] = layer.hacluster
-sys.modules['charms.layer.kubernetes_common'] = layer.kubernetes_common
-sys.modules['charms.layer.nagios'] = layer.nagios
+charms = MagicMock()
+sys.modules['charms'] = charms
+sys.modules['charms.coordinator'] = charms.coordinator
+sys.modules['charms.layer'] = charms.layer
+sys.modules['charms.layer.hacluster'] = charms.layer.hacluster
+sys.modules['charms.layer.kubernetes_common'] = charms.layer.kubernetes_common
+sys.modules['charms.layer.nagios'] = charms.layer.nagios
 
 os.environ['JUJU_MODEL_UUID'] = 'test-1234'
