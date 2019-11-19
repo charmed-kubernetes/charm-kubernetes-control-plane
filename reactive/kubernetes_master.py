@@ -1,4 +1,4 @@
-#!/usr/local/sbin/charm-env python3
+#!/usr/bin/env python
 
 # Copyright 2015 The Kubernetes Authors.
 #
@@ -27,6 +27,8 @@ import ipaddress
 import traceback
 import yaml
 
+from charms.leadership import leader_get, leader_set
+
 from shutil import move, copyfile
 from pathlib import Path
 from subprocess import check_call
@@ -34,9 +36,7 @@ from subprocess import check_output
 from subprocess import CalledProcessError
 from urllib.request import Request, urlopen
 
-import charms.coordinator
 from charms.layer import snap
-from charms.leadership import leader_get, leader_set
 from charms.reactive import hook
 from charms.reactive import remove_state, clear_flag
 from charms.reactive import set_state, set_flag
@@ -104,8 +104,6 @@ master_services = ['kube-apiserver',
                    'kube-controller-manager',
                    'kube-scheduler',
                    'kube-proxy']
-
-cohort_snaps = snap_resources + ['kubelet']
 
 
 os.environ['PATH'] += os.pathsep + os.path.join(os.sep, 'snap', 'bin')
@@ -180,12 +178,6 @@ def maybe_install_kube_proxy():
         hookenv.status_set('maintenance', 'Installing kube-proxy snap')
         snap.install('kube-proxy', channel=channel, classic=True)
         calculate_and_store_resource_checksums(checksum_prefix, snap_resources)
-
-
-@hook('install')
-def fresh_install():
-    # fresh installs should always send the unique cluster tag to cdk-addons
-    set_state('kubernetes-master.cdk-addons.unique-cluster-tag')
 
 
 @hook('upgrade-charm')
@@ -363,114 +355,6 @@ def install_snaps():
     db.set('snap.resources.fingerprint.initialised', True)
     set_state('kubernetes-master.snaps.installed')
     remove_state('kubernetes-master.components.started')
-
-
-@when('kubernetes-master.snaps.installed',
-      'leadership.is_leader')
-@when_not('leadership.set.cohort_keys')
-def create_or_update_cohort_keys():
-    cohort_keys = {}
-    for snapname in cohort_snaps:
-        cohort_key = snap.create_cohort_snapshot(snapname)
-        cohort_keys[snapname] = cohort_key
-    leader_set(cohort_keys=json.dumps(cohort_keys))
-    hookenv.log('Snap cohort keys have been created.')
-
-
-@when('kubernetes-master.snaps.installed',
-      'leadership.is_leader')
-def check_cohort_updates():
-    for snapname in cohort_snaps:
-        if snap.is_refresh_available(snapname):
-            leader_set(cohort_keys=None)
-            return
-
-
-@when('kubernetes-master.snaps.installed',
-      'leadership.set.cohort_keys')
-@when_none('coordinator.granted.cohort',
-           'coordinator.requested.cohort')
-def safely_join_cohort():
-    '''Coordinate the rollout of snap refreshes.
-
-    When cohort keys change, grab a lock so that only 1 unit in the
-    application joins the new cohort at a time. This allows us to roll out
-    snap refreshes without risking all units going down at once.
-    '''
-    # It's possible to join a cohort before snapd knows about the snap proxy.
-    # When this happens, we'll join a cohort, yet install default snaps. We
-    # won't refresh those until the leader keys change. Ensure we always
-    # check for available refreshes even if the leader keys haven't changed.
-    force_join = False
-    for snapname in cohort_snaps:
-        if snap.is_refresh_available(snapname):
-            force_join = True
-            break
-
-    cohort_keys = leader_get('cohort_keys')
-    # NB: initial data-changed is always true
-    if data_changed('leader-cohorts', cohort_keys) or force_join:
-        clear_flag('kubernetes-master.cohorts.joined')
-        clear_flag('kubernetes-master.cohorts.sent')
-        charms.coordinator.acquire('cohort')
-
-
-@when('kubernetes-master.snaps.installed',
-      'leadership.set.cohort_keys',
-      'coordinator.granted.cohort')
-@when_not('kubernetes-master.cohorts.joined')
-def join_or_update_cohorts():
-    '''Join or update a cohort snapshot.
-
-    All units of this application (leader and followers) need to refresh their
-    installed snaps to the current cohort snapshot.
-    '''
-    cohort_keys = json.loads(leader_get('cohort_keys'))
-    for snapname in cohort_snaps:
-        cohort_key = cohort_keys[snapname]
-        if snap.is_installed(snapname):  # we also manage workers' cohorts
-            hookenv.status_set('maintenance', 'Joining snap cohort.')
-            snap.join_cohort_snapshot(snapname, cohort_key)
-    hookenv.log('{} has joined the snap cohort'.format(hookenv.local_unit()))
-
-    # If we have peers, tell them we've joined the cohort. This is needed so
-    # we don't tell workers about cohorts until all masters are refreshed.
-    kube_masters = endpoint_from_flag('kube-masters.connected')
-    if kube_masters:
-        kube_masters.set_cohort_keys(cohort_keys)
-
-    set_flag('kubernetes-master.cohorts.joined')
-
-
-@when('kubernetes-master.snaps.installed',
-      'leadership.set.cohort_keys',
-      'kubernetes-master.cohorts.joined',
-      'kube-control.connected')
-@when_not('kubernetes-master.cohorts.sent')
-def send_cohorts():
-    '''Send cohort information to workers.
-
-    If we have peers, wait until all peers are updated before sending.
-    Otherwise, we're a single unit k8s-master and can fire when connected.
-    '''
-    cohort_keys = json.loads(leader_get('cohort_keys'))
-    kube_control = endpoint_from_flag('kube-control.connected')
-    kube_masters = endpoint_from_flag('kube-masters.connected')
-
-    if kube_masters:
-        if is_flag_set('kube-masters.cohorts.ready'):
-            kube_control.set_cohort_keys(cohort_keys)
-            hookenv.log('{} (peer) sent cohort keys to workers'.format(
-                hookenv.local_unit()))
-        else:
-            hookenv.log('Waiting for k8s-masters to agree on cohorts.')
-            return
-    else:
-        kube_control.set_cohort_keys(cohort_keys)
-        hookenv.log('{} (single) sent cohort keys to workers'.format(
-            hookenv.local_unit()))
-
-    set_flag('kubernetes-master.cohorts.sent')
 
 
 @when('etcd.available')
@@ -978,6 +862,7 @@ def etcd_data_change(etcd):
 
 
 @when('kube-control.connected')
+@when_not('cluster-dns.ready')
 @when('cdk-addons.configured')
 def send_cluster_dns_detail(kube_control):
     ''' Send cluster DNS info '''
@@ -1201,13 +1086,6 @@ def configure_cdk_addons():
     enable_openstack = str(is_flag_set('endpoint.openstack.ready')).lower()
     openstack = endpoint_from_flag('endpoint.openstack.ready')
 
-    if is_state('kubernetes-master.cdk-addons.unique-cluster-tag'):
-        cluster_tag = leader_get('cluster_tag')
-    else:
-        # allow for older upgraded charms to control when they start sending
-        # the unique cluster tag to cdk-addons
-        cluster_tag = 'kubernetes'
-
     args = [
         'arch=' + arch(),
         'dns-ip=' + get_deprecated_dns_ip(),
@@ -1232,7 +1110,7 @@ def configure_cdk_addons():
         'enable-gcp=' + enable_gcp,
         'enable-openstack=' + enable_openstack,
         'monitorstorage=' + hookenv.config('monitoring-storage'),
-        'cluster-tag='+cluster_tag,
+        'cluster-tag='+leader_get('cluster_tag'),
     ]
     if openstack:
         args.extend([
@@ -2790,7 +2668,7 @@ def register_grafana_dashboards():
     dash_dir = Path('templates/grafana/autoload')
     for dash_file in dash_dir.glob('*.json'):
         dashboard = dash_file.read_text()
-        grafana.register_dashboard(dash_file.stem, json.loads(dashboard))
+        grafana.register_dashboard('telegraf', json.loads(dashboard))
 
 
 @when('endpoint.aws-iam.ready')
@@ -2818,3 +2696,32 @@ def api_server_stopped():
     aws_iam = endpoint_from_flag('endpoint.aws-iam.available')
     if aws_iam:
         aws_iam.set_api_server_status(False)
+
+
+@when('cluster-dns.joined')
+def send_clusterdns_domain():
+    """Send domain to the Cluster DNS interface."""
+    cluster_dns = endpoint_from_flag('cluster-dns.joined')
+    dns_domain = hookenv.config('dns_domain')
+
+    hookenv.log('Sending dns_domain: {}'.format(dns_domain))
+    cluster_dns.send_domain(dns_domain)
+
+    set_flag('kubernetes-master.need-cluster-dns')
+    clear_flag('cluster-dns.joined')
+
+
+@when('cluster-dns.ready')
+@when('kubernetes-master.need-cluster-dns')
+@when('kube-control.connected')
+def set_charmed_clusterdns():
+    """Send new ClusterDNS information to the worker"""
+    kube_control = endpoint_from_flag('kube-control.connected')
+    cluster_dns = endpoint_from_flag('cluster-dns.ready')
+    dns_ip = cluster_dns.get_ip()
+    dns_domain = hookenv.config('dns_domain')
+
+    hookenv.log('Sending dns_ip: {}'.format(dns_ip))
+    kube_control.set_dns(53, dns_domain, dns_ip, True)
+
+    clear_flag('kubernetes-master.need-cluster-dns')
