@@ -20,6 +20,7 @@ includes:
   - 'interface:kubernetes-cni'
   - 'interface:kube-dns'
   - 'interface:kube-control'
+  - 'interface:kube-masters'
   - 'interface:public-address'
   - 'interface:aws-integration'
   - 'interface:gcp-integration'
