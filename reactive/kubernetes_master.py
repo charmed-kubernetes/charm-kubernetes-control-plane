@@ -1193,11 +1193,9 @@ def configure_cdk_addons():
         else:
             dashboard_auth = 'basic'
 
-    # clouds are not enabled in cdk-addons until we support the relevant
-    # external cloud provider
-    enable_aws = 'false'
-    enable_azure = 'false'
-    enable_gcp = 'false'
+    enable_aws = str(is_flag_set('endpoint.aws.ready')).lower()
+    enable_azure = str(is_flag_set('endpoint.azure.ready')).lower()
+    enable_gcp = str(is_flag_set('endpoint.gcp.ready')).lower()
     enable_openstack = str(is_flag_set('endpoint.openstack.ready')).lower()
     openstack = endpoint_from_flag('endpoint.openstack.ready')
 
