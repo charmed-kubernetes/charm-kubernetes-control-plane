@@ -679,12 +679,12 @@ def set_final_status():
 
     if is_leader and ks and \
        is_flag_set('kubernetes-master.keystone-policy-error'):
-        hookenv.status_set('blocked', 'Invalid keystone policy file')
+        hookenv.status_set('blocked', 'Invalid keystone policy file.')
         return
 
     if is_leader and ks and \
        not is_flag_set('kubernetes-master.keystone-policy-handled'):
-        hookenv.status_set('waiting', 'Waiting to apply keystone policy file')
+        hookenv.status_set('waiting', 'Waiting to apply keystone policy file.')
         return
 
     hookenv.status_set('active', 'Kubernetes master running.')
