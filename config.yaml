@@ -253,8 +253,8 @@ options:
           ]
     type: string
     description: |
-      Policy for Keystone authentication. This is used when a Keystone charm is
-      related to kubernetes-master in order to provide authentication and authorization
+      Policy for Keystone authorization. This is used when a Keystone charm is
+      related to kubernetes-master in order to provide authorization
       for Keystone users on the Kubernetes cluster.
   enable-keystone-authorization:
     type: boolean
