@@ -62,7 +62,7 @@ options:
   enable-dashboard-addons:
     type: boolean
     default: true
-    description: Deploy the Kubernetes Dashboard and Heapster addons
+    description: Deploy the Kubernetes Dashboard
   dns-provider:
     type: string
     default: "auto"
@@ -301,7 +301,7 @@ options:
         hostPath:
           path: /grafana
           type: Directory
-
+      DEPRECATED: this option has no effect on Kubernetes 1.18 and above.
     default: |
       influxdb:
         emptyDir: {}
