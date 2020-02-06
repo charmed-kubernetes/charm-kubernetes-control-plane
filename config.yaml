@@ -307,3 +307,15 @@ options:
         emptyDir: {}
       grafana:
         emptyDir: {}
+  default-cni:
+    type: string
+    description: |
+      Default CNI network to use when multiple CNI subordinates are related.
+
+      The value of this config should be the application name of a related CNI
+      subordinate. For example:
+
+      juju config kubernetes-master default-cni=flannel
+
+      If unspecified, then the default CNI network is chosen alphabetically.
+    default: ""

@@ -929,7 +929,8 @@ def start_master():
 
     # kube-proxy
     cni = endpoint_from_flag('cni.available')
-    cluster_cidr = cni.get_config()['cidr']
+    default_cni = hookenv.config('default-cni')
+    cluster_cidr = cni.get_config(default=default_cni)['cidr']
     # Set bind address to work around node IP error when there's no kubelet
     # https://bugs.launchpad.net/charm-kubernetes-master/+bug/1841114
     bind_address = get_ingress_address('kube-control')
@@ -2858,3 +2859,15 @@ def api_server_stopped():
     aws_iam = endpoint_from_flag('endpoint.aws-iam.available')
     if aws_iam:
         aws_iam.set_api_server_status(False)
+
+
+@when('kube-control.connected')
+def send_default_cni():
+    default_cni = hookenv.config('default-cni')
+    kube_control = endpoint_from_flag('kube-control.connected')
+    kube_control.set_default_cni(default_cni)
+
+
+@when('config.changed.default-cni')
+def default_cni_changed():
+    remove_state('kubernetes-master.components.started')
