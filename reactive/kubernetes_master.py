@@ -1181,8 +1181,11 @@ def configure_cdk_addons():
         ceph['kubernetes_key'] = b64_ceph_key.decode('ascii')
         ceph['mon_hosts'] = ceph_ep.mon_hosts()
         default_storage = hookenv.config('default-storage')
+        cephFsEnabled = kubernetes_master.query_cephfs_enabled(ceph_ep)
+        cephFsEnabled = str(cephFsEnabled).lower()
     else:
         cephEnabled = "false"
+        cephFsEnabled = "false"
 
     keystone = {}
     ks = endpoint_from_flag('keystone-credentials.available.auth')
@@ -1226,6 +1229,7 @@ def configure_cdk_addons():
         'enable-metrics=' + metricsEnabled,
         'enable-gpu=' + str(gpuEnable).lower(),
         'enable-ceph=' + cephEnabled,
+        'enable-cephfs='+cephFsEnabled,
         'ceph-admin-key=' + (ceph.get('admin_key', '')),
         'ceph-kubernetes-key=' + (ceph.get('admin_key', '')),
         'ceph-mon-hosts="' + (ceph.get('mon_hosts', '')) + '"',
