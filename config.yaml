@@ -183,7 +183,7 @@ options:
     default: "auto"
     description: |
       The storage class to make the default storage class. Allowed values are "auto",
-      "none", "ceph-xfs", "ceph-ext4". Note: Only works in Kubernetes >= 1.10
+      "none", "ceph-xfs", "ceph-ext4", "cephfs". Note: Only works in Kubernetes >= 1.10
   keystone-policy:
     default: |
       apiVersion: v1
