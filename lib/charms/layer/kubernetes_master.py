@@ -1,11 +1,12 @@
 import json
 from pathlib import Path
-from subprocess import check_call, check_output
+from subprocess import check_output
 from tempfile import TemporaryDirectory
 
 from charmhelpers.core import hookenv
 from charms.reactive import endpoint_from_flag, is_flag_set, set_flag
 
+from charms.layer import basic
 from charms.layer import kubernetes_common
 
 
@@ -73,7 +74,7 @@ def get_api_endpoint(relation=None):
 
 def query_cephfs_enabled(ceph_ep):
     if not is_flag_set('kubernetes-master.ceph-cli.installed'):
-        check_call(['apt', 'install', '-y', 'ceph-common'])
+        basic.apt_install(['ceph-common'])
         set_flag('kubernetes-master.ceph-cli.installed')
     ceph_config = {
         'hosts': ceph_ep.mon_hosts(),
