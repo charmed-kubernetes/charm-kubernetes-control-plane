@@ -1,6 +1,12 @@
-from charmhelpers.core import hookenv
-from charms.reactive import endpoint_from_flag, is_flag_set
+import json
+from pathlib import Path
+from subprocess import check_output, CalledProcessError
+from tempfile import TemporaryDirectory
 
+from charmhelpers.core import hookenv
+from charms.reactive import endpoint_from_flag, is_flag_set, set_flag
+
+from charms.layer import basic
 from charms.layer import kubernetes_common
 
 
@@ -64,3 +70,30 @@ def get_api_endpoint(relation=None):
         return (ingress_address, STANDARD_API_PORT)
     else:
         return (hookenv.unit_public_ip(), STANDARD_API_PORT)
+
+
+def query_cephfs_enabled(ceph_ep):
+    if not is_flag_set('kubernetes-master.ceph-cli.installed'):
+        basic.apt_install(['ceph-common'])
+        set_flag('kubernetes-master.ceph-cli.installed')
+    ceph_config = {
+        'hosts': ceph_ep.mon_hosts(),
+        'key': ceph_ep.key(),
+        'auth': ceph_ep.auth(),
+    }
+    with TemporaryDirectory() as tmpdir:
+        conf_file = Path(tmpdir) / 'ceph.conf'
+        conf_file.write_text(
+            '[global]\n'
+            'mon_host = {hosts}\n'
+            'key = {key}\n'
+            'auth cluster required = {auth}\n'
+            'auth service required = {auth}\n'
+            'auth client required = {auth}\n'.format(**ceph_config))
+        try:
+            out = check_output(['ceph', 'mds', 'versions',
+                                '-c', str(conf_file)])
+            return bool(json.loads(out))
+        except CalledProcessError:
+            hookenv.log('Unable to determine if CephFS is enabled', 'ERROR')
+            return False
