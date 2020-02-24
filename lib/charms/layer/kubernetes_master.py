@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from subprocess import check_output
+from subprocess import check_output, CalledProcessError
 from tempfile import TemporaryDirectory
 
 from charmhelpers.core import hookenv
@@ -90,5 +90,10 @@ def query_cephfs_enabled(ceph_ep):
             'auth cluster required = {auth}\n'
             'auth service required = {auth}\n'
             'auth client required = {auth}\n'.format(**ceph_config))
-        out = check_output(['ceph', 'mds', 'versions', '-c', str(conf_file)])
-    return bool(json.loads(out))
+        try:
+            out = check_output(['ceph', 'mds', 'versions',
+                                '-c', str(conf_file)])
+            return bool(json.loads(out))
+        except CalledProcessError:
+            hookenv.log('Unable to determine if CephFS is enabled', 'ERROR')
+            return False
