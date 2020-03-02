@@ -2863,6 +2863,9 @@ def api_server_stopped():
 
 @when('kube-control.connected')
 def send_default_cni():
+    ''' Send the value of the default-cni config to the kube-control relation.
+    This allows kubernetes-worker to use the same config value as well.
+    '''
     default_cni = hookenv.config('default-cni')
     kube_control = endpoint_from_flag('kube-control.connected')
     kube_control.set_default_cni(default_cni)
