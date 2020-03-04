@@ -1179,6 +1179,7 @@ def configure_cdk_addons():
         cephEnabled = "true"
         b64_ceph_key = base64.b64encode(ceph_ep.key().encode('utf-8'))
         ceph['admin_key'] = b64_ceph_key.decode('ascii')
+        ceph['fsid'] = ceph_ep.fsid()
         ceph['kubernetes_key'] = b64_ceph_key.decode('ascii')
         ceph['mon_hosts'] = ceph_ep.mon_hosts()
         default_storage = hookenv.config('default-storage')
@@ -1232,6 +1233,7 @@ def configure_cdk_addons():
         'enable-ceph=' + cephEnabled,
         'enable-cephfs='+cephFsEnabled,
         'ceph-admin-key=' + (ceph.get('admin_key', '')),
+        'ceph-fsid=' + (ceph.get('fsid', '')),
         'ceph-kubernetes-key=' + (ceph.get('admin_key', '')),
         'ceph-mon-hosts="' + (ceph.get('mon_hosts', '')) + '"',
         'default-storage=' + default_storage,
