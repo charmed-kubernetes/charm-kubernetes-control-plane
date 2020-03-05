@@ -1183,7 +1183,7 @@ def configure_cdk_addons():
         ceph['kubernetes_key'] = b64_ceph_key.decode('ascii')
         ceph['mon_hosts'] = ceph_ep.mon_hosts()
         default_storage = hookenv.config('default-storage')
-        if kubernetes_master.query_cephfs_enabled(ceph_ep):
+        if kubernetes_master.query_cephfs_enabled():
             cephFsEnabled = "true"
             ceph['fsname'] = kubernetes_master.get_cephfs_fsname()
         else:
