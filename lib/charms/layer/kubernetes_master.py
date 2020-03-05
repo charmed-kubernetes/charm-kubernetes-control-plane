@@ -72,28 +72,58 @@ def get_api_endpoint(relation=None):
         return (hookenv.unit_public_ip(), STANDARD_API_PORT)
 
 
-def query_cephfs_enabled(ceph_ep):
-    if not is_flag_set('kubernetes-master.ceph-cli.installed'):
-        basic.apt_install(['ceph-common'])
-        set_flag('kubernetes-master.ceph-cli.installed')
-    ceph_config = {
-        'hosts': ceph_ep.mon_hosts(),
-        'key': ceph_ep.key(),
-        'auth': ceph_ep.auth(),
+def install_ceph_common():
+    """Install ceph-common tools.
+
+    :return: None
+    """
+    ceph_admin = endpoint_from_flag('ceph-storage.available')
+
+    ceph_context = {
+        'mon_hosts': ceph_admin.mon_hosts(),
+        'fsid': ceph_admin.fsid(),
+        'auth_supported': ceph_admin.auth(),
+        'use_syslog': 'true',
+        'ceph_public_network': '',
+        'ceph_cluster_network': '',
+        'loglevel': 1,
+        'hostname': socket.gethostname(),
     }
-    with TemporaryDirectory() as tmpdir:
-        conf_file = Path(tmpdir) / 'ceph.conf'
-        conf_file.write_text(
-            '[global]\n'
-            'mon_host = {hosts}\n'
-            'key = {key}\n'
-            'auth cluster required = {auth}\n'
-            'auth service required = {auth}\n'
-            'auth client required = {auth}\n'.format(**ceph_config))
-        try:
-            out = check_output(['ceph', 'mds', 'versions',
-                                '-c', str(conf_file)])
-            return bool(json.loads(out))
-        except CalledProcessError:
-            hookenv.log('Unable to determine if CephFS is enabled', 'ERROR')
-            return False
+    # Install the ceph common utilities.
+    apt_install(['ceph-common'], fatal=True)
+
+    etc_ceph_directory = '/etc/ceph'
+    if not os.path.isdir(etc_ceph_directory):
+        os.makedirs(etc_ceph_directory)
+    charm_ceph_conf = os.path.join(etc_ceph_directory, 'ceph.conf')
+    # Render the ceph configuration from the ceph conf template.
+    render('ceph.conf', charm_ceph_conf, ceph_context)
+
+    # The key can rotate independently of other ceph config, so validate it.
+    admin_key = os.path.join(
+        etc_ceph_directory, 'ceph.client.admin.keyring')
+    try:
+        with open(admin_key, 'w') as key_file:
+            key_file.write("[client.admin]\n\tkey = {}\n".format(
+                ceph_admin.key()))
+    except IOError as err:
+        log("IOError writing admin.keyring: {}".format(err))
+
+
+def query_cephfs_enabled():
+    install_ceph_common()
+    try:
+        out = check_output(['ceph', 'mds', 'versions',
+                            '-c', str(conf_file)])
+        return bool(json.loads(out))
+    except CalledProcessError:
+        hookenv.log('Unable to determine if CephFS is enabled', 'ERROR')
+        return False
+
+
+def get_cephfs_fsname():
+    install_ceph_common()
+    data = json.loads(check_output(['ceph', 'fs', 'ls', '-f', 'json']))
+    for fs in data:
+        if 'ceph-fs_data' in fs['data_pools']:
+            return fs['name']
