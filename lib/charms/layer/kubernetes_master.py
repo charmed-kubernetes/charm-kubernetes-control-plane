@@ -3,7 +3,7 @@ import socket
 from pathlib import Path
 from subprocess import check_output, CalledProcessError
 
-from charmhelpers.core import hookenv, log
+from charmhelpers.core import hookenv
 from charmhelpers.core.templating import render
 from charmhelpers.fetch import apt_install
 from charms.reactive import endpoint_from_flag, is_flag_set
@@ -106,7 +106,7 @@ def install_ceph_common():
             key_file.write("[client.admin]\n\tkey = {}\n".format(
                 ceph_admin.key()))
     except IOError as err:
-        log("IOError writing admin.keyring: {}".format(err))
+        hookenv.log("IOError writing admin.keyring: {}".format(err))
 
 
 def query_cephfs_enabled():
