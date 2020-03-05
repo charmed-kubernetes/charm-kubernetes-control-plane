@@ -15,9 +15,7 @@
 # limitations under the License.
 
 from charms.reactive import is_state
-from charmhelpers.fetch import apt_install
 from charmhelpers.core.templating import render
-from charmhelpers.core.hookenv import log
 from charmhelpers.core.hookenv import action_get
 from charmhelpers.core.hookenv import action_set
 from charmhelpers.core.hookenv import action_fail
@@ -25,7 +23,6 @@ from subprocess import check_call
 from subprocess import check_output
 from subprocess import CalledProcessError
 from tempfile import TemporaryDirectory
-import socket
 import json
 import re
 import os
@@ -46,11 +43,11 @@ def main():
     """
     # k8s >= 1.10 uses CSI and doesn't directly create persistent volumes.
     if get_version('kube-apiserver') >= (1, 10):
-       print('This action is deprecated in favor of CSI creation of persistent volumes')
-       print('in Kubernetes >= 1.10. Just create the PVC and a PV will be created')
-       print('for you.')
-       action_fail('Deprecated, just create PVC.')
-       return
+        print('This action is deprecated in favor of CSI creation of')
+        print('persistent volumes in Kubernetes >= 1.10. Just create the PVC')
+        print('and a PV will be created for you.')
+        action_fail('Deprecated, just create PVC.')
+        return
 
     # validate relationship pre-reqs before additional steps can be taken.
     if not validate_relation():

@@ -9,7 +9,6 @@ from charmhelpers.core.hookenv import (
     action_fail,
     action_name
 )
-from charmhelpers.core.templating import render
 
 
 def _kubectl(args):
@@ -51,7 +50,7 @@ def apply_manifest():
         manifest = json.loads(action_get("json"))
         with open(apply_path, "w") as manifest_file:
             json.dump(manifest, manifest_file)
-        output = _kubectl(["apply", "-f", apply_path,])
+        output = _kubectl(["apply", "-f", apply_path])
 
         action_set({
             "summary": "Manifest applied.",

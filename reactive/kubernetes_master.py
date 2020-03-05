@@ -1237,7 +1237,7 @@ def configure_cdk_addons():
         'enable-cephfs='+cephFsEnabled,
         'ceph-admin-key=' + (ceph.get('admin_key', '')),
         'ceph-fsid=' + (ceph.get('fsid', '')),
-        'ceph-fsname='+ (ceph.get('fsname', '')),
+        'ceph-fsname=' + (ceph.get('fsname', '')),
         'ceph-kubernetes-key=' + (ceph.get('admin_key', '')),
         'ceph-mon-hosts="' + (ceph.get('mon_hosts', '')) + '"',
         'default-storage=' + default_storage,

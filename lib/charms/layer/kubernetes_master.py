@@ -1,16 +1,20 @@
 import json
+import socket
 from pathlib import Path
 from subprocess import check_output, CalledProcessError
-from tempfile import TemporaryDirectory
 
-from charmhelpers.core import hookenv
-from charms.reactive import endpoint_from_flag, is_flag_set, set_flag
+from charmhelpers.core import hookenv, log
+from charmhelpers.core.templating import render
+from charmhelpers.fetch import apt_install
+from charms.reactive import endpoint_from_flag, is_flag_set
 
-from charms.layer import basic
 from charms.layer import kubernetes_common
 
 
 STANDARD_API_PORT = 6443
+CEPH_CONF_DIR = Path('/etc/ceph')
+CEPH_CONF = CEPH_CONF_DIR / 'ceph.conf'
+CEPH_KEYRING = CEPH_CONF_DIR / 'ceph.client.admin.keyring'
 
 
 def get_external_lb_endpoints():
@@ -92,18 +96,13 @@ def install_ceph_common():
     # Install the ceph common utilities.
     apt_install(['ceph-common'], fatal=True)
 
-    etc_ceph_directory = '/etc/ceph'
-    if not os.path.isdir(etc_ceph_directory):
-        os.makedirs(etc_ceph_directory)
-    charm_ceph_conf = os.path.join(etc_ceph_directory, 'ceph.conf')
+    CEPH_CONF_DIR.mkdir(exist_ok=True, parents=True)
     # Render the ceph configuration from the ceph conf template.
-    render('ceph.conf', charm_ceph_conf, ceph_context)
+    render('ceph.conf', str(CEPH_CONF), ceph_context)
 
     # The key can rotate independently of other ceph config, so validate it.
-    admin_key = os.path.join(
-        etc_ceph_directory, 'ceph.client.admin.keyring')
     try:
-        with open(admin_key, 'w') as key_file:
+        with open(str(CEPH_KEYRING), 'w') as key_file:
             key_file.write("[client.admin]\n\tkey = {}\n".format(
                 ceph_admin.key()))
     except IOError as err:
@@ -114,7 +113,7 @@ def query_cephfs_enabled():
     install_ceph_common()
     try:
         out = check_output(['ceph', 'mds', 'versions',
-                            '-c', str(conf_file)])
+                            '-c', str(CEPH_CONF)])
         return bool(json.loads(out))
     except CalledProcessError:
         hookenv.log('Unable to determine if CephFS is enabled', 'ERROR')
