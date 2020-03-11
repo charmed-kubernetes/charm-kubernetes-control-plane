@@ -115,6 +115,7 @@ configure_prefix = 'kubernetes-master.prev_args.'
 keystone_root = '/root/cdk/keystone'
 keystone_policy_path = os.path.join(keystone_root, 'keystone-policy.yaml')
 kubecontrollermanagerconfig_path = '/root/cdk/kubecontrollermanagerconfig'
+cdk_addons_kubectl_config_path = '/root/cdk/cdk_addons_kubectl_config'
 aws_iam_webhook = '/root/cdk/aws-iam-webhook.yaml'
 
 register_trigger(when='endpoint.aws.ready',  # when set
@@ -1226,6 +1227,7 @@ def configure_cdk_addons():
         cluster_tag = 'kubernetes'
 
     args = [
+        'kubeconfig=' + cdk_addons_kubectl_config_path,
         'arch=' + arch(),
         'dns-ip=' + get_deprecated_dns_ip(),
         'dns-domain=' + hookenv.config('dns_domain'),
@@ -1699,6 +1701,10 @@ def build_kubeconfig():
         # make a copy in a location shared by kubernetes-worker
         # and kubernete-master
         create_kubeconfig(kubeclientconfig_path, server, ca_crt_path,
+                          user='admin', password=client_pass)
+
+        # make a copy for cdk-addons to use
+        create_kubeconfig(cdk_addons_kubectl_config_path, server, ca_crt_path,
                           user='admin', password=client_pass)
 
         # make a kubeconfig for kube-proxy
