@@ -3,6 +3,8 @@ set -ux
 
 export PATH=$PATH:/snap/bin
 
+alias kubectl="kubectl --kubeconfig=/root/.kube/config"
+
 kubectl cluster-info > $DEBUG_SCRIPT_DIR/cluster-info
 kubectl cluster-info dump > $DEBUG_SCRIPT_DIR/cluster-info-dump
 for obj in pods svc ingress secrets pv pvc rc; do
