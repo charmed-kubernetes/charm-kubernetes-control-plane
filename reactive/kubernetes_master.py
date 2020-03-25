@@ -115,6 +115,7 @@ configure_prefix = 'kubernetes-master.prev_args.'
 keystone_root = '/root/cdk/keystone'
 keystone_policy_path = os.path.join(keystone_root, 'keystone-policy.yaml')
 kubecontrollermanagerconfig_path = '/root/cdk/kubecontrollermanagerconfig'
+cdk_addons_kubectl_config_path = '/root/cdk/cdk_addons_kubectl_config'
 aws_iam_webhook = '/root/cdk/aws-iam-webhook.yaml'
 
 register_trigger(when='endpoint.aws.ready',  # when set
@@ -929,7 +930,8 @@ def start_master():
 
     # kube-proxy
     cni = endpoint_from_flag('cni.available')
-    cluster_cidr = cni.get_config()['cidr']
+    default_cni = hookenv.config('default-cni')
+    cluster_cidr = cni.get_config(default=default_cni)['cidr']
     # Set bind address to work around node IP error when there's no kubelet
     # https://bugs.launchpad.net/charm-kubernetes-master/+bug/1841114
     bind_address = get_ingress_address('kube-control')
@@ -1178,11 +1180,15 @@ def configure_cdk_addons():
         cephEnabled = "true"
         b64_ceph_key = base64.b64encode(ceph_ep.key().encode('utf-8'))
         ceph['admin_key'] = b64_ceph_key.decode('ascii')
+        ceph['fsid'] = ceph_ep.fsid()
         ceph['kubernetes_key'] = b64_ceph_key.decode('ascii')
         ceph['mon_hosts'] = ceph_ep.mon_hosts()
         default_storage = hookenv.config('default-storage')
-        cephFsEnabled = kubernetes_master.query_cephfs_enabled(ceph_ep)
-        cephFsEnabled = str(cephFsEnabled).lower()
+        if kubernetes_master.query_cephfs_enabled():
+            cephFsEnabled = "true"
+            ceph['fsname'] = kubernetes_master.get_cephfs_fsname()
+        else:
+            cephFsEnabled = "false"
     else:
         cephEnabled = "false"
         cephFsEnabled = "false"
@@ -1221,6 +1227,7 @@ def configure_cdk_addons():
         cluster_tag = 'kubernetes'
 
     args = [
+        'kubeconfig=' + cdk_addons_kubectl_config_path,
         'arch=' + arch(),
         'dns-ip=' + get_deprecated_dns_ip(),
         'dns-domain=' + hookenv.config('dns_domain'),
@@ -1231,6 +1238,8 @@ def configure_cdk_addons():
         'enable-ceph=' + cephEnabled,
         'enable-cephfs='+cephFsEnabled,
         'ceph-admin-key=' + (ceph.get('admin_key', '')),
+        'ceph-fsid=' + (ceph.get('fsid', '')),
+        'ceph-fsname=' + (ceph.get('fsname', '')),
         'ceph-kubernetes-key=' + (ceph.get('admin_key', '')),
         'ceph-mon-hosts="' + (ceph.get('mon_hosts', '')) + '"',
         'default-storage=' + default_storage,
@@ -1692,6 +1701,10 @@ def build_kubeconfig():
         # make a copy in a location shared by kubernetes-worker
         # and kubernete-master
         create_kubeconfig(kubeclientconfig_path, server, ca_crt_path,
+                          user='admin', password=client_pass)
+
+        # make a copy for cdk-addons to use
+        create_kubeconfig(cdk_addons_kubectl_config_path, server, ca_crt_path,
                           user='admin', password=client_pass)
 
         # make a kubeconfig for kube-proxy
@@ -2862,3 +2875,18 @@ def api_server_stopped():
     aws_iam = endpoint_from_flag('endpoint.aws-iam.available')
     if aws_iam:
         aws_iam.set_api_server_status(False)
+
+
+@when('kube-control.connected')
+def send_default_cni():
+    ''' Send the value of the default-cni config to the kube-control relation.
+    This allows kubernetes-worker to use the same config value as well.
+    '''
+    default_cni = hookenv.config('default-cni')
+    kube_control = endpoint_from_flag('kube-control.connected')
+    kube_control.set_default_cni(default_cni)
+
+
+@when('config.changed.default-cni')
+def default_cni_changed():
+    remove_state('kubernetes-master.components.started')

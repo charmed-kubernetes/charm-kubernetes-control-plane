@@ -62,7 +62,7 @@ options:
   enable-dashboard-addons:
     type: boolean
     default: true
-    description: Deploy the Kubernetes Dashboard and Heapster addons
+    description: Deploy the Kubernetes Dashboard
   dns-provider:
     type: string
     default: "auto"
@@ -111,7 +111,7 @@ options:
       will not be loaded.
   channel:
     type: string
-    default: "1.17/stable"
+    default: "1.18/stable"
     description: |
       Snap channel to install Kubernetes master services from
   client_password:
@@ -301,9 +301,21 @@ options:
         hostPath:
           path: /grafana
           type: Directory
-
+      DEPRECATED: this option has no effect on Kubernetes 1.18 and above.
     default: |
       influxdb:
         emptyDir: {}
       grafana:
         emptyDir: {}
+  default-cni:
+    type: string
+    description: |
+      Default CNI network to use when multiple CNI subordinates are related.
+
+      The value of this config should be the application name of a related CNI
+      subordinate. For example:
+
+      juju config kubernetes-master default-cni=flannel
+
+      If unspecified, then the default CNI network is chosen alphabetically.
+    default: ""

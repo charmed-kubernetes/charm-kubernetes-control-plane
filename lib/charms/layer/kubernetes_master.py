@@ -1,16 +1,21 @@
 import json
+import socket
 from pathlib import Path
 from subprocess import check_output, CalledProcessError
-from tempfile import TemporaryDirectory
 
 from charmhelpers.core import hookenv
-from charms.reactive import endpoint_from_flag, is_flag_set, set_flag
+from charmhelpers.core.templating import render
+from charmhelpers.fetch import apt_install
+from charms.reactive import endpoint_from_flag, is_flag_set
 
 from charms.layer import basic
 from charms.layer import kubernetes_common
 
 
 STANDARD_API_PORT = 6443
+CEPH_CONF_DIR = Path('/etc/ceph')
+CEPH_CONF = CEPH_CONF_DIR / 'ceph.conf'
+CEPH_KEYRING = CEPH_CONF_DIR / 'ceph.client.admin.keyring'
 
 
 def get_external_lb_endpoints():
@@ -72,28 +77,53 @@ def get_api_endpoint(relation=None):
         return (hookenv.unit_public_ip(), STANDARD_API_PORT)
 
 
-def query_cephfs_enabled(ceph_ep):
-    if not is_flag_set('kubernetes-master.ceph-cli.installed'):
-        basic.apt_install(['ceph-common'])
-        set_flag('kubernetes-master.ceph-cli.installed')
-    ceph_config = {
-        'hosts': ceph_ep.mon_hosts(),
-        'key': ceph_ep.key(),
-        'auth': ceph_ep.auth(),
+def install_ceph_common():
+    """Install ceph-common tools.
+
+    :return: None
+    """
+    ceph_admin = endpoint_from_flag('ceph-storage.available')
+
+    ceph_context = {
+        'mon_hosts': ceph_admin.mon_hosts(),
+        'fsid': ceph_admin.fsid(),
+        'auth_supported': ceph_admin.auth(),
+        'use_syslog': 'true',
+        'ceph_public_network': '',
+        'ceph_cluster_network': '',
+        'loglevel': 1,
+        'hostname': socket.gethostname(),
     }
-    with TemporaryDirectory() as tmpdir:
-        conf_file = Path(tmpdir) / 'ceph.conf'
-        conf_file.write_text(
-            '[global]\n'
-            'mon_host = {hosts}\n'
-            'key = {key}\n'
-            'auth cluster required = {auth}\n'
-            'auth service required = {auth}\n'
-            'auth client required = {auth}\n'.format(**ceph_config))
-        try:
-            out = check_output(['ceph', 'mds', 'versions',
-                                '-c', str(conf_file)])
-            return bool(json.loads(out))
-        except CalledProcessError:
-            hookenv.log('Unable to determine if CephFS is enabled', 'ERROR')
-            return False
+    # Install the ceph common utilities.
+    apt_install(['ceph-common'], fatal=True)
+
+    CEPH_CONF_DIR.mkdir(exist_ok=True, parents=True)
+    # Render the ceph configuration from the ceph conf template.
+    render('ceph.conf', str(CEPH_CONF), ceph_context)
+
+    # The key can rotate independently of other ceph config, so validate it.
+    try:
+        with open(str(CEPH_KEYRING), 'w') as key_file:
+            key_file.write("[client.admin]\n\tkey = {}\n".format(
+                ceph_admin.key()))
+    except IOError as err:
+        hookenv.log("IOError writing admin.keyring: {}".format(err))
+
+
+def query_cephfs_enabled():
+    install_ceph_common()
+    try:
+        out = check_output(['ceph', 'mds', 'versions',
+                            '-c', str(CEPH_CONF)])
+        return bool(json.loads(out))
+    except CalledProcessError:
+        hookenv.log('Unable to determine if CephFS is enabled', 'ERROR')
+        return False
+
+
+def get_cephfs_fsname():
+    install_ceph_common()
+    data = json.loads(check_output(['ceph', 'fs', 'ls', '-f', 'json']))
+    for fs in data:
+        if 'ceph-fs_data' in fs['data_pools']:
+            return fs['name']

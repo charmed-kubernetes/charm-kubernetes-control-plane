@@ -15,10 +15,7 @@
 # limitations under the License.
 
 from charms.reactive import is_state
-from charms.reactive import endpoint_from_flag
-from charmhelpers.fetch import apt_install
 from charmhelpers.core.templating import render
-from charmhelpers.core.hookenv import log
 from charmhelpers.core.hookenv import action_get
 from charmhelpers.core.hookenv import action_set
 from charmhelpers.core.hookenv import action_fail
@@ -26,11 +23,12 @@ from subprocess import check_call
 from subprocess import check_output
 from subprocess import CalledProcessError
 from tempfile import TemporaryDirectory
-import socket
 import json
 import re
 import os
 import sys
+
+from charms.layer.kubernetes_master import install_ceph_common
 
 
 os.environ['PATH'] += os.pathsep + os.path.join(os.sep, 'snap', 'bin')
@@ -45,11 +43,11 @@ def main():
     """
     # k8s >= 1.10 uses CSI and doesn't directly create persistent volumes.
     if get_version('kube-apiserver') >= (1, 10):
-       print('This action is deprecated in favor of CSI creation of persistent volumes')
-       print('in Kubernetes >= 1.10. Just create the PVC and a PV will be created')
-       print('for you.')
-       action_fail('Deprecated, just create PVC.')
-       return
+        print('This action is deprecated in favor of CSI creation of')
+        print('persistent volumes in Kubernetes >= 1.10. Just create the PVC')
+        print('and a PV will be created for you.')
+        action_fail('Deprecated, just create PVC.')
+        return
 
     # validate relationship pre-reqs before additional steps can be taken.
     if not validate_relation():
@@ -102,44 +100,6 @@ def main():
         cmd = ['kubectl', 'create', '-f', temp_template]
         debug_command(cmd)
         check_call(cmd)
-
-
-def install_ceph_common():
-    """Install ceph-common tools.
-
-    :return: None
-    """
-    ceph_admin = endpoint_from_flag('ceph-storage.available')
-
-    ceph_context = {
-        'mon_hosts': ceph_admin.mon_hosts(),
-        'fsid': ceph_admin.fsid(),
-        'auth_supported': ceph_admin.auth(),
-        'use_syslog': 'true',
-        'ceph_public_network': '',
-        'ceph_cluster_network': '',
-        'loglevel': 1,
-        'hostname': socket.gethostname(),
-    }
-    # Install the ceph common utilities.
-    apt_install(['ceph-common'], fatal=True)
-
-    etc_ceph_directory = '/etc/ceph'
-    if not os.path.isdir(etc_ceph_directory):
-        os.makedirs(etc_ceph_directory)
-    charm_ceph_conf = os.path.join(etc_ceph_directory, 'ceph.conf')
-    # Render the ceph configuration from the ceph conf template.
-    render('ceph.conf', charm_ceph_conf, ceph_context)
-
-    # The key can rotate independently of other ceph config, so validate it.
-    admin_key = os.path.join(
-        etc_ceph_directory, 'ceph.client.admin.keyring')
-    try:
-        with open(admin_key, 'w') as key_file:
-            key_file.write("[client.admin]\n\tkey = {}\n".format(
-                ceph_admin.key()))
-    except IOError as err:
-        log("IOError writing admin.keyring: {}".format(err))
 
 
 def get_version(bin_name):
