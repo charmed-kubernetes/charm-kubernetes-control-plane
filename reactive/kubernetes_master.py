@@ -1652,8 +1652,10 @@ def build_kubeconfig():
     '''Gather the relevant data for Kubernetes configuration objects and create
     a config object with that information.'''
 
-    address, port = kubernetes_master.get_api_endpoint()
-    server = 'https://{0}:{1}'.format(address, port)
+    public_address, public_port = kubernetes_master.get_api_endpoint()
+    public_server = 'https://{0}:{1}'.format(public_address, public_port)
+    local_address = get_ingress_address('kube-api-endpoint')
+    local_server = 'https://{0}:{1}'.format(local_address, 6443)
     ca_exists = ca_crt_path.exists()
     client_pass = get_password('basic_auth.csv', 'admin')
     # Do we have everything we need?
@@ -1686,11 +1688,11 @@ def build_kubeconfig():
         hookenv.log('Writing kubeconfig file.')
 
         if ks:
-            create_kubeconfig(kubeconfig_path, server, ca_crt_path,
+            create_kubeconfig(kubeconfig_path, public_server, ca_crt_path,
                               user='admin', password=client_pass,
                               keystone=True, aws_iam_cluster_id=cluster_id)
         else:
-            create_kubeconfig(kubeconfig_path, server, ca_crt_path,
+            create_kubeconfig(kubeconfig_path, public_server, ca_crt_path,
                               user='admin', password=client_pass,
                               aws_iam_cluster_id=cluster_id)
 
@@ -1700,19 +1702,19 @@ def build_kubeconfig():
 
         # make a copy in a location shared by kubernetes-worker
         # and kubernete-master
-        create_kubeconfig(kubeclientconfig_path, server, ca_crt_path,
+        create_kubeconfig(kubeclientconfig_path, local_server, ca_crt_path,
                           user='admin', password=client_pass)
 
         # make a copy for cdk-addons to use
-        create_kubeconfig(cdk_addons_kubectl_config_path, server, ca_crt_path,
-                          user='admin', password=client_pass)
+        create_kubeconfig(cdk_addons_kubectl_config_path, local_server,
+                          ca_crt_path, user='admin', password=client_pass)
 
         # make a kubeconfig for kube-proxy
         proxy_token = get_token('system:kube-proxy')
         if not proxy_token:
             setup_tokens(None, 'system:kube-proxy', 'kube-proxy')
             proxy_token = get_token('system:kube-proxy')
-        create_kubeconfig(kubeproxyconfig_path, server, ca_crt_path,
+        create_kubeconfig(kubeproxyconfig_path, local_server, ca_crt_path,
                           token=proxy_token, user='kube-proxy')
 
         controller_manager_token = get_token('system:kube-controller-manager')
@@ -1721,10 +1723,8 @@ def build_kubeconfig():
                          'kube-controller-manager')
             controller_manager_token = \
                 get_token('system:kube-controller-manager')
-        address = get_ingress_address('kube-api-endpoint')
-        server = 'https://{0}:{1}'.format(address, 6443)
         create_kubeconfig(kubecontrollermanagerconfig_path,
-                          server, ca_crt_path,
+                          local_server, ca_crt_path,
                           token=controller_manager_token,
                           user='kube-controller-manager')
 
