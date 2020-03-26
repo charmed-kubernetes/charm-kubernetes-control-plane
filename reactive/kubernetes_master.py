@@ -146,6 +146,8 @@ register_trigger(when='kubernetes-master.gcp.changed',
                  set_flag='cdk-addons.reconfigure')
 register_trigger(when='kubernetes-master.openstack.changed',
                  set_flag='cdk-addons.reconfigure')
+register_trigger(when_not='cni.available',
+                 clear_flag='kubernetes-master.components.started')
 
 
 def set_upgrade_needed(forced=False):
