@@ -114,7 +114,7 @@ def query_cephfs_enabled():
     try:
         out = check_output(['ceph', 'mds', 'versions',
                             '-c', str(CEPH_CONF)])
-        return bool(json.loads(out))
+        return bool(json.loads(out.decode()))
     except CalledProcessError:
         hookenv.log('Unable to determine if CephFS is enabled', 'ERROR')
         return False
