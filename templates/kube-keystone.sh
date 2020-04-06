@@ -14,6 +14,7 @@
 
 # Replace with your public address and port for keystone
 export OS_AUTH_URL="{{ protocol }}://{{ address }}:{{ port }}/v{{ version }}"
+export CURL_CA_BUNDLE="{{ endpoint_tls_ca }}"
 #export OS_PROJECT_NAME=k8s
 #export OS_DOMAIN_NAME=k8s
 #export OS_USERNAME=myuser

@@ -33,6 +33,7 @@ from subprocess import check_call
 from subprocess import check_output
 from subprocess import CalledProcessError
 from urllib.request import Request, urlopen
+from urllib.parse import urlparse
 
 import charms.coordinator
 from charms.layer import snap
@@ -42,7 +43,7 @@ from charms.reactive import remove_state, clear_flag
 from charms.reactive import set_state, set_flag
 from charms.reactive import is_state, is_flag_set
 from charms.reactive import endpoint_from_flag
-from charms.reactive import when, when_any, when_not, when_none
+from charms.reactive import when, when_any, when_not, when_none, when_not_all
 from charms.reactive import register_trigger
 from charms.reactive import data_changed, any_file_changed
 
@@ -137,6 +138,10 @@ register_trigger(when_not='kubernetes-master.ceph.configured',
 register_trigger(when='keystone-credentials.available.auth',
                  set_flag='cdk-addons.reconfigure')
 register_trigger(when_not='keystone-credentials.available.auth',
+                 set_flag='cdk-addons.reconfigure')
+register_trigger(when='endpoint.openstack.ready',
+                 set_flag='cdk-addons.reconfigure')
+register_trigger(when_not='endpoint.openstack.ready',
                  set_flag='cdk-addons.reconfigure')
 register_trigger(when='kubernetes-master.aws.changed',
                  set_flag='cdk-addons.reconfigure')
@@ -700,6 +705,12 @@ def set_final_status():
         hookenv.status_set('blocked', msg)
         return
 
+    openstack = endpoint_from_flag('endpoint.openstack.ready')
+    if openstack and openstack.version == '2':
+        msg = 'Keystone auth v2 detected. v3 is required.'
+        hookenv.status_set('blocked', msg)
+        return
+
     aws_iam = endpoint_from_flag('endpoint.aws-iam.ready')
     if aws_iam and ks:
         msg = 'Keystone and AWS IAM detected. Must select only one.'
@@ -1197,6 +1208,7 @@ def configure_cdk_addons():
 
     keystone = {}
     ks = endpoint_from_flag('keystone-credentials.available.auth')
+    openstack = endpoint_from_flag('endpoint.openstack.ready')
     if ks:
         keystoneEnabled = "true"
         keystone['cert'] = '/root/cdk/server.crt'
@@ -1206,11 +1218,21 @@ def configure_cdk_addons():
                                                   ks.credentials_port(),
                                                   ks.api_version())
         keystone['keystone-ca'] = hookenv.config('keystone-ssl-ca')
+    elif openstack:
+        auth_url_parsed = urlparse(openstack.auth_url)
+        keystoneEnabled = "true"
+        keystone['cert'] = '/root/cdk/server.crt'
+        keystone['key'] = '/root/cdk/server.key'
+        keystone['url'] = '{}://{}:{}/v{}'.format(auth_url_parsed.scheme,
+                                                  auth_url_parsed.hostname,
+                                                  auth_url_parsed.port,
+                                                  openstack.version)
+        keystone['keystone-ca'] = hookenv.config('keystone-ssl-ca')
     else:
         keystoneEnabled = "false"
 
     if dashboard_auth == 'auto':
-        if ks:
+        if ks or openstack:
             dashboard_auth = 'token'
         else:
             dashboard_auth = 'basic'
@@ -1219,7 +1241,6 @@ def configure_cdk_addons():
     enable_azure = str(is_flag_set('endpoint.azure.ready')).lower()
     enable_gcp = str(is_flag_set('endpoint.gcp.ready')).lower()
     enable_openstack = str(is_flag_set('endpoint.openstack.ready')).lower()
-    openstack = endpoint_from_flag('endpoint.openstack.ready')
 
     if is_state('kubernetes-master.cdk-addons.unique-cluster-tag'):
         cluster_tag = leader_get('cluster_tag')
@@ -1277,7 +1298,7 @@ def configure_cdk_addons():
 
     set_state('cdk-addons.configured')
     leader_set({'kubernetes-master-addons-ca-in-use': True})
-    if ks:
+    if ks or openstack:
         leader_set({'keystone-cdk-addons-configured': True})
     else:
         leader_set({'keystone-cdk-addons-configured': None})
@@ -1664,6 +1685,7 @@ def build_kubeconfig():
     if ca_exists and client_pass:
         # drop keystone helper script?
         ks = endpoint_from_flag('keystone-credentials.available.auth')
+        openstack = endpoint_from_flag('endpoint.openstack.ready')
         if ks:
             script_filename = 'kube-keystone.sh'
             keystone_path = os.path.join(os.sep, 'home', 'ubuntu',
@@ -1672,6 +1694,23 @@ def build_kubeconfig():
                        'address': ks.credentials_host(),
                        'port': ks.credentials_port(),
                        'version': ks.api_version()}
+            render(script_filename, keystone_path, context)
+        elif openstack:
+            auth_url_parsed = urlparse(openstack.auth_url)
+            script_filename = 'kube-keystone.sh'
+            keystone_path = os.path.join(os.sep, 'home', 'ubuntu',
+                                         script_filename)
+            tls_ca_path = ''
+            if openstack.endpoint_tls_ca:
+                tls_ca_filename = 'tls-ca.pem'
+                tls_ca_path = os.path.join(os.sep, 'home', 'ubuntu',
+                                           tls_ca_filename)
+                host.write_file(tls_ca_path, base64.b64decode(openstack.endpoint_tls_ca))
+            context = {'protocol': auth_url_parsed.scheme,
+                       'address': auth_url_parsed.hostname,
+                       'port': auth_url_parsed.port,
+                       'version': openstack.version,
+                       'endpoint_tls_ca': tls_ca_path}
             render(script_filename, keystone_path, context)
         elif is_state('leadership.set.keystone-cdk-addons-configured'):
             # if addons are configured, we're going to do keystone
@@ -1689,7 +1728,7 @@ def build_kubeconfig():
         # Create the kubeconfig on this system so users can access the cluster.
         hookenv.log('Writing kubeconfig file.')
 
-        if ks:
+        if ks or openstack:
             create_kubeconfig(kubeconfig_path, public_server, ca_crt_path,
                               user='admin', password=client_pass,
                               keystone=True, aws_iam_cluster_id=cluster_id)
@@ -1847,21 +1886,24 @@ def configure_apiserver():
         admission_plugins.append('NodeRestriction')
 
     ks = endpoint_from_flag('keystone-credentials.available.auth')
+    openstack = endpoint_from_flag('endpoint.openstack.ready')
     aws = endpoint_from_flag('endpoint.aws-iam.ready')
 
     # only one webhook at a time currently:
     # see https://github.com/kubernetes/kubernetes/issues/65874
-    if ks and aws:
+
+    keystone = ks or openstack
+    if keystone and aws:
         hookenv.log('unable to have BOTH Keystone and '
                     'AWS IAM webhook auth at the same time!')
     elif aws:
         api_opts['authentication-token-webhook-config-file'] = aws_iam_webhook
-    elif ks:
+    elif keystone:
         ks_ip = None
-        if ks:
+        if keystone:
             ks_ip = get_service_ip('k8s-keystone-auth-service',
                                    errors_fatal=False)
-        if ks and ks_ip:
+        if keystone and ks_ip:
             os.makedirs(keystone_root, exist_ok=True)
 
             keystone_webhook = keystone_root + '/webhook.yaml'
@@ -1879,7 +1921,7 @@ def configure_apiserver():
                 api_opts['authorization-webhook-config-file'] = keystone_webhook # noqa
             set_state('keystone.apiserver.configured')
         else:
-            if ks and not ks_ip:
+            if keystone and not ks_ip:
                 hookenv.log('Unable to find k8s-keystone-auth-service '
                             'service. Will retry')
                 # Note that we can get into a nasty state here
@@ -2426,8 +2468,8 @@ def regen_keystone_policy():
     clear_flag('kubernetes-master.keystone-policy-handled')
 
 
-@when('keystone-credentials.available.auth',
-      'leadership.is_leader', 'kubernetes-master.apiserver.configured')
+@when_any('keystone-credentials.available.auth', 'endpoint.openstack.ready')
+@when('leadership.is_leader', 'kubernetes-master.apiserver.configured')
 @when_not('kubernetes-master.keystone-policy-handled')
 def generate_keystone_configmap():
     keystone_policy = hookenv.config('keystone-policy')
@@ -2456,7 +2498,7 @@ def generate_keystone_configmap():
 
 
 @when('leadership.is_leader', 'kubernetes-master.keystone-policy-handled')
-@when_not('keystone-credentials.available.auth')
+@when_not_all('keystone-credentials.available.auth', 'endpoint.openstack.ready')
 def remove_keystone():
     clear_flag('kubernetes-master.apiserver.configured')
     if not os.path.exists(keystone_policy_path):
@@ -2486,18 +2528,28 @@ def keystone_kick_apiserver():
     clear_flag('kubernetes-master.apiserver.configured')
 
 
-@when('keystone-credentials.available.auth', 'certificates.ca.available',
-      'certificates.client.cert.available', 'authentication.setup',
-      'etcd.available', 'leadership.set.keystone-cdk-addons-configured')
+@when('certificates.ca.available', 'certificates.client.cert.available',
+      'authentication.setup', 'etcd.available', 'leadership.set.keystone-cdk-addons-configured')
+@when_any('keystone-credentials.available.auth', 'endpoint.openstack.ready')
 def keystone_config():
     # first, we have to have the service set up before we can render this stuff
     ks = endpoint_from_flag('keystone-credentials.available.auth')
-    data = {
-        'host': ks.credentials_host(),
-        'proto': ks.credentials_protocol(),
-        'port': ks.credentials_port(),
-        'version': ks.api_version()
-    }
+    openstack = endpoint_from_flag('endpoint.openstack.ready')
+    if ks:
+        data = {
+            'host': ks.credentials_host(),
+            'proto': ks.credentials_protocol(),
+            'port': ks.credentials_port(),
+            'version': ks.api_version()
+        }
+    elif openstack:
+        auth_url_parsed = urlparse(openstack.auth_url)
+        data = {
+            'host': auth_url_parsed.hostname,
+            'proto': auth_url_parsed.scheme,
+            'port': auth_url_parsed.port,
+            'version': openstack.version
+        }
     if data_changed('keystone', data):
         remove_state('keystone.credentials.configured')
         clear_flag('kubernetes-master.apiserver.configured')
