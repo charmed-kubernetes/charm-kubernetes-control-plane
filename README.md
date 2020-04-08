@@ -26,13 +26,13 @@ requires a Software Defined Network (SDN), a Container Runtime such as
 [containerd](https://jaas.ai/u/containers/containerd), and Transport Layer
 Security (TLS) so the components in a cluster communicate securely.
 
-Please take a look at the [Canonical Distribution of Kubernetes](https://jujucharms.com/canonical-kubernetes/)
-or the [Kubernetes core](https://jujucharms.com/kubernetes-core/) bundles for
+Please take a look at the [Charmed Kubernetes](https://jaas.ai/charmed-kubernetes)
+or the [Kubernetes core](https://jaas.ai/kubernetes-core) bundles for
 examples of complete models of Kubernetes clusters.
 
 # Resources
 
-The kubernetes-master charm takes advantage of the [Juju Resources](https://jujucharms.com/docs/2.0/developer-resources)
+The kubernetes-master charm takes advantage of the [Juju Resources](https://juju.is/docs/juju-resources)
 feature to deliver the Kubernetes software.
 
 In deployments on public clouds the Charm Store provides the resource to the
@@ -93,8 +93,7 @@ The domain name to use for the Kubernetes cluster for DNS.
 
 #### enable-dashboard-addons
 
-Enables the installation of Kubernetes dashboard, Heapster, Grafana, and
-InfluxDB.
+Installs the Kubernetes dashboard and related images.
 
 # DNS for the cluster
 
@@ -107,7 +106,7 @@ from the [Kubernetes DNS admin guide](http://kubernetes.io/docs/admin/dns/).
 # Actions
 
 The kubernetes-master charm models a few one time operations called
-[Juju actions](https://jujucharms.com/docs/stable/actions) that can be run by
+[Juju actions](https://juju.is/docs/working-with-actions) that can be run by
 Juju users.
 
 #### create-rbd-pv
