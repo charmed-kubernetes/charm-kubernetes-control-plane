@@ -148,6 +148,8 @@ register_trigger(when='kubernetes-master.openstack.changed',
                  set_flag='cdk-addons.reconfigure')
 register_trigger(when_not='cni.available',
                  clear_flag='kubernetes-master.components.started')
+register_trigger(when='kube-control.requests.changed',
+                 clear_flag='authentication.setup')
 
 
 def set_upgrade_needed(forced=False):
@@ -548,7 +550,9 @@ def setup_leader_authentication():
             check_call(cmd)
         remove_state('reconfigure.authentication.setup')
 
-    # read service account key for syndication
+    create_tokens_and_sign_auth_requests()
+
+    # send auth files to followers via leadership data
     leader_data = {}
     for f in [known_tokens, basic_auth, service_key]:
         with open(f, 'r') as fp:
@@ -559,7 +563,9 @@ def setup_leader_authentication():
     # eg:
     # {'/root/cdk/serviceaccount.key': 'RSA:2471731...'}
     leader_set(leader_data)
+
     remove_state('kubernetes-master.components.started')
+    remove_state('kube-control.requests.changed')
     set_state('authentication.setup')
 
 
@@ -577,13 +583,10 @@ def setup_non_leader_authentication():
         # the keys were not retrieved. Non-leaders have to retry.
         return
 
-    if not any_file_changed(keys) and is_state('authentication.setup'):
-        # No change detected and we have already setup the authentication
-        return
+    if any_file_changed(keys):
+        remove_state('kubernetes-master.components.started')
 
-    hookenv.status_set('maintenance', 'Rendering authentication templates.')
-
-    remove_state('kubernetes-master.components.started')
+    remove_state('kube-control.requests.changed')
     set_state('authentication.setup')
 
 
@@ -1013,31 +1016,29 @@ def send_cluster_dns_detail(kube_control):
     kube_control.set_dns(53, dns_domain, dns_ip, dns_enabled)
 
 
-@when('kube-control.connected')
-@when('snap.installed.kubectl')
-@when('leadership.is_leader')
-def create_service_configs(kube_control):
-    """Create the users for kubelet"""
-    should_restart = False
-    # generate the username/pass for the requesting unit
+def create_tokens_and_sign_auth_requests():
+    """Create tokens for the known_tokens.csv file"""
+    controller_manager_token = get_token('system:kube-controller-manager')
+    if not controller_manager_token:
+        setup_tokens(None, 'system:kube-controller-manager',
+                     'kube-controller-manager')
+
     proxy_token = get_token('system:kube-proxy')
     if not proxy_token:
         setup_tokens(None, 'system:kube-proxy', 'kube-proxy')
         proxy_token = get_token('system:kube-proxy')
-        should_restart = True
 
     client_token = get_token('admin')
     if not client_token:
         setup_tokens(None, 'admin', 'admin', "system:masters")
         client_token = get_token('admin')
-        should_restart = True
 
     monitoring_token = get_token('system:monitoring')
     if not monitoring_token:
         setup_tokens(None, 'system:monitoring', 'system:monitoring')
-        should_restart = True
 
-    requests = kube_control.auth_user()
+    kube_control = endpoint_from_flag('kube-control.connected')
+    requests = kube_control.auth_user() if kube_control else []
     for request in requests:
         username = request[1]['user']
         group = request[1]['group']
@@ -1049,14 +1050,9 @@ def create_service_configs(kube_control):
             userid = "kubelet-{}".format(request[0].split('/')[1])
             setup_tokens(None, username, userid, group)
             kubelet_token = get_token(username)
-            should_restart = True
         kube_control.sign_auth_request(request[0], username,
                                        kubelet_token, proxy_token,
                                        client_token)
-
-    if should_restart:
-        service_restart('snap.kube-apiserver.daemon')
-        remove_state('authentication.setup')
 
 
 @when('kube-api-endpoint.available')
@@ -1713,18 +1709,10 @@ def build_kubeconfig():
 
         # make a kubeconfig for kube-proxy
         proxy_token = get_token('system:kube-proxy')
-        if not proxy_token:
-            setup_tokens(None, 'system:kube-proxy', 'kube-proxy')
-            proxy_token = get_token('system:kube-proxy')
         create_kubeconfig(kubeproxyconfig_path, local_server, ca_crt_path,
                           token=proxy_token, user='kube-proxy')
 
         controller_manager_token = get_token('system:kube-controller-manager')
-        if not controller_manager_token:
-            setup_tokens(None, 'system:kube-controller-manager',
-                         'kube-controller-manager')
-            controller_manager_token = \
-                get_token('system:kube-controller-manager')
         create_kubeconfig(kubecontrollermanagerconfig_path,
                           local_server, ca_crt_path,
                           token=controller_manager_token,
