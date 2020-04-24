@@ -1167,6 +1167,7 @@ def reconfigure_cdk_addons():
 @when('kubernetes-master.components.started',
       'leadership.is_leader',
       'leadership.set.cluster_tag')
+@when_not('upgrade.series.in-progress')
 def configure_cdk_addons():
     ''' Configure CDK addons '''
     remove_state('cdk-addons.reconfigure')
