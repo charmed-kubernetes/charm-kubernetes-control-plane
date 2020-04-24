@@ -25,3 +25,14 @@ def test_default_cni_changed():
     remove_state.assert_called_once_with(
         'kubernetes-master.components.started'
     )
+
+
+def test_series_upgrade():
+    assert kubernetes_master.service_pause.call_count == 0
+    assert kubernetes_master.service_resume.call_count == 0
+    kubernetes_master.pre_series_upgrade()
+    assert kubernetes_master.service_pause.call_count == 4
+    assert kubernetes_master.service_resume.call_count == 0
+    kubernetes_master.post_series_upgrade()
+    assert kubernetes_master.service_pause.call_count == 4
+    assert kubernetes_master.service_resume.call_count == 4

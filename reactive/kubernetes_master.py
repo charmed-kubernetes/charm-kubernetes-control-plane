@@ -53,7 +53,7 @@ from charms.layer import vault_kv
 from charmhelpers.core import hookenv
 from charmhelpers.core import host
 from charmhelpers.core import unitdata
-from charmhelpers.core.host import service_stop, service_resume
+from charmhelpers.core.host import service_pause, service_stop, service_resume
 from charmhelpers.core.templating import render
 from charmhelpers.contrib.charmsupport import nrpe
 
@@ -250,6 +250,23 @@ def check_for_upgrade_needed():
 
     if is_flag_set('nrpe-external-master.available'):
         update_nrpe_config()
+
+
+@hook('pre-series-upgrade')
+def pre_series_upgrade():
+    """ Stop the kubernetes master services
+
+    """
+    for service in master_services:
+        service_pause('snap.%s.daemon' % service)
+
+
+@hook('post-series-upgrade')
+def post_series_upgrade():
+    for service in master_services:
+        service_resume('snap.%s.daemon' % service)
+    # set ourselves up to restart
+    remove_state('kubernetes-master.components.started')
 
 
 def add_rbac_roles():
@@ -653,6 +670,10 @@ def set_final_status():
     except NotImplementedError:
         goal_state = {}
 
+    if is_flag_set('upgrade.series.in-progress'):
+        hookenv.status_set('blocked',
+                           'Series upgrade in progress')
+        return
     if is_flag_set('kubernetes-master.secure-storage.failed'):
         hookenv.status_set('blocked',
                            'Failed to configure encryption; '
@@ -904,7 +925,8 @@ def add_systemd_file_watcher():
           'kubernetes-master.cloud.blocked',
           'kubernetes-master.vault-kv.pending',
           'tls_client.certs.changed',
-          'tls_client.ca.written')
+          'tls_client.ca.written',
+          'upgrade.series.in-progress')
 def start_master():
     '''Run the Kubernetes master components.'''
     hookenv.status_set('maintenance',
@@ -1141,6 +1163,7 @@ def reconfigure_cdk_addons():
 @when('kubernetes-master.components.started',
       'leadership.is_leader',
       'leadership.set.cluster_tag')
+@when_not('upgrade.series.in-progress')
 def configure_cdk_addons():
     ''' Configure CDK addons '''
     remove_state('cdk-addons.reconfigure')
