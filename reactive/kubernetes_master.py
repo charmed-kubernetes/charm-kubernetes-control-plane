@@ -1705,7 +1705,8 @@ def build_kubeconfig():
                 tls_ca_filename = 'tls-ca.pem'
                 tls_ca_path = os.path.join(os.sep, 'home', 'ubuntu',
                                            tls_ca_filename)
-                host.write_file(tls_ca_path, base64.b64decode(openstack.endpoint_tls_ca))
+                host.write_file(tls_ca_path,
+                                base64.b64decode(openstack.endpoint_tls_ca))
             context = {'protocol': auth_url_parsed.scheme,
                        'address': auth_url_parsed.hostname,
                        'port': auth_url_parsed.port,
@@ -2498,7 +2499,8 @@ def generate_keystone_configmap():
 
 
 @when('leadership.is_leader', 'kubernetes-master.keystone-policy-handled')
-@when_not_all('keystone-credentials.available.auth', 'endpoint.openstack.ready')
+@when_not_all('keystone-credentials.available.auth',
+              'endpoint.openstack.ready')
 def remove_keystone():
     clear_flag('kubernetes-master.apiserver.configured')
     if not os.path.exists(keystone_policy_path):
@@ -2529,7 +2531,8 @@ def keystone_kick_apiserver():
 
 
 @when('certificates.ca.available', 'certificates.client.cert.available',
-      'authentication.setup', 'etcd.available', 'leadership.set.keystone-cdk-addons-configured')
+      'authentication.setup', 'etcd.available',
+      'leadership.set.keystone-cdk-addons-configured')
 @when_any('keystone-credentials.available.auth', 'endpoint.openstack.ready')
 def keystone_config():
     # first, we have to have the service set up before we can render this stuff
