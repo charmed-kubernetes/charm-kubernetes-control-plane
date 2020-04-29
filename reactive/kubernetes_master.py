@@ -249,6 +249,8 @@ def check_for_upgrade_needed():
     if is_flag_set('nrpe-external-master.available'):
         update_nrpe_config()
 
+    remove_state('kubernetes-master.system-monitoring-rbac-role.applied')
+
 
 def add_rbac_roles():
     '''Update the known_tokens file with proper groups.'''
@@ -757,6 +759,12 @@ def set_final_status():
     addons_configured = is_state('cdk-addons.configured')
     if is_leader and not addons_configured:
         hookenv.status_set('waiting', 'Waiting to retry addon deployment')
+        return
+
+    if is_leader and not \
+            is_state('kubernetes-master.system-monitoring-rbac-role.applied'):
+        msg = 'Waiting to retry applying system:monitoring RBAC role'
+        hookenv.status_set('waiting', msg)
         return
 
     try:
@@ -1490,6 +1498,22 @@ def create_rbac_resources():
     else:
         msg = 'Failed to apply {}, will retry.'.format(rbac_proxy_path)
         hookenv.log(msg)
+
+
+@when('leadership.is_leader', 'kubernetes-master.components.started')
+@when_not('kubernetes-master.system-monitoring-rbac-role.applied')
+def apply_system_monitoring_rbac_role():
+    try:
+        hookenv.status_set('maintenance',
+                           'Applying system:monitoring RBAC role')
+        path = '/root/cdk/system-monitoring-rbac-role.yaml'
+        render('system-monitoring-rbac-role.yaml', path, {})
+        kubectl('apply', '-f', path)
+        set_state('kubernetes-master.system-monitoring-rbac-role.applied')
+    except Exception:
+        hookenv.log(traceback.format_exc())
+        hookenv.log('Waiting to retry applying system:monitoring RBAC role')
+        return
 
 
 @when('leadership.is_leader',
