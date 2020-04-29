@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -eux
 
 if [[ "$(action-get fix-cluster-name)" == "true" ]]; then
