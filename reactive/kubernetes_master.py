@@ -2506,7 +2506,7 @@ def _write_vsphere_snap_config(component):
         'datacenters = "{}"'.format(vsphere.datacenter),
         'vm-uuid = "VMware-{}"'.format(uuid),
         '[VirtualCenter "{}"]'.format(vsphere.vsphere_ip),
-        'user = {}'.format(vsphere.user),
+        'user = "{}"'.format(vsphere.user),
         'password = {}'.format(vsphere.password),
         '[Workspace]',
         'server = {}'.format(vsphere.vsphere_ip),
