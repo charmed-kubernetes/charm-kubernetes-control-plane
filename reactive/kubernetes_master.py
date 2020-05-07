@@ -1200,7 +1200,6 @@ def configure_cdk_addons():
         return
     metricsEnabled = str(hookenv.config('enable-metrics')).lower()
     default_storage = ''
-    dashboard_auth = str(hookenv.config('dashboard-auth')).lower()
     ceph = {}
     ceph_ep = endpoint_from_flag('ceph-storage.available')
     if (ceph_ep and ceph_ep.key() and
@@ -1235,12 +1234,6 @@ def configure_cdk_addons():
         keystone['keystone-ca'] = hookenv.config('keystone-ssl-ca')
     else:
         keystoneEnabled = "false"
-
-    if dashboard_auth == 'auto':
-        if ks:
-            dashboard_auth = 'token'
-        else:
-            dashboard_auth = 'basic'
 
     enable_aws = str(is_flag_set('endpoint.aws.ready')).lower()
     enable_azure = str(is_flag_set('endpoint.azure.ready')).lower()
@@ -1277,7 +1270,7 @@ def configure_cdk_addons():
         'keystone-key-file=' + keystone.get('key', ''),
         'keystone-server-url=' + keystone.get('url', ''),
         'keystone-server-ca=' + keystone.get('keystone-ca', ''),
-        'dashboard-auth=' + dashboard_auth,
+        'dashboard-auth=token',
         'enable-aws=' + enable_aws,
         'enable-azure=' + enable_azure,
         'enable-gcp=' + enable_gcp,
