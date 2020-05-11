@@ -198,6 +198,7 @@ def fresh_install():
 def check_for_upgrade_needed():
     '''An upgrade charm event was triggered by Juju, react to that here.'''
     hookenv.status_set('maintenance', 'Checking resources')
+    is_leader = is_state('leadership.is_leader')
 
     # migrate to new flags
     if is_state('kubernetes-master.restarted-for-cloud'):
@@ -220,6 +221,23 @@ def check_for_upgrade_needed():
     update_certificates()
     add_rbac_roles()
     switch_auth_mode(forced=True)
+
+    # Basic auth is gone in 1.19; ensure any custom entries are added to
+    # known_tokens.csv. This updates existing or appends new entries.
+    if is_leader and not is_flag_set('kubernetes-master.basic-auth.migrated'):
+        basic_auth = '/root/cdk/basic_auth.csv'
+        with open(basic_auth, 'r') as f:
+            rows = list(csv.reader(f))
+
+        for row in rows:
+            if row[0].startswith('#'):
+                continue
+            setup_tokens(*row)
+
+        with open(basic_auth, 'w') as f:
+            f.write('# Basic auth entries have moved to known_tokens.csv')
+
+        set_flag('kubernetes-master.basic-auth.migrated')
     set_state('reconfigure.authentication.setup')
     remove_state('authentication.setup')
 
@@ -237,7 +255,6 @@ def check_for_upgrade_needed():
 
     # Set the auto storage backend to etcd2.
     auto_storage_backend = leader_get('auto_storage_backend')
-    is_leader = is_state('leadership.is_leader')
     if not auto_storage_backend and is_leader:
         leader_set(auto_storage_backend='etcd2')
 
@@ -544,13 +561,20 @@ def configure_cni(cni):
 @when('leadership.is_leader')
 @when_not('authentication.setup')
 def setup_leader_authentication():
-    '''Setup service accounts and tokens for the cluster.'''
-    service_key = '/root/cdk/serviceaccount.key'
+    """
+    Setup service accounts and tokens for the cluster.
+
+    As of 1.19, this will also propogate a generic basic_auth.csv, which is
+    merged into known_tokens.csv during upgrade-charm.
+    """
+    basic_auth = '/root/cdk/basic_auth.csv'
     known_tokens = '/root/cdk/known_tokens.csv'
+    service_key = '/root/cdk/serviceaccount.key'
+    os.makedirs('/root/cdk', exist_ok=True)
 
     hookenv.status_set('maintenance', 'Rendering authentication templates.')
 
-    keys = [service_key, known_tokens]
+    keys = [basic_auth, known_tokens, service_key]
     # Try first to fetch data from an old leadership broadcast.
     if not get_keys_from_leader(keys) \
             or is_state('reconfigure.authentication.setup'):
@@ -561,7 +585,6 @@ def setup_leader_authentication():
         setup_tokens(last_pass, 'admin', 'admin', 'system:masters')
 
         # Generate the default service account token key
-        os.makedirs('/root/cdk', exist_ok=True)
         if not os.path.isfile(service_key):
             cmd = ['openssl', 'genrsa', '-out', service_key,
                    '2048']
@@ -572,7 +595,7 @@ def setup_leader_authentication():
 
     # send auth files to followers via leadership data
     leader_data = {}
-    for f in [known_tokens, service_key]:
+    for f in [basic_auth, known_tokens, service_key]:
         with open(f, 'r') as fp:
             leader_data[f] = fp.read()
 
@@ -589,11 +612,11 @@ def setup_leader_authentication():
 
 @when_not('leadership.is_leader')
 def setup_non_leader_authentication():
-
-    service_key = '/root/cdk/serviceaccount.key'
+    basic_auth = '/root/cdk/basic_auth.csv'
     known_tokens = '/root/cdk/known_tokens.csv'
+    service_key = '/root/cdk/serviceaccount.key'
 
-    keys = [service_key, known_tokens]
+    keys = [basic_auth, known_tokens, service_key]
     # The source of truth for non-leaders is the leader.
     # Therefore we overwrite_local with whatever the leader has.
     if not get_keys_from_leader(keys, overwrite_local=True):
