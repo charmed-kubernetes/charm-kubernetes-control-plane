@@ -1747,11 +1747,11 @@ def build_kubeconfig():
 
         if ks:
             create_kubeconfig(kubeconfig_path, public_server, ca_crt_path,
-                              user='admin', password=client_pass,
+                              user='admin', token=client_pass,
                               keystone=True, aws_iam_cluster_id=cluster_id)
         else:
             create_kubeconfig(kubeconfig_path, public_server, ca_crt_path,
-                              user='admin', password=client_pass,
+                              user='admin', token=client_pass,
                               aws_iam_cluster_id=cluster_id)
 
         # Make the config file readable by the ubuntu users so juju scp works.
@@ -1761,11 +1761,11 @@ def build_kubeconfig():
         # make a copy in a location shared by kubernetes-worker
         # and kubernete-master
         create_kubeconfig(kubeclientconfig_path, local_server, ca_crt_path,
-                          user='admin', password=client_pass)
+                          user='admin', token=client_pass)
 
         # make a copy for cdk-addons to use
         create_kubeconfig(cdk_addons_kubectl_config_path, local_server,
-                          ca_crt_path, user='admin', password=client_pass)
+                          ca_crt_path, user='admin', token=client_pass)
 
         # make a kubeconfig for kube-proxy
         proxy_token = get_token('system:kube-proxy')
