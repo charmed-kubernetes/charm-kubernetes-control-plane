@@ -2043,36 +2043,6 @@ def configure_scheduler():
     service_restart('snap.kube-scheduler.daemon')
 
 
-def setup_basic_auth(password=None, username='admin', uid='admin',
-                     groups=None):
-    '''Add or update an entry in /root/cdk/basic_auth.csv.'''
-    htaccess = Path('/root/cdk/basic_auth.csv')
-    htaccess.parent.mkdir(parents=True, exist_ok=True)
-
-    if not password:
-        password = token_generator()
-
-    new_row = [password, username, uid] + ([groups] if groups else [])
-
-    try:
-        with htaccess.open('r') as f:
-            rows = list(csv.reader(f))
-    except FileNotFoundError:
-        rows = []
-
-    for row in rows:
-        if row[1] == username or row[2] == uid:
-            # update existing entry based on username or uid
-            row[:] = new_row
-            break
-    else:
-        # append new entry
-        rows.append(new_row)
-
-    with htaccess.open('w') as f:
-        csv.writer(f).writerows(rows)
-
-
 def setup_tokens(token, username, user, groups=None):
     '''Create a token file for kubernetes authentication.'''
     root_cdk = '/root/cdk'
@@ -2081,14 +2051,34 @@ def setup_tokens(token, username, user, groups=None):
     known_tokens = os.path.join(root_cdk, 'known_tokens.csv')
     if not token:
         token = token_generator()
-    with open(known_tokens, 'a') as stream:
-        if groups:
-            stream.write('{0},{1},{2},"{3}"\n'.format(token,
-                                                      username,
-                                                      user,
-                                                      groups))
-        else:
-            stream.write('{0},{1},{2}\n'.format(token, username, user))
+
+    new_row = [token, username, user]
+    if groups:
+        # if we have a new group column, ensure it is double quoted
+        new_row += ['\"{}\"'.format(groups)]
+
+    try:
+        with open(known_tokens, 'r') as f:
+            rows = list(csv.reader(f))
+    except FileNotFoundError:
+        rows = []
+
+    for row in rows:
+        if row[1] == username or row[2] == user:
+            # update existing entry based on username or user
+            row[:] = new_row
+            break
+        try:
+            # if we have an existing group column, ensure it is double quoted
+            row[3] = '\"{}\"'.format(row[3])
+        except IndexError:
+            pass
+    else:
+        # append new entry
+        rows.append(new_row)
+
+    with open(known_tokens, 'w') as f:
+        csv.writer(f, quoting=csv.QUOTE_NONE, quotechar='\'').writerows(rows)
 
 
 def get_password(csv_fname, user):
