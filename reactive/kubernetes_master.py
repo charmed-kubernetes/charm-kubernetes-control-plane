@@ -522,7 +522,7 @@ def password_changed():
     elif password == "":
         # Password not initialised
         password = token_generator()
-    setup_basic_auth(password, "admin", "admin", "system:masters")
+    setup_tokens(password, 'admin', 'admin', 'system:masters')
     set_state('reconfigure.authentication.setup')
     remove_state('authentication.setup')
     set_state('client.password.initialised')
@@ -544,22 +544,21 @@ def configure_cni(cni):
 @when('leadership.is_leader')
 @when_not('authentication.setup')
 def setup_leader_authentication():
-    '''Setup basic authentication and token access for the cluster.'''
+    '''Setup service accounts and tokens for the cluster.'''
     service_key = '/root/cdk/serviceaccount.key'
-    basic_auth = '/root/cdk/basic_auth.csv'
     known_tokens = '/root/cdk/known_tokens.csv'
 
     hookenv.status_set('maintenance', 'Rendering authentication templates.')
 
-    keys = [service_key, basic_auth, known_tokens]
+    keys = [service_key, known_tokens]
     # Try first to fetch data from an old leadership broadcast.
     if not get_keys_from_leader(keys) \
             or is_state('reconfigure.authentication.setup'):
-        last_pass = get_password('basic_auth.csv', 'admin')
-        setup_basic_auth(last_pass, 'admin', 'admin', 'system:masters')
-
         if not os.path.isfile(known_tokens):
             touch(known_tokens)
+
+        last_pass = get_token('admin')
+        setup_tokens(last_pass, 'admin', 'admin', 'system:masters')
 
         # Generate the default service account token key
         os.makedirs('/root/cdk', exist_ok=True)
@@ -573,7 +572,7 @@ def setup_leader_authentication():
 
     # send auth files to followers via leadership data
     leader_data = {}
-    for f in [known_tokens, basic_auth, service_key]:
+    for f in [known_tokens, service_key]:
         with open(f, 'r') as fp:
             leader_data[f] = fp.read()
 
@@ -592,10 +591,9 @@ def setup_leader_authentication():
 def setup_non_leader_authentication():
 
     service_key = '/root/cdk/serviceaccount.key'
-    basic_auth = '/root/cdk/basic_auth.csv'
     known_tokens = '/root/cdk/known_tokens.csv'
 
-    keys = [service_key, basic_auth, known_tokens]
+    keys = [service_key, known_tokens]
     # The source of truth for non-leaders is the leader.
     # Therefore we overwrite_local with whatever the leader has.
     if not get_keys_from_leader(keys, overwrite_local=True):
@@ -898,7 +896,6 @@ def add_systemd_file_watcher():
 
     This service watches these files for changes:
 
-    /root/cdk/basic_auth.csv
     /root/cdk/known_tokens.csv
     /root/cdk/serviceaccount.key
 
@@ -1695,7 +1692,7 @@ def build_kubeconfig():
     local_address = get_ingress_address('kube-api-endpoint')
     local_server = 'https://{0}:{1}'.format(local_address, 6443)
     ca_exists = ca_crt_path.exists()
-    client_pass = get_password('basic_auth.csv', 'admin')
+    client_pass = get_token('admin')
     # Do we have everything we need?
     if ca_exists and client_pass:
         # drop keystone helper script?
@@ -1840,7 +1837,6 @@ def configure_apiserver():
     api_opts['insecure-bind-address'] = '127.0.0.1'
     api_opts['insecure-port'] = '8080'
     api_opts['storage-backend'] = getStorageBackend()
-    api_opts['basic-auth-file'] = '/root/cdk/basic_auth.csv'
 
     api_opts['token-auth-file'] = '/root/cdk/known_tokens.csv'
     api_opts['service-account-key-file'] = '/root/cdk/serviceaccount.key'
