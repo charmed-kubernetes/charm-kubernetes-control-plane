@@ -235,7 +235,7 @@ def check_for_upgrade_needed():
             setup_tokens(*row)
 
         with open(basic_auth, 'w') as f:
-            f.write('# Basic auth entries have moved to known_tokens.csv')
+            f.write('# Basic auth entries have moved to known_tokens.csv\n')
 
         set_flag('kubernetes-master.basic-auth.migrated')
     set_state('reconfigure.authentication.setup')
@@ -2068,20 +2068,15 @@ def configure_scheduler():
 
 def setup_tokens(token, username, user, groups=None):
     '''Create a token file for kubernetes authentication.'''
-    root_cdk = '/root/cdk'
-    if not os.path.isdir(root_cdk):
-        os.makedirs(root_cdk)
-    known_tokens = os.path.join(root_cdk, 'known_tokens.csv')
+    known_tokens = Path('/root/cdk/known_tokens.csv')
+    known_tokens.parent.mkdir(exist_ok=True)
+
     if not token:
         token = token_generator()
-
-    new_row = [token, username, user]
-    if groups:
-        # if we have a new group column, ensure it is double quoted
-        new_row += ['\"{}\"'.format(groups)]
+    new_row = [token, username, user] + ([groups] if groups else [])
 
     try:
-        with open(known_tokens, 'r') as f:
+        with known_tokens.open('r') as f:
             rows = list(csv.reader(f))
     except FileNotFoundError:
         rows = []
@@ -2091,17 +2086,12 @@ def setup_tokens(token, username, user, groups=None):
             # update existing entry based on username or user
             row[:] = new_row
             break
-        try:
-            # if we have an existing group column, ensure it is double quoted
-            row[3] = '\"{}\"'.format(row[3])
-        except IndexError:
-            pass
     else:
         # append new entry
         rows.append(new_row)
 
-    with open(known_tokens, 'w') as f:
-        csv.writer(f, quoting=csv.QUOTE_NONE, quotechar='\'').writerows(rows)
+    with known_tokens.open('w') as f:
+        csv.writer(f).writerows(rows)
 
 
 def get_password(csv_fname, user):
