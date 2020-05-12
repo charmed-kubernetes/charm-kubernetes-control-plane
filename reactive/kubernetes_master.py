@@ -166,6 +166,42 @@ def channel_changed():
     set_upgrade_needed()
 
 
+# Returns True if a is subnet of b
+# This method is copied from cpython as it is available only from
+# python 3.7
+# https://github.com/python/cpython/blob/3.7/Lib/ipaddress.py#L1000
+def is_subnet_of(a, b):
+    try:
+        # Always false if one is v4 and the other is v6.
+        if a._version != b._version:
+            raise TypeError("{} and {} are not of the same version".format(
+                a, b))
+        return (b.network_address <= a.network_address and
+                b.broadcast_address >= a.broadcast_address)
+    except AttributeError:
+        raise TypeError("Unable to test subnet containment "
+                        "between {} and {}".format(a, b))
+
+
+def is_service_cidr_expansion():
+    service_cidr_from_db = db.get('kubernetes-master.service-cidr')
+    service_cidr_from_config = hookenv.config('service-cidr')
+    if not service_cidr_from_db:
+        return False
+
+    # Do not consider as expansion if both old and new service cidr are same
+    if service_cidr_from_db == service_cidr_from_config:
+        return False
+
+    current_service_cidr = ipaddress.ip_network(service_cidr_from_db)
+    new_service_cidr = ipaddress.ip_network(service_cidr_from_config)
+    if not is_subnet_of(current_service_cidr, new_service_cidr):
+        hookenv.log("WARN: New k8s service cidr not superset of old one")
+        return False
+
+    return True
+
+
 def service_cidr():
     ''' Return the charm's service-cidr config '''
     frozen_cidr = db.get('kubernetes-master.service-cidr')
@@ -175,7 +211,10 @@ def service_cidr():
 def freeze_service_cidr():
     ''' Freeze the service CIDR. Once the apiserver has started, we can no
     longer safely change this value. '''
-    db.set('kubernetes-master.service-cidr', service_cidr())
+    frozen_service_cidr = db.get('kubernetes-master.service-cidr')
+    if not frozen_service_cidr or is_service_cidr_expansion():
+        db.set('kubernetes-master.service-cidr', hookenv.config(
+            'service-cidr'))
 
 
 def maybe_install_kube_proxy():
@@ -1599,7 +1638,8 @@ def on_config_allow_privileged_change():
 @when_any('config.changed.api-extra-args',
           'config.changed.audit-policy',
           'config.changed.audit-webhook-config',
-          'config.changed.enable-keystone-authorization')
+          'config.changed.enable-keystone-authorization',
+          'config.changed.service-cidr')
 @when('kubernetes-master.components.started')
 @when('leadership.set.auto_storage_backend')
 @when('etcd.available')
@@ -1814,6 +1854,10 @@ def configure_apiserver():
         # No point in trying to start master services and fail. Just return.
         return
 
+    # Update unit db service-cidr
+    was_service_cidr_expanded = is_service_cidr_expansion()
+    freeze_service_cidr()
+
     api_opts = {}
 
     if is_privileged():
@@ -1986,6 +2030,37 @@ def configure_apiserver():
     configure_kubernetes_service(configure_prefix, 'kube-apiserver',
                                  api_opts, 'api-extra-args')
     service_restart('snap.kube-apiserver.daemon')
+
+    if was_service_cidr_expanded and is_state('leadership.is_leader'):
+        try:
+            hookenv.log("service-cidr expansion: Deleting service kubernetes")
+            kubectl('delete', 'service', 'kubernetes')
+
+            # Restart the cdk-addons
+            # Get deployments/daemonsets/statefulsets
+            hookenv.log("service-cidr expansion: Restart the cdk-addons")
+            output = kubectl(
+                'get', 'daemonset,deployment,statefulset',
+                '-o', 'json',
+                '--all-namespaces',
+                '-l', 'cdk-restart-on-ca-change=true'
+            ).decode('UTF-8')
+            deployments = json.loads(output)['items']
+
+            # Now restart the addons
+            for deployment in deployments:
+                kind = deployment['kind']
+                namespace = deployment['metadata']['namespace']
+                name = deployment['metadata']['name']
+                hookenv.log('Restarting addon: {0} {1} {2}'.format(kind,
+                                                                   namespace,
+                                                                   name))
+                kubectl(
+                    'rollout', 'restart', kind + '/' + name,
+                    '-n', namespace
+                )
+        except Exception:
+            hookenv.log("service-cidr-expansion: k8s services not yet started")
 
     set_flag('kubernetes-master.apiserver.configured')
 
