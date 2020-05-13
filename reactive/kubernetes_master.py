@@ -599,8 +599,11 @@ def setup_leader_authentication():
     # send auth files to followers via leadership data
     leader_data = {}
     for f in [basic_auth, known_tokens, service_key]:
-        with open(f, 'r') as fp:
-            leader_data[f] = fp.read()
+        try:
+            with open(f, 'r') as fp:
+                leader_data[f] = fp.read()
+        except FileNotFoundError:
+            pass
 
     # this is slightly opaque, but we are sending file contents under its file
     # path as a key.
