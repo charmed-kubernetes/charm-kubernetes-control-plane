@@ -230,10 +230,13 @@ def check_for_upgrade_needed():
             rows = list(csv.reader(f))
 
         for row in rows:
-            if row[0].startswith('#'):
-                continue
-            setup_tokens(*row)
-
+            try:
+                if row[0].startswith('#'):
+                    continue
+                else:
+                    setup_tokens(*row)
+            except IndexError:
+                pass
         with open(basic_auth, 'w') as f:
             f.write('# Basic auth entries have moved to known_tokens.csv\n')
 
@@ -2070,28 +2073,33 @@ def setup_tokens(token, username, user, groups=None):
     '''Create a token file for kubernetes authentication.'''
     known_tokens = Path('/root/cdk/known_tokens.csv')
     known_tokens.parent.mkdir(exist_ok=True)
-
-    if not token:
-        token = token_generator()
-    new_row = [token, username, user] + ([groups] if groups else [])
+    csv_fields = ['token', 'username', 'user', 'groups']
 
     try:
         with known_tokens.open('r') as f:
-            rows = list(csv.reader(f))
+            tokens_by_user = {r['user']: r for r in csv.DictReader(f, csv_fields)}
     except FileNotFoundError:
-        rows = []
+        tokens_by_user = {}
+    tokens_by_username = {r['username']: r for r in tokens_by_user.values()}
 
-    for row in rows:
-        if row[1] == username or row[2] == user:
-            # update existing entry based on username or user
-            row[:] = new_row
-            break
+    if user in tokens_by_user:
+        record = tokens_by_user[user]
+    elif username in tokens_by_username:
+        record = tokens_by_username[username]
     else:
-        # append new entry
-        rows.append(new_row)
+        record = tokens_by_user[user] = {}
+    record.update({
+        'token': token or token_generator(),
+        'username': username,
+        'user': user,
+        'groups': groups,
+    })
+    if not record['groups']:
+        del record['groups']
 
     with known_tokens.open('w') as f:
-        csv.writer(f).writerows(rows)
+        csv.DictWriter(f, csv_fields, lineterminator='\n').writerows(
+            tokens_by_user.values())
 
 
 def get_password(csv_fname, user):
