@@ -275,6 +275,8 @@ options:
       Method of authentication for the Kubernetes dashboard. Allowed values are "auto", 
       "basic", and "token". If set to "auto", basic auth is used unless Keystone is 
       related to kubernetes-master, in which case token auth is used.
+
+      DEPRECATED: this option has no effect on Kubernetes 1.19 and above.
     default: "auto"
   loadbalancer-ips:
     type: string
@@ -301,6 +303,7 @@ options:
         hostPath:
           path: /grafana
           type: Directory
+
       DEPRECATED: this option has no effect on Kubernetes 1.18 and above.
     default: |
       influxdb:

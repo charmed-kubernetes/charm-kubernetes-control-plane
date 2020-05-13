@@ -237,6 +237,7 @@ def fresh_install():
 def check_for_upgrade_needed():
     '''An upgrade charm event was triggered by Juju, react to that here.'''
     hookenv.status_set('maintenance', 'Checking resources')
+    is_leader = is_state('leadership.is_leader')
 
     # migrate to new flags
     if is_state('kubernetes-master.restarted-for-cloud'):
@@ -259,6 +260,26 @@ def check_for_upgrade_needed():
     update_certificates()
     add_rbac_roles()
     switch_auth_mode(forced=True)
+
+    # Basic auth is gone in 1.19; ensure any custom entries are added to
+    # known_tokens.csv. This updates existing or appends new entries.
+    if is_leader and not is_flag_set('kubernetes-master.basic-auth.migrated'):
+        basic_auth = '/root/cdk/basic_auth.csv'
+        with open(basic_auth, 'r') as f:
+            rows = list(csv.reader(f))
+
+        for row in rows:
+            try:
+                if row[0].startswith('#'):
+                    continue
+                else:
+                    setup_tokens(*row)
+            except IndexError:
+                pass
+        with open(basic_auth, 'w') as f:
+            f.write('# Basic auth entries have moved to known_tokens.csv\n')
+
+        set_flag('kubernetes-master.basic-auth.migrated')
     set_state('reconfigure.authentication.setup')
     remove_state('authentication.setup')
 
@@ -276,7 +297,6 @@ def check_for_upgrade_needed():
 
     # Set the auto storage backend to etcd2.
     auto_storage_backend = leader_get('auto_storage_backend')
-    is_leader = is_state('leadership.is_leader')
     if not auto_storage_backend and is_leader:
         leader_set(auto_storage_backend='etcd2')
 
@@ -561,7 +581,7 @@ def password_changed():
     elif password == "":
         # Password not initialised
         password = token_generator()
-    setup_basic_auth(password, "admin", "admin", "system:masters")
+    setup_tokens(password, 'admin', 'admin', 'system:masters')
     set_state('reconfigure.authentication.setup')
     remove_state('authentication.setup')
     set_state('client.password.initialised')
@@ -583,25 +603,30 @@ def configure_cni(cni):
 @when('leadership.is_leader')
 @when_not('authentication.setup')
 def setup_leader_authentication():
-    '''Setup basic authentication and token access for the cluster.'''
-    service_key = '/root/cdk/serviceaccount.key'
+    """
+    Setup service accounts and tokens for the cluster.
+
+    As of 1.19, this will also propogate a generic basic_auth.csv, which is
+    merged into known_tokens.csv during upgrade-charm.
+    """
     basic_auth = '/root/cdk/basic_auth.csv'
     known_tokens = '/root/cdk/known_tokens.csv'
+    service_key = '/root/cdk/serviceaccount.key'
+    os.makedirs('/root/cdk', exist_ok=True)
 
     hookenv.status_set('maintenance', 'Rendering authentication templates.')
 
-    keys = [service_key, basic_auth, known_tokens]
+    keys = [basic_auth, known_tokens, service_key]
     # Try first to fetch data from an old leadership broadcast.
     if not get_keys_from_leader(keys) \
             or is_state('reconfigure.authentication.setup'):
-        last_pass = get_password('basic_auth.csv', 'admin')
-        setup_basic_auth(last_pass, 'admin', 'admin', 'system:masters')
-
         if not os.path.isfile(known_tokens):
             touch(known_tokens)
 
+        last_pass = get_token('admin')
+        setup_tokens(last_pass, 'admin', 'admin', 'system:masters')
+
         # Generate the default service account token key
-        os.makedirs('/root/cdk', exist_ok=True)
         if not os.path.isfile(service_key):
             cmd = ['openssl', 'genrsa', '-out', service_key,
                    '2048']
@@ -612,9 +637,12 @@ def setup_leader_authentication():
 
     # send auth files to followers via leadership data
     leader_data = {}
-    for f in [known_tokens, basic_auth, service_key]:
-        with open(f, 'r') as fp:
-            leader_data[f] = fp.read()
+    for f in [basic_auth, known_tokens, service_key]:
+        try:
+            with open(f, 'r') as fp:
+                leader_data[f] = fp.read()
+        except FileNotFoundError:
+            pass
 
     # this is slightly opaque, but we are sending file contents under its file
     # path as a key.
@@ -629,12 +657,11 @@ def setup_leader_authentication():
 
 @when_not('leadership.is_leader')
 def setup_non_leader_authentication():
-
-    service_key = '/root/cdk/serviceaccount.key'
     basic_auth = '/root/cdk/basic_auth.csv'
     known_tokens = '/root/cdk/known_tokens.csv'
+    service_key = '/root/cdk/serviceaccount.key'
 
-    keys = [service_key, basic_auth, known_tokens]
+    keys = [basic_auth, known_tokens, service_key]
     # The source of truth for non-leaders is the leader.
     # Therefore we overwrite_local with whatever the leader has.
     if not get_keys_from_leader(keys, overwrite_local=True):
@@ -937,7 +964,6 @@ def add_systemd_file_watcher():
 
     This service watches these files for changes:
 
-    /root/cdk/basic_auth.csv
     /root/cdk/known_tokens.csv
     /root/cdk/serviceaccount.key
 
@@ -1239,7 +1265,6 @@ def configure_cdk_addons():
         return
     metricsEnabled = str(hookenv.config('enable-metrics')).lower()
     default_storage = ''
-    dashboard_auth = str(hookenv.config('dashboard-auth')).lower()
     ceph = {}
     ceph_ep = endpoint_from_flag('ceph-storage.available')
     if (ceph_ep and ceph_ep.key() and
@@ -1274,12 +1299,6 @@ def configure_cdk_addons():
         keystone['keystone-ca'] = hookenv.config('keystone-ssl-ca')
     else:
         keystoneEnabled = "false"
-
-    if dashboard_auth == 'auto':
-        if ks:
-            dashboard_auth = 'token'
-        else:
-            dashboard_auth = 'basic'
 
     enable_aws = str(is_flag_set('endpoint.aws.ready')).lower()
     enable_azure = str(is_flag_set('endpoint.azure.ready')).lower()
@@ -1316,7 +1335,7 @@ def configure_cdk_addons():
         'keystone-key-file=' + keystone.get('key', ''),
         'keystone-server-url=' + keystone.get('url', ''),
         'keystone-server-ca=' + keystone.get('keystone-ca', ''),
-        'dashboard-auth=' + dashboard_auth,
+        'dashboard-auth=token',
         'enable-aws=' + enable_aws,
         'enable-azure=' + enable_azure,
         'enable-gcp=' + enable_gcp,
@@ -1742,7 +1761,7 @@ def build_kubeconfig():
     local_address = get_ingress_address('kube-api-endpoint')
     local_server = 'https://{0}:{1}'.format(local_address, 6443)
     ca_exists = ca_crt_path.exists()
-    client_pass = get_password('basic_auth.csv', 'admin')
+    client_pass = get_token('admin')
     # Do we have everything we need?
     if ca_exists and client_pass:
         # drop keystone helper script?
@@ -1774,11 +1793,11 @@ def build_kubeconfig():
 
         if ks:
             create_kubeconfig(kubeconfig_path, public_server, ca_crt_path,
-                              user='admin', password=client_pass,
+                              user='admin', token=client_pass,
                               keystone=True, aws_iam_cluster_id=cluster_id)
         else:
             create_kubeconfig(kubeconfig_path, public_server, ca_crt_path,
-                              user='admin', password=client_pass,
+                              user='admin', token=client_pass,
                               aws_iam_cluster_id=cluster_id)
 
         # Make the config file readable by the ubuntu users so juju scp works.
@@ -1788,11 +1807,11 @@ def build_kubeconfig():
         # make a copy in a location shared by kubernetes-worker
         # and kubernete-master
         create_kubeconfig(kubeclientconfig_path, local_server, ca_crt_path,
-                          user='admin', password=client_pass)
+                          user='admin', token=client_pass)
 
         # make a copy for cdk-addons to use
         create_kubeconfig(cdk_addons_kubectl_config_path, local_server,
-                          ca_crt_path, user='admin', password=client_pass)
+                          ca_crt_path, user='admin', token=client_pass)
 
         # make a kubeconfig for kube-proxy
         proxy_token = get_token('system:kube-proxy')
@@ -1891,7 +1910,6 @@ def configure_apiserver():
     api_opts['insecure-bind-address'] = '127.0.0.1'
     api_opts['insecure-port'] = '8080'
     api_opts['storage-backend'] = getStorageBackend()
-    api_opts['basic-auth-file'] = '/root/cdk/basic_auth.csv'
 
     api_opts['token-auth-file'] = '/root/cdk/known_tokens.csv'
     api_opts['service-account-key-file'] = '/root/cdk/serviceaccount.key'
@@ -2129,52 +2147,37 @@ def configure_scheduler():
     service_restart('snap.kube-scheduler.daemon')
 
 
-def setup_basic_auth(password=None, username='admin', uid='admin',
-                     groups=None):
-    '''Add or update an entry in /root/cdk/basic_auth.csv.'''
-    htaccess = Path('/root/cdk/basic_auth.csv')
-    htaccess.parent.mkdir(parents=True, exist_ok=True)
-
-    if not password:
-        password = token_generator()
-
-    new_row = [password, username, uid] + ([groups] if groups else [])
-
-    try:
-        with htaccess.open('r') as f:
-            rows = list(csv.reader(f))
-    except FileNotFoundError:
-        rows = []
-
-    for row in rows:
-        if row[1] == username or row[2] == uid:
-            # update existing entry based on username or uid
-            row[:] = new_row
-            break
-    else:
-        # append new entry
-        rows.append(new_row)
-
-    with htaccess.open('w') as f:
-        csv.writer(f).writerows(rows)
-
-
 def setup_tokens(token, username, user, groups=None):
     '''Create a token file for kubernetes authentication.'''
-    root_cdk = '/root/cdk'
-    if not os.path.isdir(root_cdk):
-        os.makedirs(root_cdk)
-    known_tokens = os.path.join(root_cdk, 'known_tokens.csv')
-    if not token:
-        token = token_generator()
-    with open(known_tokens, 'a') as stream:
-        if groups:
-            stream.write('{0},{1},{2},"{3}"\n'.format(token,
-                                                      username,
-                                                      user,
-                                                      groups))
-        else:
-            stream.write('{0},{1},{2}\n'.format(token, username, user))
+    known_tokens = Path('/root/cdk/known_tokens.csv')
+    known_tokens.parent.mkdir(exist_ok=True)
+    csv_fields = ['token', 'username', 'user', 'groups']
+
+    try:
+        with known_tokens.open('r') as f:
+            tokens_by_user = {r['user']: r for r in csv.DictReader(f, csv_fields)}
+    except FileNotFoundError:
+        tokens_by_user = {}
+    tokens_by_username = {r['username']: r for r in tokens_by_user.values()}
+
+    if user in tokens_by_user:
+        record = tokens_by_user[user]
+    elif username in tokens_by_username:
+        record = tokens_by_username[username]
+    else:
+        record = tokens_by_user[user] = {}
+    record.update({
+        'token': token or token_generator(),
+        'username': username,
+        'user': user,
+        'groups': groups,
+    })
+    if not record['groups']:
+        del record['groups']
+
+    with known_tokens.open('w') as f:
+        csv.DictWriter(f, csv_fields, lineterminator='\n').writerows(
+            tokens_by_user.values())
 
 
 def get_password(csv_fname, user):
