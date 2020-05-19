@@ -4,6 +4,7 @@ config:
   raw.lxc: |
     lxc.apparmor.profile=unconfined
     lxc.mount.auto=proc:rw sys:rw
+    lxc.cgroup.devices.allow=a
     lxc.cap.drop=
   security.nesting: true
   security.privileged: true
