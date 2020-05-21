@@ -1,7 +1,10 @@
 import pytest
+import tempfile
+from pathlib import Path
 from unittest import mock
 from reactive import kubernetes_master
 from charms.layer.kubernetes_common import get_version, kubectl
+from charms.layer.kubernetes_master import deprecate_auth_file
 from charms.reactive import endpoint_from_flag, remove_state
 from charmhelpers.core import hookenv, unitdata
 
@@ -12,6 +15,19 @@ def patch_fixture(patch_target):
         with mock.patch(patch_target) as m:
             yield m
     return _fixture
+
+
+@pytest.fixture
+def auth_file():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yield Path(tmpdir) / 'test_auth.csv'
+
+
+def test_deprecate_auth_file(auth_file):
+    """Verify a comment is written by deprecate_auth_file()"""
+    deprecate_auth_file(auth_file)
+    assert auth_file.exists()
+    assert auth_file.read_text().startswith('#')
 
 
 def test_send_default_cni():
