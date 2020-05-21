@@ -133,5 +133,7 @@ def deprecate_auth_file(auth_file):
     In 1.19+, file-based authentication was deprecated in favor of cert
     auth. Write out generic files that inform the user of this.
     """
-    with open(auth_file, 'w') as f:
+    csv_file = Path(auth_file)
+    csv_file.parent.mkdir(exist_ok=True)
+    with csv_file.open('w') as f:
         f.write('# File-based authentication was deprecated in 1.19\n')
