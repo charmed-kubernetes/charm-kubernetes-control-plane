@@ -126,3 +126,12 @@ def get_cephfs_fsname():
     for fs in data:
         if 'ceph-fs_data' in fs['data_pools']:
             return fs['name']
+
+
+def deprecate_auth_file(auth_file):
+    """
+    In 1.19+, file-based authentication was deprecated in favor of cert
+    auth. Write out generic files that inform the user of this.
+    """
+    with open(auth_file, 'w') as f:
+        f.write('# File-based authentication was deprecated in 1.19\n')

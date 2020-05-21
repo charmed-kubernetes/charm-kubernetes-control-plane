@@ -276,8 +276,7 @@ def check_for_upgrade_needed():
                     setup_tokens(*row)
             except IndexError:
                 pass
-        with open(basic_auth, 'w') as f:
-            f.write('# Basic auth entries have moved to known_tokens.csv\n')
+        kubernetes_master.deprecate_auth_file(basic_auth)
 
         set_flag('kubernetes-master.basic-auth.migrated')
     set_state('reconfigure.authentication.setup')
@@ -620,8 +619,11 @@ def setup_leader_authentication():
     # Try first to fetch data from an old leadership broadcast.
     if not get_keys_from_leader(keys) \
             or is_state('reconfigure.authentication.setup'):
+        if not os.path.isfile(basic_auth):
+            kubernetes_master.deprecate_auth_file(basic_auth)
+
         if not os.path.isfile(known_tokens):
-            touch(known_tokens)
+            kubernetes_master.deprecate_auth_file(known_tokens)
 
         last_pass = get_token('admin')
         setup_tokens(last_pass, 'admin', 'admin', 'system:masters')
