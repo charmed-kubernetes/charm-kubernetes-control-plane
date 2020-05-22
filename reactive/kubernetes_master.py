@@ -23,7 +23,6 @@ import shutil
 import socket
 import string
 import json
-import ipaddress
 import traceback
 import yaml
 
@@ -58,6 +57,7 @@ from charmhelpers.core.templating import render
 from charmhelpers.contrib.charmsupport import nrpe
 
 from charms.layer import kubernetes_master
+from charms.layer import kubernetes_common
 
 from charms.layer.hacluster import add_service_to_hacluster
 from charms.layer.hacluster import remove_service_from_hacluster
@@ -167,57 +167,6 @@ def set_upgrade_needed(forced=False):
 @when('config.changed.channel')
 def channel_changed():
     set_upgrade_needed()
-
-
-# Returns True if a is subnet of b
-# This method is copied from cpython as it is available only from
-# python 3.7
-# https://github.com/python/cpython/blob/3.7/Lib/ipaddress.py#L1000
-def is_subnet_of(a, b):
-    try:
-        # Always false if one is v4 and the other is v6.
-        if a._version != b._version:
-            raise TypeError("{} and {} are not of the same version".format(
-                a, b))
-        return (b.network_address <= a.network_address and
-                b.broadcast_address >= a.broadcast_address)
-    except AttributeError:
-        raise TypeError("Unable to test subnet containment "
-                        "between {} and {}".format(a, b))
-
-
-def is_service_cidr_expansion():
-    service_cidr_from_db = db.get('kubernetes-master.service-cidr')
-    service_cidr_from_config = hookenv.config('service-cidr')
-    if not service_cidr_from_db:
-        return False
-
-    # Do not consider as expansion if both old and new service cidr are same
-    if service_cidr_from_db == service_cidr_from_config:
-        return False
-
-    current_service_cidr = ipaddress.ip_network(service_cidr_from_db)
-    new_service_cidr = ipaddress.ip_network(service_cidr_from_config)
-    if not is_subnet_of(current_service_cidr, new_service_cidr):
-        hookenv.log("WARN: New k8s service cidr not superset of old one")
-        return False
-
-    return True
-
-
-def service_cidr():
-    ''' Return the charm's service-cidr config '''
-    frozen_cidr = db.get('kubernetes-master.service-cidr')
-    return frozen_cidr or hookenv.config('service-cidr')
-
-
-def freeze_service_cidr():
-    ''' Freeze the service CIDR. Once the apiserver has started, we can no
-    longer safely change this value. '''
-    frozen_service_cidr = db.get('kubernetes-master.service-cidr')
-    if not frozen_service_cidr or is_service_cidr_expansion():
-        db.set('kubernetes-master.service-cidr', hookenv.config(
-            'service-cidr'))
 
 
 def maybe_install_kube_proxy():
@@ -877,8 +826,9 @@ def set_final_status():
         hookenv.status_set('waiting', msg)
         return
 
-    if hookenv.config('service-cidr') != service_cidr():
-        msg = 'WARN: cannot change service-cidr, still using ' + service_cidr()
+    service_cidr = kubernetes_master.service_cidr()
+    if hookenv.config('service-cidr') != service_cidr:
+        msg = 'WARN: cannot change service-cidr, still using ' + service_cidr
         hookenv.status_set('active', msg)
         return
 
@@ -1031,7 +981,8 @@ def start_master():
             })
         )
 
-    freeze_service_cidr()
+    kubernetes_master.freeze_service_cidr()
+
     etcd = endpoint_from_flag('etcd.available')
     if not etcd.get_connection_string():
         # etcd is not returning a connection string. This happens when
@@ -1056,12 +1007,9 @@ def start_master():
     configure_scheduler()
 
     # kube-proxy
-    cni = endpoint_from_flag('cni.available')
-    default_cni = hookenv.config('default-cni')
-    cluster_cidr = cni.get_config(default=default_cni)['cidr']
-    # Set bind address to work around node IP error when there's no kubelet
-    # https://bugs.launchpad.net/charm-kubernetes-master/+bug/1841114
-    bind_address = get_ingress_address('kube-control')
+    cluster_cidr = kubernetes_common.cluster_cidr()
+    if kubernetes_common.is_ipv6(cluster_cidr):
+        bind_address = '::'
 
     local_address = get_ingress_address('kube-api-endpoint')
     local_server = 'https://{0}:{1}'.format(local_address, 6443)
@@ -1073,6 +1021,12 @@ def start_master():
 
     set_state('kubernetes-master.components.started')
     hookenv.open_port(6443)
+
+
+@when('config.changed.proxy-extra-args')
+def proxy_args_changed():
+    clear_flag('kubernetes-master.components.started')
+    clear_flag('config.changed.proxy-extra-args')
 
 
 @when('tls_client.certs.changed')
@@ -1135,7 +1089,7 @@ def send_cluster_dns_detail(kube_control):
     dns_ip = None
     if dns_enabled:
         try:
-            dns_ip = get_dns_ip()
+            dns_ip = kubernetes_master.get_dns_ip()
         except CalledProcessError:
             hookenv.log("DNS addon service not ready yet")
             return
@@ -1212,7 +1166,7 @@ def send_data():
     common_name = hookenv.unit_public_ip()
 
     # Get the SDN gateway based on the cidr address.
-    kubernetes_service_ip = get_kubernetes_service_ip()
+    k8s_service_ips = kubernetes_master.get_kubernetes_service_ips()
 
     # Get ingress address
     ingress_ip = get_ingress_address(kube_api_endpoint.endpoint_name)
@@ -1224,13 +1178,12 @@ def send_data():
         ingress_ip,
         socket.gethostname(),
         socket.getfqdn(),
-        kubernetes_service_ip,
         'kubernetes',
         'kubernetes.{0}'.format(domain),
         'kubernetes.default',
         'kubernetes.default.svc',
         'kubernetes.default.svc.{0}'.format(domain)
-    ]
+    ] + k8s_service_ips
 
     lb_addrs = [e[0] for e in kubernetes_master.get_lb_endpoints()]
     sans.extend(lb_addrs)
@@ -1351,7 +1304,7 @@ def configure_cdk_addons():
     args = [
         'kubeconfig=' + cdk_addons_kubectl_config_path,
         'arch=' + arch(),
-        'dns-ip=' + get_deprecated_dns_ip(),
+        'dns-ip=' + kubernetes_master.get_deprecated_dns_ip(),
         'dns-domain=' + hookenv.config('dns_domain'),
         'registry=' + registry,
         'enable-dashboard=' + dbEnabled,
@@ -1885,26 +1838,6 @@ def build_kubeconfig():
                           user='kube-scheduler')
 
 
-def get_dns_ip():
-    return get_service_ip('kube-dns', namespace='kube-system')
-
-
-def get_deprecated_dns_ip():
-    '''We previously hardcoded the dns ip. This function returns the old
-    hardcoded value for use with older versions of cdk_addons.'''
-    interface = ipaddress.IPv4Interface(service_cidr())
-    ip = interface.network.network_address + 10
-    return ip.exploded
-
-
-def get_kubernetes_service_ip():
-    '''Get the IP address for the kubernetes service based on the cidr.'''
-    interface = ipaddress.IPv4Interface(service_cidr())
-    # Add .1 at the end of the network
-    ip = interface.network.network_address + 1
-    return ip.exploded
-
-
 def handle_etcd_relation(reldata):
     ''' Save the client credentials and set appropriate daemon flags when
     etcd declares itself as available'''
@@ -1945,8 +1878,11 @@ def configure_apiserver():
         return
 
     # Update unit db service-cidr
-    was_service_cidr_expanded = is_service_cidr_expansion()
-    freeze_service_cidr()
+    was_service_cidr_expanded = kubernetes_master.is_service_cidr_expansion()
+    kubernetes_master.freeze_service_cidr()
+
+    cluster_cidr = kubernetes_common.cluster_cidr()
+    service_cidr = kubernetes_master.service_cidr()
 
     api_opts = {}
 
@@ -1958,7 +1894,9 @@ def configure_apiserver():
         remove_state('kubernetes-master.privileged')
 
     # Handle static options for now
-    api_opts['service-cluster-ip-range'] = service_cidr()
+    api_opts['service-cluster-ip-range'] = service_cidr
+    if kubernetes_common.is_dual_stack(cluster_cidr):
+        api_opts['feature-gates'] = 'IPv6DualStack=true'
     api_opts['min-request-timeout'] = '300'
     api_opts['v'] = '4'
     api_opts['tls-cert-file'] = str(server_crt_path)
@@ -1980,6 +1918,8 @@ def configure_apiserver():
     api_opts['advertise-address'] = get_ingress_address('kube-control')
     api_opts['encryption-provider-config'] = \
         str(encryption_config_path())
+    if kubernetes_common.is_ipv6(cluster_cidr):
+        api_opts['bind-address'] = '::'
 
     etcd_dir = '/root/cdk/etcd'
     etcd_ca = os.path.join(etcd_dir, 'client-ca.pem')
@@ -2146,7 +2086,10 @@ def update_for_service_cidr_expansion():
             return None
 
     hookenv.log('service-cidr expansion: Waiting for API service')
-    expected_service_ip = get_kubernetes_service_ip()
+    # First network is the default, which is used for the API service's address.
+    # This logic will likely need to change once dual-stack services are
+    # supported: https://bit.ly/2YlbxOx
+    expected_service_ip = kubernetes_master.get_kubernetes_service_ips()[0]
     actual_service_ip = _wait_for_svc_ip()
     if not actual_service_ip:
         hookenv.log('service-cidr expansion: Timed out waiting for API service')
@@ -2199,6 +2142,8 @@ def update_for_service_cidr_expansion():
 
 def configure_controller_manager():
     controller_opts = {}
+    cluster_cidr = kubernetes_common.cluster_cidr()
+    service_cidr = kubernetes_master.service_cidr()
 
     # Default to 3 minute resync. TODO: Make this configurable?
     controller_opts['min-resync-period'] = '3m'
@@ -2219,6 +2164,13 @@ def configure_controller_manager():
     controller_opts['terminated-pod-gc-threshold'] = '12500'
     controller_opts['profiling'] = 'false'
     controller_opts['feature-gates'] = 'RotateKubeletServerCertificate=true'
+    controller_opts['service-cluster-ip-range'] = service_cidr
+    controller_opts['cluster-cidr'] = cluster_cidr
+    if kubernetes_common.is_dual_stack(cluster_cidr):
+        controller_opts['feature-gates'] = 'IPv6DualStack=true'
+    net_ipv6 = kubernetes_common.get_ipv6_network(cluster_cidr)
+    if net_ipv6:
+        controller_opts['node-cidr-mask-size-ipv6'] = net_ipv6.prefixlen
 
     cm_cloud_config_path = cloud_config_path('kube-controller-manager')
     if is_state('endpoint.aws.ready'):
