@@ -170,6 +170,7 @@ except AttributeError:
             raise TypeError("Unable to test subnet containment "
                             "between {} and {}".format(a, b))
     ipaddress.IPv4Network.subnet_of = _is_subnet_of
+    ipaddress.IPv6Network.subnet_of = _is_subnet_of
 
 
 def is_service_cidr_expansion():
