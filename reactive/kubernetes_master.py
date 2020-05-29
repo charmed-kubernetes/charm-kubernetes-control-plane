@@ -2191,8 +2191,12 @@ def get_password(csv_fname, user):
     with open(tokens_fname, 'r') as stream:
         for line in stream:
             record = line.split(',')
-            if record[1] == user:
-                return record[0]
+            try:
+                if record[1] == user:
+                    return record[0]
+            except IndexError:
+                # probably a blank line or comment; move on
+                continue
     return None
 
 
