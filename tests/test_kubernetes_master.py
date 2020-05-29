@@ -38,13 +38,15 @@ def test_get_password(auth_file):
     # Test we handle a missing file
     assert kubernetes_master.get_password('missing', user) is None
 
-    # Test we handle a deprecated file
-    deprecate_auth_file(auth_file)
-    assert kubernetes_master.get_password(auth_file, user) is None
+    with mock.patch('reactive.kubernetes_master.os.path.join',
+                    return_value=str(auth_file)):
+        # Test we handle a deprecated file
+        deprecate_auth_file(auth_file)
+        assert kubernetes_master.get_password(auth_file, user) is None
 
-    # Test we handle a valid file
-    auth_file.write_text('{},{},uid,group\n'.format(password, user))
-    assert kubernetes_master.get_password(auth_file, user) == password
+        # Test we handle a valid file
+        auth_file.write_text('{},{},uid,group\n'.format(password, user))
+        assert kubernetes_master.get_password(auth_file, user) == password
 
 
 def test_send_default_cni():
