@@ -772,6 +772,11 @@ def set_final_status():
                                       'to secure secrets')
         return
 
+    if is_state('kubernetes-master.had-service-cidr-expanded'):
+        hookenv.status_set('waiting',
+                           'Waiting to retry updates for service-cidr expansion')
+        return
+
     if is_state('kubernetes-master.components.started'):
         # All services should be up and running at this point. Double-check...
         failing_services = master_services_down()
@@ -2020,37 +2025,79 @@ def configure_apiserver():
     service_restart('snap.kube-apiserver.daemon')
 
     if was_service_cidr_expanded and is_state('leadership.is_leader'):
-        try:
-            hookenv.log("service-cidr expansion: Deleting service kubernetes")
-            kubectl('delete', 'service', 'kubernetes')
-
-            # Restart the cdk-addons
-            # Get deployments/daemonsets/statefulsets
-            hookenv.log("service-cidr expansion: Restart the cdk-addons")
-            output = kubectl(
-                'get', 'daemonset,deployment,statefulset',
-                '-o', 'json',
-                '--all-namespaces',
-                '-l', 'cdk-restart-on-ca-change=true'
-            ).decode('UTF-8')
-            deployments = json.loads(output)['items']
-
-            # Now restart the addons
-            for deployment in deployments:
-                kind = deployment['kind']
-                namespace = deployment['metadata']['namespace']
-                name = deployment['metadata']['name']
-                hookenv.log('Restarting addon: {0} {1} {2}'.format(kind,
-                                                                   namespace,
-                                                                   name))
-                kubectl(
-                    'rollout', 'restart', kind + '/' + name,
-                    '-n', namespace
-                )
-        except Exception:
-            hookenv.log("service-cidr-expansion: k8s services not yet started")
+        set_flag('kubernetes-master.had-service-cidr-expanded')
 
     set_flag('kubernetes-master.apiserver.configured')
+
+
+@when('kubernetes-master.had-service-cidr-expanded',
+      'kubernetes-master.apiserver.configured',
+      'leadership.is_leader')
+def update_for_service_cidr_expansion():
+    # We just restarted the API server, so there's a decent chance it's
+    # not up yet. Keep trying to get the svcs list until we can; get_svcs
+    # has a built-in retry and delay, so this should try for around 30s.
+    def _wait_for_svc_ip():
+        for attempt in range(10):
+            svcs = get_svcs()
+            if svcs:
+                svc_ip = {svc['metadata']['name']: svc['spec']['clusterIP']
+                          for svc in svcs['items']}.get('kubernetes')
+                if svc_ip:
+                    return svc_ip
+        else:
+            return None
+
+    hookenv.log('service-cidr expansion: Waiting for API service')
+    expected_service_ip = get_kubernetes_service_ip()
+    actual_service_ip = _wait_for_svc_ip()
+    if not actual_service_ip:
+        hookenv.log('service-cidr expansion: Timed out waiting for API service')
+        return
+    try:
+        if actual_service_ip != expected_service_ip:
+            hookenv.log("service-cidr expansion: Deleting service kubernetes")
+            kubectl('delete', 'service', 'kubernetes')
+            actual_service_ip = _wait_for_svc_ip()
+            if not actual_service_ip:
+                # we might need another restart to get the service recreated
+                hookenv.log("service-cidr expansion: Timed out waiting for "
+                            "the service to return; restarting API server")
+                clear_flag('kubernetes-master.apiserver.configured')
+                return
+            if actual_service_ip != expected_service_ip:
+                raise ValueError('Unexpected service IP: {} != {}'.format(
+                    actual_service_ip, expected_service_ip))
+
+        # Restart the cdk-addons
+        # Get deployments/daemonsets/statefulsets
+        hookenv.log("service-cidr expansion: Restart the cdk-addons")
+        output = kubectl(
+            'get', 'daemonset,deployment,statefulset',
+            '-o', 'json',
+            '--all-namespaces',
+            '-l', 'cdk-restart-on-ca-change=true'
+        ).decode('UTF-8')
+        deployments = json.loads(output)['items']
+
+        # Now restart the addons
+        for deployment in deployments:
+            kind = deployment['kind']
+            namespace = deployment['metadata']['namespace']
+            name = deployment['metadata']['name']
+            hookenv.log('Restarting addon: {0} {1} {2}'.format(kind,
+                                                               namespace,
+                                                               name))
+            kubectl(
+                'rollout', 'restart', kind + '/' + name,
+                '-n', namespace
+            )
+    except CalledProcessError:
+        # the kubectl calls already log the command and don't capture stderr,
+        # so logging the exception is a bit superfluous
+        hookenv.log('service-cidr expansion: failed to restart components')
+    else:
+        clear_flag('kubernetes-master.had-service-cidr-expanded')
 
 
 def configure_controller_manager():
@@ -2203,6 +2250,22 @@ def get_pods(namespace='default'):
         result = json.loads(output)
     except CalledProcessError:
         hookenv.log('failed to get {} pod status'.format(namespace))
+        return None
+    return result
+
+
+@retry(times=3, delay_secs=1)
+def get_svcs(namespace='default'):
+    try:
+        output = kubectl(
+            'get', 'svc',
+            '-n', namespace,
+            '-o', 'json',
+            '--request-timeout', '10s'
+        ).decode('UTF-8')
+        result = json.loads(output)
+    except CalledProcessError:
+        hookenv.log('failed to get {} service status'.format(namespace))
         return None
     return result
 

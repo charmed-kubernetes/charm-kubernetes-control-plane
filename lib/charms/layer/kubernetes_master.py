@@ -8,7 +8,6 @@ from charmhelpers.core.templating import render
 from charmhelpers.fetch import apt_install
 from charms.reactive import endpoint_from_flag, is_flag_set
 
-from charms.layer import basic
 from charms.layer import kubernetes_common
 
 
