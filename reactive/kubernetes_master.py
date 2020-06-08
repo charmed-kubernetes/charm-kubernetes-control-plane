@@ -2136,6 +2136,8 @@ def update_for_service_cidr_expansion():
                 '-n', namespace
             )
     except CalledProcessError:
+        # the kubectl calls already log the command and don't capture stderr,
+        # so logging the exception is a bit superfluous
         hookenv.log('service-cidr expansion: failed to restart components')
     else:
         clear_flag('kubernetes-master.had-service-cidr-expanded')
