@@ -1010,6 +1010,7 @@ def start_master():
     cluster_cidr = kubernetes_common.cluster_cidr()
     if kubernetes_common.is_ipv6(cluster_cidr):
         bind_address = '::'
+        kubernetes_common.enable_ipv6_forwarding()
 
     local_address = get_ingress_address('kube-api-endpoint')
     local_server = 'https://{0}:{1}'.format(local_address, 6443)
