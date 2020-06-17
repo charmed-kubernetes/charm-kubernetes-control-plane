@@ -1184,7 +1184,7 @@ def send_data():
         'kubernetes.default',
         'kubernetes.default.svc',
         'kubernetes.default.svc.{0}'.format(domain)
-    ] + k8s_service_ips
+    ] + k8s_service_ips + kubernetes_master.get_ipv6_addrs()
 
     lb_addrs = [e[0] for e in kubernetes_master.get_lb_endpoints()]
     sans.extend(lb_addrs)
