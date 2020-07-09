@@ -1,7 +1,7 @@
 import json
 import socket
 from pathlib import Path
-from subprocess import check_output, CalledProcessError
+from subprocess import check_output, CalledProcessError, TimeoutExpired
 
 from charmhelpers.core import hookenv
 from charmhelpers.core.templating import render
@@ -113,16 +113,23 @@ def query_cephfs_enabled():
     install_ceph_common()
     try:
         out = check_output(['ceph', 'mds', 'versions',
-                            '-c', str(CEPH_CONF)])
+                            '-c', str(CEPH_CONF)], timeout=60)
         return bool(json.loads(out))
     except CalledProcessError:
         hookenv.log('Unable to determine if CephFS is enabled', 'ERROR')
+        return False
+    except TimeoutExpired:
+        hookenv.log('Timeout attempting to determine if CephFS is enabled', "ERROR")
         return False
 
 
 def get_cephfs_fsname():
     install_ceph_common()
-    data = json.loads(check_output(['ceph', 'fs', 'ls', '-f', 'json']))
+    try:
+        data = json.loads(check_output(['ceph', 'fs', 'ls', '-f', 'json'], timeout=60))
+    except TimeoutExpired:
+        hookenv.log('Timeout attempting to determine fsname', "ERROR")
+        return None
     for fs in data:
         if 'ceph-fs_data' in fs['data_pools']:
             return fs['name']
