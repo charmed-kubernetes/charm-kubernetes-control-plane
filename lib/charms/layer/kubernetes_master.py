@@ -232,20 +232,3 @@ def get_kubernetes_service_ips():
     '''Get the IP address(es) for the kubernetes service based on the cidr.'''
     return [next(network.hosts()).exploded
             for network in kubernetes_common.get_networks(service_cidr())]
-
-
-def get_ipv6_addrs():
-    '''Get all global-scoped IPv6 addresses that we might bind to.'''
-
-    try:
-        output = check_output(["ip", "-6", "-br", "a", "show", "scope", "global"])
-    except CalledProcessError:
-        # stderr will have any details, and go to the log
-        hookenv.log('Unable to determine IPv6 addresses', hookenv.ERROR)
-        return []
-
-    addrs = []
-    for line in output.splitlines():
-        intf, state, *intf_addrs = line.split()
-        addrs.extend(str(ipaddress.ip_interface(addr).ip) for addr in intf_addrs)
-    return addrs

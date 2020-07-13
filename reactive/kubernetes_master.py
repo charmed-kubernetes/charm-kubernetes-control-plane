@@ -68,6 +68,7 @@ from charms.layer.kubernetes_common import calculate_and_store_resource_checksum
 from charms.layer.kubernetes_common import arch
 from charms.layer.kubernetes_common import service_restart
 from charms.layer.kubernetes_common import get_ingress_address
+from charms.layer.kubernetes_common import get_ingress_address6
 from charms.layer.kubernetes_common import create_kubeconfig
 from charms.layer.kubernetes_common import get_service_ip
 from charms.layer.kubernetes_common import configure_kubernetes_service
@@ -1009,15 +1010,13 @@ def start_master():
     # kube-proxy
     cluster_cidr = kubernetes_common.cluster_cidr()
     if kubernetes_common.is_ipv6(cluster_cidr):
-        bind_address = '::'
         kubernetes_common.enable_ipv6_forwarding()
 
     local_address = get_ingress_address('kube-api-endpoint')
     local_server = 'https://{0}:{1}'.format(local_address, 6443)
 
     configure_kube_proxy(configure_prefix,
-                         [local_server], cluster_cidr,
-                         bind_address=bind_address)
+                         [local_server], cluster_cidr)
     service_restart('snap.kube-proxy.daemon')
 
     set_state('kubernetes-master.components.started')
@@ -1157,26 +1156,25 @@ def push_service_data():
         kube_api.configure(kubernetes_master.STANDARD_API_PORT)
 
 
-@when('certificates.available', 'kube-api-endpoint.available')
+@when('certificates.available', 'kube-api-endpoint.available', 'cni.available')
 def send_data():
     '''Send the data that is required to create a server certificate for
     this server.'''
-    kube_api_endpoint = endpoint_from_flag('kube-api-endpoint.available')
-
     # Use the public ip of this unit as the Common Name for the certificate.
     common_name = hookenv.unit_public_ip()
 
-    # Get the SDN gateway based on the cidr address.
+    # Get the SDN gateways based on the service CIDRs.
     k8s_service_ips = kubernetes_master.get_kubernetes_service_ips()
 
-    # Get ingress address
-    ingress_ip = get_ingress_address(kube_api_endpoint.endpoint_name)
+    cluster_cidr = kubernetes_common.cluster_cidr()
+    bind_ips = kubernetes_common.get_bind_addrs(
+        ipv4=kubernetes_common.is_ipv4(cluster_cidr),
+        ipv6=kubernetes_common.is_ipv6(cluster_cidr),
+    )
 
     domain = hookenv.config('dns_domain')
     # Create SANs that the tls layer will add to the server cert.
     sans = [
-        hookenv.unit_public_ip(),
-        ingress_ip,
         socket.gethostname(),
         socket.getfqdn(),
         'kubernetes',
@@ -1184,7 +1182,7 @@ def send_data():
         'kubernetes.default',
         'kubernetes.default.svc',
         'kubernetes.default.svc.{0}'.format(domain)
-    ] + k8s_service_ips + kubernetes_master.get_ipv6_addrs()
+    ] + k8s_service_ips + bind_ips
 
     lb_addrs = [e[0] for e in kubernetes_master.get_lb_endpoints()]
     sans.extend(lb_addrs)
@@ -1917,11 +1915,14 @@ def configure_apiserver():
     api_opts['service-account-key-file'] = '/root/cdk/serviceaccount.key'
     api_opts['kubelet-preferred-address-types'] = \
         'InternalIP,Hostname,InternalDNS,ExternalDNS,ExternalIP'
-    api_opts['advertise-address'] = get_ingress_address('kube-control')
     api_opts['encryption-provider-config'] = \
         str(encryption_config_path())
     if kubernetes_common.is_ipv6(cluster_cidr):
         api_opts['bind-address'] = '::'
+    if kubernetes_common.is_ipv6_preferred(cluster_cidr):
+        api_opts['advertise-address'] = get_ingress_address6('kube-control')
+    else:
+        api_opts['advertise-address'] = get_ingress_address('kube-control')
 
     etcd_dir = '/root/cdk/etcd'
     etcd_ca = os.path.join(etcd_dir, 'client-ca.pem')
