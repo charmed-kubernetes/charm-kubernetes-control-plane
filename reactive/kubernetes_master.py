@@ -1964,11 +1964,11 @@ def configure_apiserver():
 
     admission_plugins = [
         'PersistentVolumeLabel',
+        'PodSecurityPolicy',
+        'NodeRestriction'
     ]
 
     auth_mode = hookenv.config('authorization-mode')
-    if 'Node' in auth_mode:
-        admission_plugins.append('NodeRestriction')
 
     ks = endpoint_from_flag('keystone-credentials.available.auth')
     aws = endpoint_from_flag('endpoint.aws-iam.ready')
