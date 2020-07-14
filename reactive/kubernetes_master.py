@@ -1175,6 +1175,9 @@ def send_data():
     domain = hookenv.config('dns_domain')
     # Create SANs that the tls layer will add to the server cert.
     sans = [
+        # The CN field is checked as a hostname, so if it's an IP, it
+        # won't match unless also included in the SANs as an IP field.
+        common_name,
         socket.gethostname(),
         socket.getfqdn(),
         'kubernetes',
