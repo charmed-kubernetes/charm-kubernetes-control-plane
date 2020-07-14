@@ -1007,10 +1007,30 @@ def add_systemd_file_watcher():
           'tls_client.certs.changed',
           'tls_client.ca.written',
           'upgrade.series.in-progress')
+
+
 def start_master():
     '''Run the Kubernetes master components.'''
     hookenv.status_set('maintenance',
                        'Configuring the Kubernetes master services.')
+
+    if not is_state('kubernetes-master.vault-kv.pending'):
+        encryption_config_path().parent.mkdir(parents=True, exist_ok=True)
+        host.write_file(
+            path=str(encryption_config_path()),
+            perms=0o600,
+            content=yaml.safe_dump({
+                'kind': 'EncryptionConfig',
+                'apiVersion': 'v1',
+                'resources': [{
+                    'resources': ['secrets'],
+                    'providers': [
+                        {'identity': {}}
+                    ]
+                }]
+            })
+        )
+
     freeze_service_cidr()
     etcd = endpoint_from_flag('etcd.available')
     if not etcd.get_connection_string():
@@ -1913,11 +1933,13 @@ def configure_apiserver():
     api_opts['kubelet-certificate-authority'] = str(ca_crt_path)
     api_opts['kubelet-client-certificate'] = str(client_crt_path)
     api_opts['kubelet-client-key'] = str(client_key_path)
+    api_opts['kubelet-https'] = 'true'
     api_opts['logtostderr'] = 'true'
-    api_opts['insecure-bind-address'] = '127.0.0.1'
-    api_opts['insecure-port'] = '8080'
     api_opts['storage-backend'] = getStorageBackend()
+    api_opts['insecure-port'] = '0'
+    api_opts['profiling'] = 'false'
 
+    api_opts['anonymous-auth'] = 'false'
     api_opts['token-auth-file'] = '/root/cdk/known_tokens.csv'
     api_opts['service-account-key-file'] = '/root/cdk/serviceaccount.key'
     api_opts['kubelet-preferred-address-types'] = \
@@ -2039,8 +2061,9 @@ def configure_apiserver():
 
     audit_log_path = audit_root + '/audit.log'
     api_opts['audit-log-path'] = audit_log_path
+    api_opts['audit-log-maxage'] = '30'
     api_opts['audit-log-maxsize'] = '100'
-    api_opts['audit-log-maxbackup'] = '9'
+    api_opts['audit-log-maxbackup'] = '10'
 
     audit_policy_path = audit_root + '/audit-policy.yaml'
     audit_policy = hookenv.config('audit-policy')
@@ -2059,7 +2082,10 @@ def configure_apiserver():
     else:
         remove_if_exists(audit_webhook_config_path)
 
-    if is_flag_set('kubernetes-master.secure-storage.created'):
+    if kube_version > (1, 8):
+        api_opts['encryption-provider-config'] = \
+            str(encryption_config_path())
+    else:
         api_opts['experimental-encryption-provider-config'] = \
             str(encryption_config_path())
 
