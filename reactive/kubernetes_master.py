@@ -1007,8 +1007,6 @@ def add_systemd_file_watcher():
           'tls_client.certs.changed',
           'tls_client.ca.written',
           'upgrade.series.in-progress')
-
-
 def start_master():
     '''Run the Kubernetes master components.'''
     hookenv.status_set('maintenance',
