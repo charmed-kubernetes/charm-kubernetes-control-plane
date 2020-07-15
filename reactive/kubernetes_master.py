@@ -1012,7 +1012,8 @@ def start_master():
     hookenv.status_set('maintenance',
                        'Configuring the Kubernetes master services.')
 
-    if not is_state('kubernetes-master.vault-kv.pending'):
+    if not is_state('kubernetes-master.vault-kv.pending') \
+            and not is_state('kubernetes-master.secure-storage.created'):
         encryption_config_path().parent.mkdir(parents=True, exist_ok=True)
         host.write_file(
             path=str(encryption_config_path()),
