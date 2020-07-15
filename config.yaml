@@ -148,7 +148,7 @@ options:
         --runtime-config=batch/v2alpha1=true --profiling=true
   authorization-mode:
     type: string
-    default: "AlwaysAllow"
+    default: "RBAC,Node"
     description: |
       Comma separated authorization modes. Allowed values are
       "RBAC", "Node", "Webhook", "ABAC", "AlwaysDeny" and "AlwaysAllow".
@@ -272,8 +272,8 @@ options:
   dashboard-auth:
     type: string
     description: |
-      Method of authentication for the Kubernetes dashboard. Allowed values are "auto", 
-      "basic", and "token". If set to "auto", basic auth is used unless Keystone is 
+      Method of authentication for the Kubernetes dashboard. Allowed values are "auto",
+      "basic", and "token". If set to "auto", basic auth is used unless Keystone is
       related to kubernetes-master, in which case token auth is used.
 
       DEPRECATED: this option has no effect on Kubernetes 1.19 and above.

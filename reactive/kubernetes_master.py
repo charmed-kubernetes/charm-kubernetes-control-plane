@@ -1944,6 +1944,8 @@ def configure_apiserver():
     api_opts['kubelet-preferred-address-types'] = \
         'InternalIP,Hostname,InternalDNS,ExternalDNS,ExternalIP'
     api_opts['advertise-address'] = get_ingress_address('kube-control')
+    api_opts['encryption-provider-config'] = \
+        str(encryption_config_path())
 
     etcd_dir = '/root/cdk/etcd'
     etcd_ca = os.path.join(etcd_dir, 'client-ca.pem')
@@ -2080,13 +2082,6 @@ def configure_apiserver():
         api_opts['audit-webhook-config-file'] = audit_webhook_config_path
     else:
         remove_if_exists(audit_webhook_config_path)
-
-    if kube_version > (1, 8):
-        api_opts['encryption-provider-config'] = \
-            str(encryption_config_path())
-    else:
-        api_opts['experimental-encryption-provider-config'] = \
-            str(encryption_config_path())
 
     configure_kubernetes_service(configure_prefix, 'kube-apiserver',
                                  api_opts, 'api-extra-args')
