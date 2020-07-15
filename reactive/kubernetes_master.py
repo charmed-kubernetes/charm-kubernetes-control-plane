@@ -1577,6 +1577,22 @@ def switch_auth_mode(forced=False):
 
 
 @when('leadership.is_leader',
+      'kubernetes-master.components.started')
+@when_not('kubernetes-master.pod-security-policy.applied')
+def create_pod_security_policy_resources():
+    pod_security_policy_path = '/root/cdk/pod-security-policy.yaml'
+
+    render('rbac-pod-security-policy.yaml')
+
+    hookenv.log('Creating pod security policy resources.')
+    if kubectl_manifest('apply', pod_security_policy_path):
+        set_state('kubernetes-master.pod-security-policy.applied')
+    else:
+        msg = 'Failed to apply {}, will retry.'.format(pod_security_policy_path)
+        hookenv.log(msg)
+
+
+@when('leadership.is_leader',
       'kubernetes-master.components.started',
       'kubernetes-master.create.rbac')
 def create_rbac_resources():
