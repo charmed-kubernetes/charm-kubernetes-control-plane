@@ -2187,6 +2187,9 @@ def configure_controller_manager():
     controller_opts['tls-cert-file'] = str(server_crt_path)
     controller_opts['tls-private-key-file'] = str(server_key_path)
     controller_opts['cluster-name'] = leader_get('cluster_tag')
+    controller_opts['terminated-pod-gc-threshold'] = '12500'
+    controller_opts['profiling'] = 'false'
+    controller_opts['feature-gates'] = 'RotateKubeletServerCertificate=true'
 
     cm_cloud_config_path = cloud_config_path('kube-controller-manager')
     if is_state('endpoint.aws.ready'):
@@ -2214,6 +2217,7 @@ def configure_scheduler():
     scheduler_opts['v'] = '2'
     scheduler_opts['logtostderr'] = 'true'
     scheduler_opts['master'] = 'http://127.0.0.1:8080'
+    scheduler_opts['profiling'] = 'false'
 
     configure_kubernetes_service(configure_prefix, 'kube-scheduler',
                                  scheduler_opts, 'scheduler-extra-args')
