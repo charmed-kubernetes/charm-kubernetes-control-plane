@@ -1582,7 +1582,11 @@ def switch_auth_mode(forced=False):
 def create_pod_security_policy_resources():
     pod_security_policy_path = '/root/cdk/pod-security-policy.yaml'
 
-    render('rbac-pod-security-policy.yaml')
+    render(
+        'rbac-pod-security-policy.yaml',
+        pod_security_policy_path,
+        {}
+    )
 
     hookenv.log('Creating pod security policy resources.')
     if kubectl_manifest('apply', pod_security_policy_path):
@@ -1800,8 +1804,6 @@ def build_kubeconfig():
 
     public_address, public_port = kubernetes_master.get_api_endpoint()
     public_server = 'https://{0}:{1}'.format(public_address, public_port)
-    local_address = get_ingress_address('kube-api-endpoint')
-    local_server = 'https://{0}:{1}'.format(local_address, 6443)
     ca_exists = ca_crt_path.exists()
     client_pass = get_token('admin')
     # Do we have everything we need?
@@ -1848,21 +1850,21 @@ def build_kubeconfig():
 
         # make a copy in a location shared by kubernetes-worker
         # and kubernete-master
-        create_kubeconfig(kubeclientconfig_path, local_server, ca_crt_path,
+        create_kubeconfig(kubeclientconfig_path, public_server, ca_crt_path,
                           user='admin', token=client_pass)
 
         # make a copy for cdk-addons to use
-        create_kubeconfig(cdk_addons_kubectl_config_path, local_server,
+        create_kubeconfig(cdk_addons_kubectl_config_path, public_server,
                           ca_crt_path, user='admin', token=client_pass)
 
         # make a kubeconfig for kube-proxy
         proxy_token = get_token('system:kube-proxy')
-        create_kubeconfig(kubeproxyconfig_path, local_server, ca_crt_path,
+        create_kubeconfig(kubeproxyconfig_path, public_server, ca_crt_path,
                           token=proxy_token, user='kube-proxy')
 
         controller_manager_token = get_token('system:kube-controller-manager')
         create_kubeconfig(kubecontrollermanagerconfig_path,
-                          local_server, ca_crt_path,
+                          public_server, ca_crt_path,
                           token=controller_manager_token,
                           user='kube-controller-manager')
 
