@@ -148,7 +148,7 @@ options:
         --runtime-config=batch/v2alpha1=true --profiling=true
   authorization-mode:
     type: string
-    default: "RBAC,Node"
+    default: "Node,RBAC"
     description: |
       Comma separated authorization modes. Allowed values are
       "RBAC", "Node", "Webhook", "ABAC", "AlwaysDeny" and "AlwaysAllow".

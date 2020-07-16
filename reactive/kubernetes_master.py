@@ -1061,8 +1061,12 @@ def start_master():
     # Set bind address to work around node IP error when there's no kubelet
     # https://bugs.launchpad.net/charm-kubernetes-master/+bug/1841114
     bind_address = get_ingress_address('kube-control')
+
+    public_address, public_port = kubernetes_master.get_api_endpoint()
+    public_server = 'https://{0}:{1}'.format(public_address, public_port)
+
     configure_kube_proxy(configure_prefix,
-                         ['127.0.0.1:8080'], cluster_cidr,
+                         [public_server], cluster_cidr,
                          bind_address=bind_address)
     service_restart('snap.kube-proxy.daemon')
 
@@ -2225,11 +2229,14 @@ def configure_controller_manager():
 
 
 def configure_scheduler():
+    public_address, public_port = kubernetes_master.get_api_endpoint()
+    public_server = 'https://{0}:{1}'.format(public_address, public_port)
+
     scheduler_opts = {}
 
     scheduler_opts['v'] = '2'
     scheduler_opts['logtostderr'] = 'true'
-    scheduler_opts['master'] = 'http://127.0.0.1:8080'
+    scheduler_opts['master'] = public_server
     scheduler_opts['profiling'] = 'false'
 
     configure_kubernetes_service(configure_prefix, 'kube-scheduler',
@@ -2390,6 +2397,9 @@ def poke_network_unavailable():
     discussion about refactoring the affected code but nothing has happened
     in a while.
     """
+    public_address, public_port = kubernetes_master.get_api_endpoint()
+    public_server = 'https://{0}:{1}'.format(public_address, public_port)
+
     cmd = ['kubectl', 'get', 'nodes', '-o', 'json']
 
     try:
@@ -2405,7 +2415,7 @@ def poke_network_unavailable():
 
     for node in nodes:
         node_name = node['metadata']['name']
-        url = 'http://localhost:8080/api/v1/nodes/{}/status'.format(node_name)
+        url = '{}/api/v1/nodes/{}/status'.format(public_server, node_name)
         with urlopen(url) as response:
             code = response.getcode()
             body = response.read().decode('utf8')
