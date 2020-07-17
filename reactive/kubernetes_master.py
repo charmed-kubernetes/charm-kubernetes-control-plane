@@ -2441,7 +2441,8 @@ def poke_network_unavailable():
 
     for node in nodes:
         node_name = node['metadata']['name']
-        req = Request('{}/api/v1/nodes/{}/status'.format(local_server, node_name))
+        url = '{}/api/v1/nodes/{}/status'.format(local_server, node_name)
+        req = Request(url)
         req.add_header(*http_header)
         with urlopen(req) as response:
             code = response.getcode()
