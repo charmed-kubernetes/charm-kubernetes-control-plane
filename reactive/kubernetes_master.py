@@ -2467,6 +2467,7 @@ def poke_network_unavailable():
                 req = Request(url, method='PUT',
                               data=json.dumps(node_info).encode('utf8'),
                               headers={'Content-Type': 'application/json'})
+                req.add_header(*http_header)
                 with urlopen(req) as response:
                     code = response.getcode()
                     body = response.read().decode('utf8')
