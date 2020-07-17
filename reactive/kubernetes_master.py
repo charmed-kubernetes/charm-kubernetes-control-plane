@@ -115,6 +115,7 @@ configure_prefix = 'kubernetes-master.prev_args.'
 keystone_root = '/root/cdk/keystone'
 keystone_policy_path = os.path.join(keystone_root, 'keystone-policy.yaml')
 kubecontrollermanagerconfig_path = '/root/cdk/kubecontrollermanagerconfig'
+kubeschedulerconfig_path = '/root/cdk/kubeschedulerconfig'
 cdk_addons_kubectl_config_path = '/root/cdk/cdk_addons_kubectl_config'
 aws_iam_webhook = '/root/cdk/aws-iam-webhook.yaml'
 
@@ -1062,11 +1063,11 @@ def start_master():
     # https://bugs.launchpad.net/charm-kubernetes-master/+bug/1841114
     bind_address = get_ingress_address('kube-control')
 
-    public_address, public_port = kubernetes_master.get_api_endpoint()
-    public_server = 'https://{0}:{1}'.format(public_address, public_port)
+    local_address = get_ingress_address('kube-api-endpoint')
+    local_server = 'https://{0}:{1}'.format(local_address, 6443)
 
     configure_kube_proxy(configure_prefix,
-                         [public_server], cluster_cidr,
+                         [local_server], cluster_cidr,
                          bind_address=bind_address)
     service_restart('snap.kube-proxy.daemon')
 
@@ -1153,6 +1154,11 @@ def create_tokens_and_sign_auth_requests():
         setup_tokens(None, 'system:kube-proxy', 'kube-proxy')
         proxy_token = get_token('system:kube-proxy')
 
+    scheduler_token = get_token('system:kube-scheduler')
+    if not scheduler_token:
+        setup_tokens(None, 'system:kube-scheduler', 'system:kube-scheduler')
+        scheduler_token = get_token('system:kube-scheduler')
+
     client_token = get_token('admin')
     if not client_token:
         setup_tokens(None, 'admin', 'admin', "system:masters")
@@ -1177,7 +1183,7 @@ def create_tokens_and_sign_auth_requests():
             kubelet_token = get_token(username)
         kube_control.sign_auth_request(request[0], username,
                                        kubelet_token, proxy_token,
-                                       client_token)
+                                       scheduler_token, client_token)
 
 
 @when('kube-api-endpoint.available')
@@ -1805,7 +1811,8 @@ def shutdown():
 def build_kubeconfig():
     '''Gather the relevant data for Kubernetes configuration objects and create
     a config object with that information.'''
-
+    local_address = get_ingress_address('kube-api-endpoint')
+    local_server = 'https://{0}:{1}'.format(local_address, 6443)
     public_address, public_port = kubernetes_master.get_api_endpoint()
     public_server = 'https://{0}:{1}'.format(public_address, public_port)
     ca_exists = ca_crt_path.exists()
@@ -1854,23 +1861,29 @@ def build_kubeconfig():
 
         # make a copy in a location shared by kubernetes-worker
         # and kubernete-master
-        create_kubeconfig(kubeclientconfig_path, public_server, ca_crt_path,
+        create_kubeconfig(kubeclientconfig_path, local_server, ca_crt_path,
                           user='admin', token=client_pass)
 
         # make a copy for cdk-addons to use
-        create_kubeconfig(cdk_addons_kubectl_config_path, public_server,
+        create_kubeconfig(cdk_addons_kubectl_config_path, local_server,
                           ca_crt_path, user='admin', token=client_pass)
 
         # make a kubeconfig for kube-proxy
         proxy_token = get_token('system:kube-proxy')
-        create_kubeconfig(kubeproxyconfig_path, public_server, ca_crt_path,
+        create_kubeconfig(kubeproxyconfig_path, local_server, ca_crt_path,
                           token=proxy_token, user='kube-proxy')
 
         controller_manager_token = get_token('system:kube-controller-manager')
         create_kubeconfig(kubecontrollermanagerconfig_path,
-                          public_server, ca_crt_path,
+                          local_server, ca_crt_path,
                           token=controller_manager_token,
                           user='kube-controller-manager')
+
+        scheduler_token = get_token('system:kube-scheduler')
+        create_kubeconfig(kubeschedulerconfig_path,
+                          local_server, ca_crt_path,
+                          token=scheduler_token,
+                          user='kube-scheduler')
 
 
 def get_dns_ip():
@@ -2229,15 +2242,26 @@ def configure_controller_manager():
 
 
 def configure_scheduler():
-    public_address, public_port = kubernetes_master.get_api_endpoint()
-    public_server = 'https://{0}:{1}'.format(public_address, public_port)
+    kube_scheduler_config_path = '/root/cdk/kube-scheduler-config.yaml'
 
     scheduler_opts = {}
 
     scheduler_opts['v'] = '2'
     scheduler_opts['logtostderr'] = 'true'
-    scheduler_opts['master'] = public_server
     scheduler_opts['profiling'] = 'false'
+    scheduler_opts['config'] = kube_scheduler_config_path
+
+    host.write_file(
+        path=kube_scheduler_config_path,
+        perms=0o600,
+        content=yaml.safe_dump({
+            'apiVersion': 'kubescheduler.config.k8s.io/v1alpha1',
+            'kind': 'KubeSchedulerConfiguration',
+            'clientConnection': {
+                'kubeconfig': kubeschedulerconfig_path
+            }
+        })
+    )
 
     configure_kubernetes_service(configure_prefix, 'kube-scheduler',
                                  scheduler_opts, 'scheduler-extra-args')
