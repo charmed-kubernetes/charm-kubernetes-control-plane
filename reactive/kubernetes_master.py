@@ -1157,7 +1157,6 @@ def create_tokens_and_sign_auth_requests():
     scheduler_token = get_token('system:kube-scheduler')
     if not scheduler_token:
         setup_tokens(None, 'system:kube-scheduler', 'system:kube-scheduler')
-        scheduler_token = get_token('system:kube-scheduler')
 
     client_token = get_token('admin')
     if not client_token:
@@ -1183,7 +1182,7 @@ def create_tokens_and_sign_auth_requests():
             kubelet_token = get_token(username)
         kube_control.sign_auth_request(request[0], username,
                                        kubelet_token, proxy_token,
-                                       scheduler_token, client_token)
+                                       client_token)
 
 
 @when('kube-api-endpoint.available')
@@ -2421,10 +2420,13 @@ def poke_network_unavailable():
     discussion about refactoring the affected code but nothing has happened
     in a while.
     """
-    public_address, public_port = kubernetes_master.get_api_endpoint()
-    public_server = 'https://{0}:{1}'.format(public_address, public_port)
+    local_address = get_ingress_address('kube-api-endpoint')
+    local_server = 'https://{0}:{1}'.format(local_address, 6443)
 
     cmd = ['kubectl', 'get', 'nodes', '-o', 'json']
+
+    client_token = get_token('admin')
+    http_header = ('Authorization', 'Bearer {}'.format(client_token))
 
     try:
         output = check_output(cmd).decode('utf-8')
@@ -2439,8 +2441,9 @@ def poke_network_unavailable():
 
     for node in nodes:
         node_name = node['metadata']['name']
-        url = '{}/api/v1/nodes/{}/status'.format(public_server, node_name)
-        with urlopen(url) as response:
+        req = Request('{}/api/v1/nodes/{}/status'.format(local_server, node_name))
+        req.add_header(*http_header)
+        with urlopen(req) as response:
             code = response.getcode()
             body = response.read().decode('utf8')
         if code != 200:
