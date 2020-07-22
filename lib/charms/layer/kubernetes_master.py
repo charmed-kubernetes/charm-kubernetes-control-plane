@@ -185,7 +185,8 @@ def is_service_cidr_expansion():
 
     current_networks = kubernetes_common.get_networks(service_cidr_from_db)
     new_networks = kubernetes_common.get_networks(service_cidr_from_config)
-    if not all(cur.subnet_of(new) for cur, new in zip(current_networks,
+    if len(current_networks) != len(new_networks) or \
+       not all(cur.subnet_of(new) for cur, new in zip(current_networks,
                                                       new_networks)):
         hookenv.log("WARN: New k8s service cidr not superset of old one")
         return False
