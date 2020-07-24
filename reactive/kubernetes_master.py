@@ -115,6 +115,7 @@ configure_prefix = 'kubernetes-master.prev_args.'
 keystone_root = '/root/cdk/keystone'
 keystone_policy_path = os.path.join(keystone_root, 'keystone-policy.yaml')
 kubecontrollermanagerconfig_path = '/root/cdk/kubecontrollermanagerconfig'
+kubeschedulerconfig_path = '/root/cdk/kubeschedulerconfig'
 cdk_addons_kubectl_config_path = '/root/cdk/cdk_addons_kubectl_config'
 aws_iam_webhook = '/root/cdk/aws-iam-webhook.yaml'
 
@@ -1011,6 +1012,25 @@ def start_master():
     '''Run the Kubernetes master components.'''
     hookenv.status_set('maintenance',
                        'Configuring the Kubernetes master services.')
+
+    if not is_state('kubernetes-master.vault-kv.pending') \
+            and not is_state('kubernetes-master.secure-storage.created'):
+        encryption_config_path().parent.mkdir(parents=True, exist_ok=True)
+        host.write_file(
+            path=str(encryption_config_path()),
+            perms=0o600,
+            content=yaml.safe_dump({
+                'kind': 'EncryptionConfig',
+                'apiVersion': 'v1',
+                'resources': [{
+                    'resources': ['secrets'],
+                    'providers': [
+                        {'identity': {}}
+                    ]
+                }]
+            })
+        )
+
     freeze_service_cidr()
     etcd = endpoint_from_flag('etcd.available')
     if not etcd.get_connection_string():
@@ -1042,8 +1062,12 @@ def start_master():
     # Set bind address to work around node IP error when there's no kubelet
     # https://bugs.launchpad.net/charm-kubernetes-master/+bug/1841114
     bind_address = get_ingress_address('kube-control')
+
+    local_address = get_ingress_address('kube-api-endpoint')
+    local_server = 'https://{0}:{1}'.format(local_address, 6443)
+
     configure_kube_proxy(configure_prefix,
-                         ['127.0.0.1:8080'], cluster_cidr,
+                         [local_server], cluster_cidr,
                          bind_address=bind_address)
     service_restart('snap.kube-proxy.daemon')
 
@@ -1129,6 +1153,10 @@ def create_tokens_and_sign_auth_requests():
     if not proxy_token:
         setup_tokens(None, 'system:kube-proxy', 'kube-proxy')
         proxy_token = get_token('system:kube-proxy')
+
+    scheduler_token = get_token('system:kube-scheduler')
+    if not scheduler_token:
+        setup_tokens(None, 'system:kube-scheduler', 'system:kube-scheduler')
 
     client_token = get_token('admin')
     if not client_token:
@@ -1558,6 +1586,26 @@ def switch_auth_mode(forced=False):
 
 
 @when('leadership.is_leader',
+      'kubernetes-master.components.started')
+@when_not('kubernetes-master.pod-security-policy.applied')
+def create_pod_security_policy_resources():
+    pod_security_policy_path = '/root/cdk/pod-security-policy.yaml'
+
+    render(
+        'rbac-pod-security-policy.yaml',
+        pod_security_policy_path,
+        {}
+    )
+
+    hookenv.log('Creating pod security policy resources.')
+    if kubectl_manifest('apply', pod_security_policy_path):
+        set_state('kubernetes-master.pod-security-policy.applied')
+    else:
+        msg = 'Failed to apply {}, will retry.'.format(pod_security_policy_path)
+        hookenv.log(msg)
+
+
+@when('leadership.is_leader',
       'kubernetes-master.components.started',
       'kubernetes-master.create.rbac')
 def create_rbac_resources():
@@ -1762,11 +1810,10 @@ def shutdown():
 def build_kubeconfig():
     '''Gather the relevant data for Kubernetes configuration objects and create
     a config object with that information.'''
-
-    public_address, public_port = kubernetes_master.get_api_endpoint()
-    public_server = 'https://{0}:{1}'.format(public_address, public_port)
     local_address = get_ingress_address('kube-api-endpoint')
     local_server = 'https://{0}:{1}'.format(local_address, 6443)
+    public_address, public_port = kubernetes_master.get_api_endpoint()
+    public_server = 'https://{0}:{1}'.format(public_address, public_port)
     ca_exists = ca_crt_path.exists()
     client_pass = get_token('admin')
     # Do we have everything we need?
@@ -1830,6 +1877,12 @@ def build_kubeconfig():
                           local_server, ca_crt_path,
                           token=controller_manager_token,
                           user='kube-controller-manager')
+
+        scheduler_token = get_token('system:kube-scheduler')
+        create_kubeconfig(kubeschedulerconfig_path,
+                          local_server, ca_crt_path,
+                          token=scheduler_token,
+                          user='kube-scheduler')
 
 
 def get_dns_ip():
@@ -1913,16 +1966,20 @@ def configure_apiserver():
     api_opts['kubelet-certificate-authority'] = str(ca_crt_path)
     api_opts['kubelet-client-certificate'] = str(client_crt_path)
     api_opts['kubelet-client-key'] = str(client_key_path)
+    api_opts['kubelet-https'] = 'true'
     api_opts['logtostderr'] = 'true'
-    api_opts['insecure-bind-address'] = '127.0.0.1'
-    api_opts['insecure-port'] = '8080'
     api_opts['storage-backend'] = getStorageBackend()
+    api_opts['insecure-port'] = '0'
+    api_opts['profiling'] = 'false'
 
+    api_opts['anonymous-auth'] = 'false'
     api_opts['token-auth-file'] = '/root/cdk/known_tokens.csv'
     api_opts['service-account-key-file'] = '/root/cdk/serviceaccount.key'
     api_opts['kubelet-preferred-address-types'] = \
         'InternalIP,Hostname,InternalDNS,ExternalDNS,ExternalIP'
     api_opts['advertise-address'] = get_ingress_address('kube-control')
+    api_opts['encryption-provider-config'] = \
+        str(encryption_config_path())
 
     etcd_dir = '/root/cdk/etcd'
     etcd_ca = os.path.join(etcd_dir, 'client-ca.pem')
@@ -1944,11 +2001,11 @@ def configure_apiserver():
 
     admission_plugins = [
         'PersistentVolumeLabel',
+        'PodSecurityPolicy',
+        'NodeRestriction'
     ]
 
     auth_mode = hookenv.config('authorization-mode')
-    if 'Node' in auth_mode:
-        admission_plugins.append('NodeRestriction')
 
     ks = endpoint_from_flag('keystone-credentials.available.auth')
     aws = endpoint_from_flag('endpoint.aws-iam.ready')
@@ -2039,8 +2096,9 @@ def configure_apiserver():
 
     audit_log_path = audit_root + '/audit.log'
     api_opts['audit-log-path'] = audit_log_path
+    api_opts['audit-log-maxage'] = '30'
     api_opts['audit-log-maxsize'] = '100'
-    api_opts['audit-log-maxbackup'] = '9'
+    api_opts['audit-log-maxbackup'] = '10'
 
     audit_policy_path = audit_root + '/audit-policy.yaml'
     audit_policy = hookenv.config('audit-policy')
@@ -2058,10 +2116,6 @@ def configure_apiserver():
         api_opts['audit-webhook-config-file'] = audit_webhook_config_path
     else:
         remove_if_exists(audit_webhook_config_path)
-
-    if is_flag_set('kubernetes-master.secure-storage.created'):
-        api_opts['experimental-encryption-provider-config'] = \
-            str(encryption_config_path())
 
     configure_kubernetes_service(configure_prefix, 'kube-apiserver',
                                  api_opts, 'api-extra-args')
@@ -2162,6 +2216,9 @@ def configure_controller_manager():
     controller_opts['tls-cert-file'] = str(server_crt_path)
     controller_opts['tls-private-key-file'] = str(server_key_path)
     controller_opts['cluster-name'] = leader_get('cluster_tag')
+    controller_opts['terminated-pod-gc-threshold'] = '12500'
+    controller_opts['profiling'] = 'false'
+    controller_opts['feature-gates'] = 'RotateKubeletServerCertificate=true'
 
     cm_cloud_config_path = cloud_config_path('kube-controller-manager')
     if is_state('endpoint.aws.ready'):
@@ -2184,11 +2241,34 @@ def configure_controller_manager():
 
 
 def configure_scheduler():
+    kube_scheduler_config_path = '/root/cdk/kube-scheduler-config.yaml'
+
     scheduler_opts = {}
 
     scheduler_opts['v'] = '2'
     scheduler_opts['logtostderr'] = 'true'
-    scheduler_opts['master'] = 'http://127.0.0.1:8080'
+    scheduler_opts['profiling'] = 'false'
+    scheduler_opts['config'] = kube_scheduler_config_path
+
+    scheduler_ver = get_version('kube-scheduler')
+    if scheduler_ver >= (1, 19):
+        api_ver = 'v1beta1'
+    elif scheduler_ver >= (1, 18):
+        api_ver = 'v1alpha2'
+    else:
+        api_ver = 'v1alpha1'
+
+    host.write_file(
+        path=kube_scheduler_config_path,
+        perms=0o600,
+        content=yaml.safe_dump({
+            'apiVersion': 'kubescheduler.config.k8s.io/{}'.format(api_ver),
+            'kind': 'KubeSchedulerConfiguration',
+            'clientConnection': {
+                'kubeconfig': kubeschedulerconfig_path
+            }
+        })
+    )
 
     configure_kubernetes_service(configure_prefix, 'kube-scheduler',
                                  scheduler_opts, 'scheduler-extra-args')
@@ -2348,7 +2428,13 @@ def poke_network_unavailable():
     discussion about refactoring the affected code but nothing has happened
     in a while.
     """
+    local_address = get_ingress_address('kube-api-endpoint')
+    local_server = 'https://{0}:{1}'.format(local_address, 6443)
+
     cmd = ['kubectl', 'get', 'nodes', '-o', 'json']
+
+    client_token = get_token('admin')
+    http_header = ('Authorization', 'Bearer {}'.format(client_token))
 
     try:
         output = check_output(cmd).decode('utf-8')
@@ -2363,8 +2449,10 @@ def poke_network_unavailable():
 
     for node in nodes:
         node_name = node['metadata']['name']
-        url = 'http://localhost:8080/api/v1/nodes/{}/status'.format(node_name)
-        with urlopen(url) as response:
+        url = '{}/api/v1/nodes/{}/status'.format(local_server, node_name)
+        req = Request(url)
+        req.add_header(*http_header)
+        with urlopen(req) as response:
             code = response.getcode()
             body = response.read().decode('utf8')
         if code != 200:
@@ -2387,6 +2475,7 @@ def poke_network_unavailable():
                 req = Request(url, method='PUT',
                               data=json.dumps(node_info).encode('utf8'),
                               headers={'Content-Type': 'application/json'})
+                req.add_header(*http_header)
                 with urlopen(req) as response:
                     code = response.getcode()
                     body = response.read().decode('utf8')
