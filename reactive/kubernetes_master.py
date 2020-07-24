@@ -1482,6 +1482,22 @@ def ceph_storage_pool():
     set_state('kubernetes-master.ceph.pool.created')
 
 
+@when('leadership.is_leader')
+@when('ceph-storage.available')
+@when_not('kubernetes-master.ceph.csi.config.applied')
+def ceph_csi_config():
+    """
+    We need to apply an empty `ceph-csi-encryption-kms-config`
+    to the cluster to keep Ceph CSI happy.
+    """
+    render('ceph-csi.yaml', '/tmp/ceph-csi.yaml', {})
+    cmd = ['kubectl', 'apply', '-f', '/tmp/ceph-csi.yaml']
+    check_call(cmd)
+    os.remove('/tmp/ceph-csi.yaml')
+
+    set_state('kubernetes-master.ceph.csi.config.applied')
+
+
 @when('ceph-storage.available')
 @when('kubernetes-master.privileged')
 @when_not('kubernetes-master.ceph.configured')
