@@ -2250,11 +2250,19 @@ def configure_scheduler():
     scheduler_opts['profiling'] = 'false'
     scheduler_opts['config'] = kube_scheduler_config_path
 
+    scheduler_ver = get_version('kube-scheduler')
+    if scheduler_ver >= (1, 19):
+        api_ver = 'v1beta1'
+    elif scheduler_ver >= (1, 18):
+        api_ver = 'v1alpha2'
+    else:
+        api_ver = 'v1alpha1'
+
     host.write_file(
         path=kube_scheduler_config_path,
         perms=0o600,
         content=yaml.safe_dump({
-            'apiVersion': 'kubescheduler.config.k8s.io/v1alpha1',
+            'apiVersion': 'kubescheduler.config.k8s.io/{}'.format(api_ver),
             'kind': 'KubeSchedulerConfiguration',
             'clientConnection': {
                 'kubeconfig': kubeschedulerconfig_path
