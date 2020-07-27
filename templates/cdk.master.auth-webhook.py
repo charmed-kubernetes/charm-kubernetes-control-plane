@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
 import csv
+import json
 from flask import Flask, request, jsonify
 from pathlib import Path
+from subprocess import check_output
 app = Flask(__name__)
 
 
@@ -25,6 +27,13 @@ def fetch_token_data(token):
     return record
 
 
+def kubectl(*args):
+    ''' Run a kubectl cli command with a config file. Returns stdout and throws
+    an error if the command fails. '''
+    command = ['kubectl', '--kubeconfig=/root/.kube/config'] + list(args)
+    return check_output(command)
+
+
 def check_token(token_review):
     print('Checking token')
     token_data = fetch_token_data(token_review['spec']['token'])
@@ -43,6 +52,22 @@ def check_token(token_review):
 
 def check_secret(token_review):
     print('Checking secret')
+    password_to_check = token_review['spec']['token']
+    output = kubectl('get', 'secrets', '-o', 'json').decode('UTF-8')
+    secrets = json.loads(output)
+    if 'items' in secrets:
+        for item in secrets['items']:
+            if 'data' in item:
+                if 'password' in item['data']:
+                    if item['data']['password'] == password_to_check:
+                        token_review['status'] = {
+                            'authenticated': True,
+                            'user': {
+                                'username': item['data']['username'],
+                                'uid': item['data']['username'],
+                            }
+                        }
+                        return True
     return False
 
 

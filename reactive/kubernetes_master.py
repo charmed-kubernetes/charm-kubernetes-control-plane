@@ -2317,6 +2317,13 @@ def setup_tokens(token, username, user, groups=None):
         'user': user,
         'groups': groups,
     })
+
+    # TODO: move secrets to proper function when ready to remove known_tokens
+    kubectl('create', 'secret', 'generic',
+            '{}-secret'.format(record['username']),
+            '--from-literal=username={}'.format(record['username']),
+            '--from-literal=password={}'.format(record['token']))
+
     if not record['groups']:
         del record['groups']
 
