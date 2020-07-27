@@ -2,6 +2,7 @@
 
 import csv
 import json
+import logging
 from base64 import b64decode
 from flask import Flask, request, jsonify
 from pathlib import Path
@@ -42,7 +43,7 @@ def kubectl(*args):
 
 
 def check_token(token_review):
-    print('Checking token')
+    app.logger.info('Checking token')
     token_data = fetch_known_token_data(token_review['spec']['token'])
     if token_data:
         token_review['status'] = {
@@ -58,7 +59,7 @@ def check_token(token_review):
 
 
 def check_secret(token_review):
-    print('Checking secret')
+    app.logger.info('Checking secret')
     token_to_check = token_review['spec']['token']
     output = kubectl('get', 'secrets', '-o', 'json').decode('UTF-8')
     secrets = json.loads(output)
@@ -90,12 +91,12 @@ def check_secret(token_review):
 
 
 def check_aws_iam(token_review):
-    print('Checking AWS')
+    app.logger.info('Checking AWS')
     return False
 
 
 def check_keystone(token_review):
-    print('Checking Keystone')
+    app.logger.info('Checking Keystone')
     return False
 
 
@@ -110,6 +111,11 @@ def webhook():
         TokenReview object with 'user' attributes if a user is found; otherwise,
         an empty string.
     '''
+    # Log to gunicorn
+    glogger = logging.getLogger('gunicorn.error')
+    app.logger.handlers = glogger.handlers
+    app.logger.setLevel(glogger.level)
+
     req = request.json
     try:
         valid = True if (req['kind'] == 'TokenReview' and
@@ -121,17 +127,17 @@ def webhook():
         # Make the request unauthenticated by deafult
         req['status'] = {'authenticated': False}
     else:
-        print('Invalid request: {}'.format(req))
+        app.logger.info('Invalid request: {}'.format(req))
         return ''  # flask needs to return something that isn't None
 
-    print('REQ: {}'.format(req))
+    app.logger.debug('REQ: {}'.format(req))
 
     if (check_token(req) or check_secret(req) or
             check_aws_iam(req) or check_keystone(req)):
-        print('RESP: {}'.format(req))
+        app.logger.debug('RESP: {}'.format(req))
         return jsonify(req)
     else:
-        print('No user found')
+        app.logger.debug('No match found for the requested token')
         return ''
 
 
