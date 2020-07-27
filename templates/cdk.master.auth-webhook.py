@@ -10,29 +10,6 @@ from subprocess import check_output
 app = Flask(__name__)
 
 
-def fetch_known_token_data(token):
-    '''Fetch known_tokens.csv entry for a given token.
-
-    Returns the csv line as a dict if the given token is found; otherwise,
-    an empty dict.
-    '''
-    known_tokens = Path('/root/cdk/known_tokens.csv')
-    csv_fields = ['token', 'username', 'user', 'groups']
-
-    try:
-        with known_tokens.open('r') as f:
-            data_by_token = {r['token']: r for r in csv.DictReader(f, csv_fields)}
-    except FileNotFoundError:
-        data_by_token = {}
-
-    if token in data_by_token:
-        record = data_by_token[token]
-    else:
-        record = {}
-
-    return record
-
-
 def kubectl(*args):
     '''Run a kubectl cli command with a config file.
 
@@ -42,25 +19,38 @@ def kubectl(*args):
     return check_output(command)
 
 
-def check_token(token_review):
+def check_known_tokens(token_review):
+    '''Populate user info if token is found in known_tokens.csv.'''
     app.logger.info('Checking token')
-    token_data = fetch_known_token_data(token_review['spec']['token'])
-    if token_data:
+    token_to_check = token_review['spec']['token']
+
+    csv_fields = ['token', 'username', 'user', 'groups']
+    known_tokens = Path('/root/cdk/known_tokens.csv')
+    try:
+        with known_tokens.open('r') as f:
+            data_by_token = {r['token']: r for r in csv.DictReader(f, csv_fields)}
+    except FileNotFoundError:
+        data_by_token = {}
+
+    if token_to_check in data_by_token:
+        record = data_by_token[token_to_check]
         token_review['status'] = {
             'authenticated': True,
             'user': {
-                'username': token_data['username'],
-                'uid': token_data['user'],
-                'groups': token_data['groups'].split(','),
+                'username': record['username'],
+                'uid': record['user'],
+                'groups': record['groups'].split(','),
             }
         }
         return True
     return False
 
 
-def check_secret(token_review):
+def check_secrets(token_review):
+    '''Populate user info if token is found in k8s secrets.'''
     app.logger.info('Checking secret')
     token_to_check = token_review['spec']['token']
+
     output = kubectl('get', 'secrets', '-o', 'json').decode('UTF-8')
     secrets = json.loads(output)
     if 'items' in secrets:
@@ -132,7 +122,7 @@ def webhook():
 
     app.logger.debug('REQ: {}'.format(req))
 
-    if (check_token(req) or check_secret(req) or
+    if (check_known_tokens(req) or check_secrets(req) or
             check_aws_iam(req) or check_keystone(req)):
         app.logger.debug('RESP: {}'.format(req))
         return jsonify(req)
