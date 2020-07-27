@@ -1,0 +1,12 @@
+[Unit]
+Description=CDK master auth webhook
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/root/cdk
+ExecStart={{ charm_dir }}/../.venv/bin/gunicorn --certfile ./server.crt --keyfile ./server.key --bind {{ host }}:{{ port }} auth-webhook:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Config
+clusters:
+  - name: authn
+    cluster:
+      server: https://{{ host }}:{{ port }}
+      insecure-skip-tls-verify: true
+users:
+  - name: kube-apiserver
+contexts:
+- context:
+    cluster: authn
+    user: kube-apiserver
+  name: authn
+current-context: authn
