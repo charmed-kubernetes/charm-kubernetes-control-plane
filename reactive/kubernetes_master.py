@@ -2319,10 +2319,16 @@ def setup_tokens(token, username, user, groups=None):
     })
 
     # TODO: move secrets to proper function when ready to remove known_tokens
-    kubectl('create', 'secret', 'generic',
-            '{}-secret'.format(record['username']),
-            '--from-literal=username={}'.format(record['username']),
-            '--from-literal=password={}'.format(record['token']))
+    secret_id = '{}-secret'.format(record['username'])
+    try:
+        kubectl('delete', 'secret', secret_id)
+    except CalledProcessError:
+        pass
+    kubectl('create', 'secret', 'generic', secret_id,
+            "--from-literal=username='{}'".format(record['username']),
+            "--from-literal=user='{}'".format(record['user']),
+            "--from-literal=groups='{}'".format(record['groups']),
+            "--from-literal=password='{}'".format(record['token']))
 
     if not record['groups']:
         del record['groups']
