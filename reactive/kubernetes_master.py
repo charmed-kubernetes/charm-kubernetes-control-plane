@@ -118,6 +118,7 @@ kubecontrollermanagerconfig_path = '/root/cdk/kubecontrollermanagerconfig'
 kubeschedulerconfig_path = '/root/cdk/kubeschedulerconfig'
 cdk_addons_kubectl_config_path = '/root/cdk/cdk_addons_kubectl_config'
 aws_iam_webhook = '/root/cdk/aws-iam-webhook.yaml'
+auth_webhook_conf = '/root/cdk/auth-webhook.yaml'
 
 register_trigger(when='endpoint.aws.ready',  # when set
                  set_flag='kubernetes-master.aws.changed')
@@ -994,6 +995,21 @@ def add_systemd_file_watcher():
         '/etc/systemd/system/cdk.master.leader.file-watcher.path',
         {}, perms=0o644)
     service_resume('cdk.master.leader.file-watcher.path')
+
+
+@when('etcd.available', 'tls_client.certs.saved')
+def register_auth_webhook():
+    auth_webhook_exe = '/root/cdk/auth-webhook.py'
+    auth_webhook_service = '/etc/systemd/system/cdk.master.auth-webhook.service'
+    context = {'charm_dir': hookenv.charm_dir(),
+               'host': socket.gethostname(),
+               'port': 5000}
+
+    render('cdk.master.auth-webhook.py', auth_webhook_exe, {})
+    render('cdk.master.auth-webhook.service', auth_webhook_service, context)
+    render('cdk.master.auth-webhook.yaml', auth_webhook_conf, context)
+    check_call(['systemctl', 'daemon-reload'])
+    service_resume('cdk.master.auth-webhook')
 
 
 @when('etcd.available', 'tls_client.certs.saved',
@@ -1973,7 +1989,7 @@ def configure_apiserver():
     api_opts['profiling'] = 'false'
 
     api_opts['anonymous-auth'] = 'false'
-    api_opts['token-auth-file'] = '/root/cdk/known_tokens.csv'
+    api_opts['authentication-token-webhook-config-file'] = auth_webhook_conf
     api_opts['service-account-key-file'] = '/root/cdk/serviceaccount.key'
     api_opts['kubelet-preferred-address-types'] = \
         'InternalIP,Hostname,InternalDNS,ExternalDNS,ExternalIP'
