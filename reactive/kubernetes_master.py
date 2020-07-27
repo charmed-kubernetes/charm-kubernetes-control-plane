@@ -53,7 +53,8 @@ from charms.layer import vault_kv
 from charmhelpers.core import hookenv
 from charmhelpers.core import host
 from charmhelpers.core import unitdata
-from charmhelpers.core.host import service_pause, service_stop, service_resume
+from charmhelpers.core.host import restart_on_change
+from charmhelpers.core.host import service_pause, service_resume, service_stop
 from charmhelpers.core.templating import render
 from charmhelpers.contrib.charmsupport import nrpe
 
@@ -119,6 +120,7 @@ kubeschedulerconfig_path = '/root/cdk/kubeschedulerconfig'
 cdk_addons_kubectl_config_path = '/root/cdk/cdk_addons_kubectl_config'
 aws_iam_webhook = '/root/cdk/aws-iam-webhook.yaml'
 auth_webhook_conf = '/root/cdk/auth-webhook.yaml'
+auth_webhook_exe = '/root/cdk/auth-webhook.py'
 
 register_trigger(when='endpoint.aws.ready',  # when set
                  set_flag='kubernetes-master.aws.changed')
@@ -998,16 +1000,20 @@ def add_systemd_file_watcher():
 
 
 @when('etcd.available', 'tls_client.certs.saved')
+@restart_on_change({
+    auth_webhook_conf: ['cdk.master.auth-webhook'],
+    auth_webhook_exe: ['cdk.master.auth-webhook'],
+    })
 def register_auth_webhook():
-    auth_webhook_exe = '/root/cdk/auth-webhook.py'
     auth_webhook_service = '/etc/systemd/system/cdk.master.auth-webhook.service'
     context = {'charm_dir': hookenv.charm_dir(),
                'host': socket.gethostname(),
                'port': 5000}
 
     render('cdk.master.auth-webhook.py', auth_webhook_exe, {})
-    render('cdk.master.auth-webhook.service', auth_webhook_service, context)
     render('cdk.master.auth-webhook.yaml', auth_webhook_conf, context)
+
+    render('cdk.master.auth-webhook.service', auth_webhook_service, context)
     check_call(['systemctl', 'daemon-reload'])
     service_resume('cdk.master.auth-webhook')
 
