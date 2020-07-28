@@ -1005,15 +1005,20 @@ def add_systemd_file_watcher():
     auth_webhook_exe: ['cdk.master.auth-webhook'],
     })
 def register_auth_webhook():
-    auth_webhook_service = '/etc/systemd/system/cdk.master.auth-webhook.service'
-    context = {'charm_dir': hookenv.charm_dir(),
+    '''Render auth webhook templates and start the related service.'''
+    # For 'api_ver', match the api version of the authentication.k8s.io TokenReview
+    # that k8s-apiserver will be sending:
+    #   https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18
+    context = {'api_ver': 'v1beta1',
+               'charm_dir': hookenv.charm_dir(),
                'host': socket.gethostname(),
                'port': 5000}
 
-    render('cdk.master.auth-webhook.py', auth_webhook_exe, {})
+    render('cdk.master.auth-webhook.py', auth_webhook_exe, context)
     render('cdk.master.auth-webhook.yaml', auth_webhook_conf, context)
 
-    render('cdk.master.auth-webhook.service', auth_webhook_service, context)
+    service_tmpl = '/etc/systemd/system/cdk.master.auth-webhook.service'
+    render('cdk.master.auth-webhook.service', service_tmpl, context)
     check_call(['systemctl', 'daemon-reload'])
     service_resume('cdk.master.auth-webhook')
 

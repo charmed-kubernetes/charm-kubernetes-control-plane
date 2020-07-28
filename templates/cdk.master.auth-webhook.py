@@ -99,12 +99,15 @@ def check_keystone(token_review):
     return False
 
 
-@app.route('/', methods=['POST'])
+@app.route('/{{ api_ver }}', methods=['POST'])
 def webhook():
-    '''Listen on / for POST requests.
+    '''Listen on /$api_version for POST requests.
 
     For a POSTed TokenReview object, check every known authentication mechanism
     for a user with a matching token.
+
+    The /$api_version is expected to be the api version of the authentication.k8s.io
+    TokenReview that the k8s-apiserver will be sending.
 
     Returns:
         TokenReview object with 'authenticated: True' and user attributes if a

@@ -3,7 +3,7 @@ kind: Config
 clusters:
   - name: authn
     cluster:
-      server: https://{{ host }}:{{ port }}
+      server: https://{{ host }}:{{ port }}/{{ api_ver }}
       insecure-skip-tls-verify: true
 users:
   - name: kube-apiserver
