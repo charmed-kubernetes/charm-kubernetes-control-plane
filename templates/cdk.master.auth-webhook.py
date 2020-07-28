@@ -57,23 +57,32 @@ def check_secrets(token_review):
         for secret in secrets['items']:
             try:
                 data_b64 = secret['data']
-                token_b64 = data_b64['password'].encode('UTF-8')
+                password_b64 = data_b64['password'].encode('UTF-8')
             except (KeyError, TypeError):
                 continue
 
-            token = b64decode(token_b64).decode('UTF-8')
-            if token == token_to_check:
+            password = b64decode(password_b64).decode('UTF-8')
+            if token_to_check == password:
                 username_b64 = data_b64['username'].encode('UTF-8')
-                user_b64 = data_b64['user'].encode('UTF-8')
                 groups_b64 = data_b64['groups'].encode('UTF-8') \
                     if 'groups' in data_b64 else b''
 
+                # NB: CK creates k8s secrets with the 'password' field set as
+                # uid::token. Split the decoded password so we can send a 'uid' back.
+                # If there is no delimiter, set uid == username.
+                # TODO: make the delimeter less magical so it doesn't get out of
+                # sync with the function that creates secrets in k8s-master.py.
+                username = uid = b64decode(username_b64).decode('UTF-8')
+                pw_delim = '::'
+                if pw_delim in password:
+                    uid = password.split(pw_delim)[0]
+                groups = b64decode(groups_b64).decode('UTF-8').split(',')
                 token_review['status'] = {
                     'authenticated': True,
                     'user': {
-                        'username': b64decode(username_b64).decode('UTF-8'),
-                        'uid': b64decode(user_b64).decode('UTF-8'),
-                        'groups': b64decode(groups_b64).decode('UTF-8').split(','),
+                        'username': username,
+                        'uid': uid,
+                        'groups': groups,
                     }
                 }
                 return True
@@ -98,8 +107,8 @@ def webhook():
     for a user with a matching token.
 
     Returns:
-        TokenReview object with 'user' attributes if a user is found; otherwise,
-        an empty string.
+        TokenReview object with 'authenticated: True' and user attributes if a
+        token is found; otherwise, a TokenReview object with 'authenticated: False'
     '''
     # Log to gunicorn
     glogger = logging.getLogger('gunicorn.error')
@@ -114,21 +123,22 @@ def webhook():
         valid = False
 
     if valid:
-        # Make the request unauthenticated by deafult
-        req['status'] = {'authenticated': False}
+        app.logger.debug('REQ: {}'.format(req))
     else:
         app.logger.info('Invalid request: {}'.format(req))
         return ''  # flask needs to return something that isn't None
 
-    app.logger.debug('REQ: {}'.format(req))
+    # Make the request unauthenticated by deafult
+    req['status'] = {'authenticated': False}
 
     if (check_known_tokens(req) or check_secrets(req) or
             check_aws_iam(req) or check_keystone(req)):
-        app.logger.debug('RESP: {}'.format(req))
-        return jsonify(req)
+        # Successful checks will set auth and user data in the 'req' dict
+        app.logger.debug('ACK: {}'.format(req))
     else:
-        app.logger.debug('No match found for the requested token')
-        return ''
+        app.logger.debug('NAK: {}'.format(req))
+
+    return jsonify(req)
 
 
 if __name__ == '__main__':

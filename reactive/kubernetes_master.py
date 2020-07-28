@@ -2332,9 +2332,9 @@ def setup_tokens(token, username, user, groups=None):
         pass
     kubectl('create', 'secret', 'generic', secret_id,
             "--from-literal=username='{}'".format(record['username']),
-            "--from-literal=user='{}'".format(record['user']),
             "--from-literal=groups='{}'".format(record['groups']),
-            "--from-literal=password='{}'".format(record['token']))
+            "--from-literal=password='{}::{}'".format(
+                record['user'], record['token']))
 
     if not record['groups']:
         del record['groups']
