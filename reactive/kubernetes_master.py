@@ -2336,9 +2336,9 @@ def setup_tokens(token, username, user, groups=None):
     except CalledProcessError:
         pass
     kubectl('create', 'secret', 'generic', secret_id,
-            "--from-literal=username='{}'".format(record['username']),
-            "--from-literal=groups='{}'".format(record['groups']),
-            "--from-literal=password='{}::{}'".format(
+            "--from-literal=username={}".format(record['username']),
+            "--from-literal=groups={}".format(record['groups']),
+            "--from-literal=password={}::{}".format(
                 record['user'], record['token']))
 
     if not record['groups']:
