@@ -1306,7 +1306,6 @@ def configure_cdk_addons():
     args = [
         'kubeconfig=' + cdk_addons_kubectl_config_path,
         'arch=' + arch(),
-        'dns-ip=' + kubernetes_master.get_deprecated_dns_ip(),
         'dns-domain=' + hookenv.config('dns_domain'),
         'registry=' + registry,
         'enable-dashboard=' + dbEnabled,

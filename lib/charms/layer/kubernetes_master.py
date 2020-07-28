@@ -2,7 +2,6 @@ import json
 import socket
 from pathlib import Path
 import ipaddress
-from itertools import islice
 from subprocess import check_output, CalledProcessError, TimeoutExpired
 
 from charmhelpers.core import hookenv
@@ -219,14 +218,6 @@ def get_preferred_service_network(service_cidrs):
 def get_dns_ip():
     return kubernetes_common.get_service_ip('kube-dns',
                                             namespace='kube-system')
-
-
-def get_deprecated_dns_ip():
-    '''We previously hardcoded the dns ip. This function returns the old
-    hardcoded value for use with older versions of cdk_addons.'''
-    network = get_preferred_service_network(service_cidr())
-    ip = next(islice(network.hosts(), 9, None))
-    return ip.exploded
 
 
 def get_kubernetes_service_ips():
