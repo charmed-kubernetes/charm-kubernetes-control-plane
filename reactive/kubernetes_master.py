@@ -1302,7 +1302,7 @@ def configure_cdk_addons():
     default_storage = ''
     ceph = {}
     ceph_ep = endpoint_from_flag('ceph-storage.available')
-    if (ceph_ep and ceph_ep.key() and
+    if (ceph_ep and ceph_ep.key() and ceph_ep.fsid() and ceph_ep.mon_hosts() and
             is_state('kubernetes-master.ceph.configured') and
             get_version('kube-apiserver') >= (1, 12)):
         cephEnabled = "true"
