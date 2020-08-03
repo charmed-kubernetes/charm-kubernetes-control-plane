@@ -1160,6 +1160,8 @@ def push_service_data():
 def send_data():
     '''Send the data that is required to create a server certificate for
     this server.'''
+    kube_api_endpoint = endpoint_from_flag('kube-api-endpoint.available')
+
     # Use the public ip of this unit as the Common Name for the certificate.
     common_name = hookenv.unit_public_ip()
 
@@ -1172,12 +1174,17 @@ def send_data():
         ipv6=kubernetes_common.is_ipv6(cluster_cidr),
     )
 
+    # Get ingress address (this is probably already covered by bind_ips,
+    # but list it explicitly as well just in case it's not).
+    ingress_ip = get_ingress_address(kube_api_endpoint.endpoint_name)
+
     domain = hookenv.config('dns_domain')
     # Create SANs that the tls layer will add to the server cert.
     sans = [
         # The CN field is checked as a hostname, so if it's an IP, it
         # won't match unless also included in the SANs as an IP field.
         common_name,
+        ingress_ip,
         socket.gethostname(),
         socket.getfqdn(),
         'kubernetes',
