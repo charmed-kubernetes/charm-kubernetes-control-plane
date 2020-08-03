@@ -1,4 +1,6 @@
+import csv
 import json
+import re
 import socket
 from pathlib import Path
 from subprocess import check_output, CalledProcessError, TimeoutExpired
@@ -7,10 +9,11 @@ from charmhelpers.core import hookenv
 from charmhelpers.core.templating import render
 from charmhelpers.fetch import apt_install
 from charms.reactive import endpoint_from_flag, is_flag_set
-
 from charms.layer import kubernetes_common
 
 
+AUTH_BASIC_FILE = '/root/cdk/basic_auth.csv'
+AUTH_TOKENS_FILE = '/root/cdk/known_tokens.csv'
 STANDARD_API_PORT = 6443
 CEPH_CONF_DIR = Path('/etc/ceph')
 CEPH_CONF = CEPH_CONF_DIR / 'ceph.conf'
@@ -137,10 +140,89 @@ def get_cephfs_fsname():
 
 def deprecate_auth_file(auth_file):
     """
-    In 1.19+, file-based authentication was deprecated in favor of cert
+    In 1.19+, file-based authentication was deprecated in favor of webhook
     auth. Write out generic files that inform the user of this.
     """
     csv_file = Path(auth_file)
     csv_file.parent.mkdir(exist_ok=True)
     with csv_file.open('w') as f:
         f.write('# File-based authentication was deprecated in 1.19\n')
+
+
+def migrate_auth_file(filename):
+    migrate_basic = migrate_known_tokens = False
+    if filename == AUTH_BASIC_FILE:
+        migrate_basic = True
+    elif filename == AUTH_TOKENS_FILE:
+        migrate_known_tokens = True
+
+    with open(filename, 'r') as f:
+        rows = list(csv.reader(f))
+
+    for row in rows:
+        try:
+            if row[0].startswith('#'):
+                continue
+            else:
+                if migrate_basic:
+                    create_known_token(*row)
+                elif migrate_known_tokens:
+                    create_secret(*row)
+                else:
+                    return False
+        except IndexError:
+            pass
+    deprecate_auth_file(filename)
+    return True
+
+
+def create_known_token(token, username, user, groups=None):
+    known_tokens = Path(AUTH_TOKENS_FILE)
+    known_tokens.parent.mkdir(exist_ok=True)
+    csv_fields = ['token', 'username', 'user', 'groups']
+
+    try:
+        with known_tokens.open('r') as f:
+            tokens_by_user = {r['user']: r for r in csv.DictReader(f, csv_fields)}
+    except FileNotFoundError:
+        tokens_by_user = {}
+    tokens_by_username = {r['username']: r for r in tokens_by_user.values()}
+
+    if user in tokens_by_user:
+        record = tokens_by_user[user]
+    elif username in tokens_by_username:
+        record = tokens_by_username[username]
+    else:
+        record = tokens_by_user[user] = {}
+    record.update({
+        'token': token,
+        'username': username,
+        'user': user,
+        'groups': groups,
+    })
+
+    if not record['groups']:
+        del record['groups']
+
+    with known_tokens.open('w') as f:
+        csv.DictWriter(f, csv_fields, lineterminator='\n').writerows(
+            tokens_by_user.values())
+
+
+def create_secret(token, username, user, groups=None):
+    sani_name = re.sub('[^0-9a-zA-Z]+', '-', user)
+    secret_id = '{}-secret'.format(sani_name)
+    delete_secret(secret_id)
+    kubernetes_common.kubectl('create', 'secret', 'generic', secret_id,
+                              "--from-literal=username={}".format(username),
+                              "--from-literal=groups={}".format(groups),
+                              "--from-literal=password={}::{}".format(
+                                  user, token))
+
+
+def delete_secret(secret_id):
+    try:
+        kubernetes_common.kubectl('delete', 'secret', secret_id)
+    except CalledProcessError:
+        # Most probably a failure to delete an unknown secret; carry on.
+        pass

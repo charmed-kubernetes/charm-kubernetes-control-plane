@@ -15,7 +15,6 @@
 # limitations under the License.
 
 import base64
-import csv
 import os
 import re
 import random
@@ -265,24 +264,24 @@ def check_for_upgrade_needed():
     add_rbac_roles()
     switch_auth_mode(forced=True)
 
-    # Basic auth is gone in 1.19; ensure any custom entries are added to
-    # known_tokens.csv. This updates existing or appends new entries.
-    if is_leader and not is_flag_set('kubernetes-master.basic-auth.migrated'):
-        basic_auth = '/root/cdk/basic_auth.csv'
-        with open(basic_auth, 'r') as f:
-            rows = list(csv.reader(f))
-
-        for row in rows:
-            try:
-                if row[0].startswith('#'):
-                    continue
-                else:
-                    setup_tokens(*row)
-            except IndexError:
-                pass
-        kubernetes_master.deprecate_auth_file(basic_auth)
-
-        set_flag('kubernetes-master.basic-auth.migrated')
+    # File-based auth is gone in 1.19; ensure any entries in basic_auth.csv are
+    # added to known_tokens.csv, and any known_tokens entries are created as secrets.
+    if is_leader:
+        if not is_flag_set('kubernetes-master.basic-auth.migrated'):
+            if kubernetes_master.migrate_auth_file(kubernetes_master.AUTH_BASIC_FILE):
+                set_flag('kubernetes-master.basic-auth.migrated')
+            else:
+                hookenv.log('Unable to migrate {} to {}'.format(
+                    kubernetes_master.AUTH_BASIC_FILE,
+                    kubernetes_master.AUTH_TOKENS_FILE
+                ))
+        if not is_flag_set('kubernetes-master.token-auth.migrated'):
+            if kubernetes_master.migrate_auth_file(kubernetes_master.AUTH_TOKENS_FILE):
+                set_flag('kubernetes-master.token-auth.migrated')
+            else:
+                hookenv.log('Unable to migrate {} to Kubernetes secrets'.format(
+                    kubernetes_master.AUTH_TOKENS_FILE
+                ))
     set_state('reconfigure.authentication.setup')
     remove_state('authentication.setup')
 
@@ -625,9 +624,11 @@ def setup_leader_authentication():
             or is_state('reconfigure.authentication.setup'):
         if not os.path.isfile(basic_auth):
             kubernetes_master.deprecate_auth_file(basic_auth)
+            set_flag('kubernetes-master.basic-auth.migrated')
 
         if not os.path.isfile(known_tokens):
             kubernetes_master.deprecate_auth_file(known_tokens)
+            set_flag('kubernetes-master.token-auth.migrated')
 
         last_pass = get_token('admin')
         setup_tokens(last_pass, 'admin', 'admin', 'system:masters')
@@ -2305,48 +2306,10 @@ def configure_scheduler():
 
 def setup_tokens(token, username, user, groups=None):
     '''Create a token file for kubernetes authentication.'''
-    known_tokens = Path('/root/cdk/known_tokens.csv')
-    known_tokens.parent.mkdir(exist_ok=True)
-    csv_fields = ['token', 'username', 'user', 'groups']
-
-    try:
-        with known_tokens.open('r') as f:
-            tokens_by_user = {r['user']: r for r in csv.DictReader(f, csv_fields)}
-    except FileNotFoundError:
-        tokens_by_user = {}
-    tokens_by_username = {r['username']: r for r in tokens_by_user.values()}
-
-    if user in tokens_by_user:
-        record = tokens_by_user[user]
-    elif username in tokens_by_username:
-        record = tokens_by_username[username]
+    if not is_flag_set('kubernetes-master.token-auth.migrated'):
+        kubernetes_master.create_known_token(token, username, user, groups)
     else:
-        record = tokens_by_user[user] = {}
-    record.update({
-        'token': token or token_generator(),
-        'username': username,
-        'user': user,
-        'groups': groups,
-    })
-
-    # TODO: move secrets to proper function when ready to remove known_tokens
-    secret_id = '{}-secret'.format(record['username'])
-    try:
-        kubectl('delete', 'secret', secret_id)
-    except CalledProcessError:
-        pass
-    kubectl('create', 'secret', 'generic', secret_id,
-            "--from-literal=username={}".format(record['username']),
-            "--from-literal=groups={}".format(record['groups']),
-            "--from-literal=password={}::{}".format(
-                record['user'], record['token']))
-
-    if not record['groups']:
-        del record['groups']
-
-    with known_tokens.open('w') as f:
-        csv.DictWriter(f, csv_fields, lineterminator='\n').writerows(
-            tokens_by_user.values())
+        kubernetes_master.create_secret(token, username, user, groups)
 
 
 def get_password(csv_fname, user):
