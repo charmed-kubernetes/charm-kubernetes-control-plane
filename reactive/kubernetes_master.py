@@ -261,7 +261,6 @@ def check_for_upgrade_needed():
     migrate_from_pre_snaps()
     maybe_install_kube_proxy()
     update_certificates()
-    add_rbac_roles()
     switch_auth_mode(forced=True)
 
     # File-based auth is gone in 1.19; ensure any entries in basic_auth.csv are
@@ -276,6 +275,7 @@ def check_for_upgrade_needed():
                     kubernetes_master.AUTH_TOKENS_FILE
                 ))
         if not is_flag_set('kubernetes-master.token-auth.migrated'):
+            add_rbac_roles()
             if kubernetes_master.migrate_auth_file(kubernetes_master.AUTH_TOKENS_FILE):
                 set_flag('kubernetes-master.token-auth.migrated')
             else:
@@ -2305,34 +2305,29 @@ def configure_scheduler():
 
 
 def setup_tokens(token, username, user, groups=None):
-    '''Create a token file for kubernetes authentication.'''
+    '''Create a token for kubernetes authentication.
+
+    Add an entry to the 'known_tokens.csv' file if the contents have not yet
+    been migrated to K8s secrets. Otherwise, create a new secret.
+    '''
     if not is_flag_set('kubernetes-master.token-auth.migrated'):
-        kubernetes_master.create_known_token(token, username, user, groups)
+        kubernetes_master.create_known_token(token or token_generator(),
+                                             username, user, groups)
     else:
-        kubernetes_master.create_secret(token, username, user, groups)
-
-
-def get_password(csv_fname, user):
-    '''Get the password of user within the csv file provided.'''
-    root_cdk = '/root/cdk'
-    tokens_fname = os.path.join(root_cdk, csv_fname)
-    if not os.path.isfile(tokens_fname):
-        return None
-    with open(tokens_fname, 'r') as stream:
-        for line in stream:
-            record = line.split(',')
-            try:
-                if record[1] == user:
-                    return record[0]
-            except IndexError:
-                # probably a blank line or comment; move on
-                continue
-    return None
+        kubernetes_master.create_secret(token or token_generator(),
+                                        username, user, groups)
 
 
 def get_token(username):
-    """Grab a token from the static file if present. """
-    return get_password('known_tokens.csv', username)
+    '''Fetch a token for the given username.
+
+    Use the 'known_tokens.csv' file if the contents have not yet been migrated
+    to K8s secrets. Otherwise, grab the token from the user's secret.
+    '''
+    if not is_flag_set('kubernetes-master.token-auth.migrated'):
+        return kubernetes_master.get_csv_password('known_tokens.csv', username)
+    else:
+        return kubernetes_master.get_secret_password(username)
 
 
 def set_token(password, save_salt):

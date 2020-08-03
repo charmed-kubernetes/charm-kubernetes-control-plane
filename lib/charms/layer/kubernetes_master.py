@@ -2,6 +2,7 @@ import csv
 import json
 import re
 import socket
+from base64 import b64decode
 from pathlib import Path
 from subprocess import check_output, CalledProcessError, TimeoutExpired
 
@@ -226,3 +227,41 @@ def delete_secret(secret_id):
     except CalledProcessError:
         # Most probably a failure to delete an unknown secret; carry on.
         pass
+
+
+def get_csv_password(csv_fname, user):
+    """Get the password for the given user within the csv file provided."""
+    root_cdk = '/root/cdk'
+    tokens_fname = Path(root_cdk) / csv_fname
+    if not tokens_fname.is_file:
+        return None
+    with open(tokens_fname, 'r') as stream:
+        for line in stream:
+            record = line.split(',')
+            try:
+                if record[1] == user:
+                    return record[0]
+            except IndexError:
+                # probably a blank line or comment; move on
+                continue
+    return None
+
+
+def get_secret_password(username):
+    output = kubernetes_common.kubectl('get', 'secrets', '-o', 'json').decode('UTF-8')
+    secrets = json.loads(output)
+    if 'items' in secrets:
+        for secret in secrets['items']:
+            try:
+                data_b64 = secret['data']
+                password_b64 = data_b64['password'].encode('UTF-8')
+                username_b64 = data_b64['username'].encode('UTF-8')
+            except (KeyError, TypeError):
+                # CK authn secrets will have populated 'data', but not all secrets do
+                continue
+
+            password = b64decode(password_b64).decode('UTF-8')
+            secret_user = b64decode(username_b64).decode('UTF-8')
+            if username == secret_user:
+                return password
+    return None
