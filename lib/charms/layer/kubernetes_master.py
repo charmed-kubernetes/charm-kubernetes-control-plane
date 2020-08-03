@@ -1,10 +1,12 @@
 import json
 import socket
 from pathlib import Path
+import ipaddress
 from subprocess import check_output, CalledProcessError, TimeoutExpired
 
 from charmhelpers.core import hookenv
 from charmhelpers.core.templating import render
+from charmhelpers.core import unitdata
 from charmhelpers.fetch import apt_install
 from charms.reactive import endpoint_from_flag, is_flag_set
 
@@ -15,6 +17,8 @@ STANDARD_API_PORT = 6443
 CEPH_CONF_DIR = Path('/etc/ceph')
 CEPH_CONF = CEPH_CONF_DIR / 'ceph.conf'
 CEPH_KEYRING = CEPH_CONF_DIR / 'ceph.client.admin.keyring'
+
+db = unitdata.kv()
 
 
 def get_external_lb_endpoints():
@@ -144,3 +148,79 @@ def deprecate_auth_file(auth_file):
     csv_file.parent.mkdir(exist_ok=True)
     with csv_file.open('w') as f:
         f.write('# File-based authentication was deprecated in 1.19\n')
+
+
+try:
+    ipaddress.IPv4Network.subnet_of
+except AttributeError:
+    # Returns True if a is subnet of b
+    # This method is copied from cpython as it is available only from
+    # python 3.7
+    # https://github.com/python/cpython/blob/3.7/Lib/ipaddress.py#L1000
+    def _is_subnet_of(a, b):
+        try:
+            # Always false if one is v4 and the other is v6.
+            if a._version != b._version:
+                raise TypeError("{} and {} are not of the same version".format(
+                    a, b))
+            return (b.network_address <= a.network_address and
+                    b.broadcast_address >= a.broadcast_address)
+        except AttributeError:
+            raise TypeError("Unable to test subnet containment "
+                            "between {} and {}".format(a, b))
+    ipaddress.IPv4Network.subnet_of = _is_subnet_of
+    ipaddress.IPv6Network.subnet_of = _is_subnet_of
+
+
+def is_service_cidr_expansion():
+    service_cidr_from_db = db.get('kubernetes-master.service-cidr')
+    service_cidr_from_config = hookenv.config('service-cidr')
+    if not service_cidr_from_db:
+        return False
+
+    # Do not consider as expansion if both old and new service cidr are same
+    if service_cidr_from_db == service_cidr_from_config:
+        return False
+
+    current_networks = kubernetes_common.get_networks(service_cidr_from_db)
+    new_networks = kubernetes_common.get_networks(service_cidr_from_config)
+    if len(current_networks) != len(new_networks) or \
+       not all(cur.subnet_of(new) for cur, new in zip(current_networks,
+                                                      new_networks)):
+        hookenv.log("WARN: New k8s service cidr not superset of old one")
+        return False
+
+    return True
+
+
+def service_cidr():
+    ''' Return the charm's service-cidr config'''
+    frozen_cidr = db.get('kubernetes-master.service-cidr')
+    return frozen_cidr or hookenv.config('service-cidr')
+
+
+def freeze_service_cidr():
+    ''' Freeze the service CIDR. Once the apiserver has started, we can no
+    longer safely change this value. '''
+    frozen_service_cidr = db.get('kubernetes-master.service-cidr')
+    if not frozen_service_cidr or is_service_cidr_expansion():
+        db.set('kubernetes-master.service-cidr', hookenv.config(
+            'service-cidr'))
+
+
+def get_preferred_service_network(service_cidrs):
+    '''Get the network preferred for cluster service, preferring IPv4'''
+    net_ipv4 = kubernetes_common.get_ipv4_network(service_cidrs)
+    net_ipv6 = kubernetes_common.get_ipv6_network(service_cidrs)
+    return net_ipv4 or net_ipv6
+
+
+def get_dns_ip():
+    return kubernetes_common.get_service_ip('kube-dns',
+                                            namespace='kube-system')
+
+
+def get_kubernetes_service_ips():
+    '''Get the IP address(es) for the kubernetes service based on the cidr.'''
+    return [next(network.hosts()).exploded
+            for network in kubernetes_common.get_networks(service_cidr())]
