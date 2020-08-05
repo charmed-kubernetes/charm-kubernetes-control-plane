@@ -13,6 +13,7 @@ from charms.reactive import endpoint_from_flag, is_flag_set
 from charms.layer import kubernetes_common
 
 
+AUTH_BACKUP_EXT = 'pre-migration'
 AUTH_BASIC_FILE = '/root/cdk/basic_auth.csv'
 AUTH_TOKENS_FILE = '/root/cdk/known_tokens.csv'
 STANDARD_API_PORT = 6443
@@ -146,8 +147,12 @@ def deprecate_auth_file(auth_file):
     """
     csv_file = Path(auth_file)
     csv_file.parent.mkdir(exist_ok=True)
+
+    csv_backup = Path('{}.{}'.format(csv_file, AUTH_BACKUP_EXT))
+    if not csv_backup.exists():
+        csv_file.rename(csv_backup)
     with csv_file.open('w') as f:
-        f.write('# File-based authentication was deprecated in 1.19\n')
+        f.write('# File-based authentication was removed in Charmed Kubernetes 1.19\n')
 
 
 def migrate_auth_file(filename):
@@ -175,6 +180,19 @@ def migrate_auth_file(filename):
             pass
     deprecate_auth_file(filename)
     return True
+
+
+def sa_kubectl(*args):
+    '''Run a kubectl cli command with a service account config file.
+
+    If the service account config is not available, fall back to the root kube
+    config file. Returns stdout and throws an error if the command fails.
+    '''
+    kubeconfig = Path('/root/cdk/auth-webhook/kubeconfig')
+    if not kubeconfig.exists():
+        kubeconfig = Path('/root/.kube/config')
+    command = ['kubectl', '--kubeconfig={}'.format(kubeconfig)] + list(args)
+    return check_output(command)
 
 
 def create_known_token(token, username, user, groups=None):
@@ -214,16 +232,21 @@ def create_secret(token, username, user, groups=None):
     sani_name = re.sub('[^0-9a-zA-Z]+', '-', user)
     secret_id = '{}-secret'.format(sani_name)
     delete_secret(secret_id)
-    kubernetes_common.kubectl('create', 'secret', 'generic', secret_id,
-                              "--from-literal=username={}".format(username),
-                              "--from-literal=groups={}".format(groups),
-                              "--from-literal=password={}::{}".format(
-                                  user, token))
+    # The authenticator expects tokens to be in the form user::token
+    token_delim = '::'
+    if token_delim not in token:
+        token = '{}::{}'.format(user, token)
+
+    sa_kubectl(
+        '-n', 'auth-webhook', 'create', 'secret', 'generic', secret_id,
+        "--from-literal=username={}".format(username),
+        "--from-literal=groups={}".format(groups),
+        "--from-literal=password={}".format(token))
 
 
 def delete_secret(secret_id):
     try:
-        kubernetes_common.kubectl('delete', 'secret', secret_id)
+        sa_kubectl('-n', 'auth-webhook', 'delete', 'secret', secret_id)
     except CalledProcessError:
         # Most probably a failure to delete an unknown secret; carry on.
         pass
@@ -248,7 +271,20 @@ def get_csv_password(csv_fname, user):
 
 
 def get_secret_password(username):
-    output = kubernetes_common.kubectl('get', 'secrets', '-o', 'json').decode('UTF-8')
+    try:
+        output = sa_kubectl(
+            '-n', 'auth-webhook', 'get', 'secrets', '-o', 'json').decode('UTF-8')
+    except CalledProcessError:
+        # NB: Fix race where the apiserver has moved over to webhook auth, but the
+        # admin kube config hasn't been updated yet. Handle by constructing a token
+        # from the migrated known_tokens file.
+        if username == 'admin':
+            password = get_csv_password(
+                '{}.{}'.format(AUTH_BASIC_FILE, AUTH_BACKUP_EXT), username)
+            return 'admin::{}'.format(password) if password else None
+        else:
+            raise
+
     secrets = json.loads(output)
     if 'items' in secrets:
         for secret in secrets['items']:
@@ -265,3 +301,23 @@ def get_secret_password(username):
             if username == secret_user:
                 return password
     return None
+
+
+def get_sa_token(sa):
+    try:
+        sa_secret = sa_kubectl(
+            '-n', 'auth-webhook', 'get', 'serviceaccount', '{}'.format(sa),
+            '-o', 'jsonpath={.secrets[0].name}').decode('UTF-8')
+    except CalledProcessError as e:
+        hookenv.log('Unable to get the {} service account secret: {}'.format(sa, e))
+        return None
+
+    try:
+        token_b64 = sa_kubectl(
+            '-n', 'auth-webhook', 'get', 'secret', '{}'.format(sa_secret),
+            '-o', 'jsonpath={.data.token}')
+    except CalledProcessError as e:
+        hookenv.log('Unable to get the {} service account token: {}'.format(sa, e))
+        return None
+
+    return b64decode(token_b64).decode('UTF-8')
