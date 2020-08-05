@@ -118,8 +118,9 @@ kubecontrollermanagerconfig_path = '/root/cdk/kubecontrollermanagerconfig'
 kubeschedulerconfig_path = '/root/cdk/kubeschedulerconfig'
 cdk_addons_kubectl_config_path = '/root/cdk/cdk_addons_kubectl_config'
 aws_iam_webhook = '/root/cdk/aws-iam-webhook.yaml'
-auth_webhook_conf = '/root/cdk/auth-webhook.yaml'
-auth_webhook_exe = '/root/cdk/auth-webhook.py'
+auth_webhook_root = '/root/cdk/auth-webhook'
+auth_webhook_conf = os.path.join(auth_webhook_root, 'auth-webhook-conf.yaml')
+auth_webhook_exe = os.path.join(auth_webhook_root, 'auth-webhook.py')
 
 register_trigger(when='endpoint.aws.ready',  # when set
                  set_flag='kubernetes-master.aws.changed')
@@ -275,6 +276,7 @@ def check_for_upgrade_needed():
                     kubernetes_master.AUTH_TOKENS_FILE
                 ))
         if not is_flag_set('kubernetes-master.token-auth.migrated'):
+            register_auth_webhook()
             add_rbac_roles()
             if kubernetes_master.migrate_auth_file(kubernetes_master.AUTH_TOKENS_FILE):
                 set_flag('kubernetes-master.token-auth.migrated')
@@ -333,8 +335,14 @@ def post_series_upgrade():
 
 
 def add_rbac_roles():
-    '''Update the known_tokens file with proper groups.'''
+    '''Update the known_tokens file with proper groups.
 
+    DEPRECATED: Once known_tokens are migrated, group data will be stored in K8s
+    secrets. Do not use this function after migrating to authn with secrets.
+    '''
+    if is_flag_set('kubernetes-master.token-auth.migrated'):
+        hookenv.log('Known tokens have migrated to secrets. Skipping group changes')
+        return
     tokens_fname = '/root/cdk/known_tokens.csv'
     tokens_backup_fname = '/root/cdk/known_tokens.csv.backup'
     move(tokens_fname, tokens_backup_fname)
@@ -608,8 +616,8 @@ def setup_leader_authentication():
     """
     Setup service accounts and tokens for the cluster.
 
-    As of 1.19, this will also propogate a generic basic_auth.csv, which is
-    merged into known_tokens.csv during upgrade-charm.
+    As of 1.19 charms, this will also propogate a generic basic_auth.csv, which is
+    merged into known_tokens.csv, which are migrated to secrets during upgrade-charm.
     """
     basic_auth = '/root/cdk/basic_auth.csv'
     known_tokens = '/root/cdk/known_tokens.csv'
@@ -1001,12 +1009,15 @@ def add_systemd_file_watcher():
 
 
 @when('etcd.available', 'tls_client.certs.saved')
+@when_not('kubernetes-master.auth-webhook.started')
 @restart_on_change({
     auth_webhook_conf: ['cdk.master.auth-webhook'],
     auth_webhook_exe: ['cdk.master.auth-webhook'],
     })
 def register_auth_webhook():
     '''Render auth webhook templates and start the related service.'''
+    os.makedirs(auth_webhook_root, exist_ok=True)
+
     # For 'api_ver', match the api version of the authentication.k8s.io TokenReview
     # that k8s-apiserver will be sending:
     #   https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18
@@ -1016,12 +1027,23 @@ def register_auth_webhook():
                'port': 5000}
 
     render('cdk.master.auth-webhook.py', auth_webhook_exe, context)
-    render('cdk.master.auth-webhook.yaml', auth_webhook_conf, context)
+    render('cdk.master.auth-webhook-conf.yaml', auth_webhook_conf, context)
 
-    service_tmpl = '/etc/systemd/system/cdk.master.auth-webhook.service'
-    render('cdk.master.auth-webhook.service', service_tmpl, context)
+    res_file = '/root/cdk/auth-webhook/resources.yaml'
+    render('cdk.master.auth-webhook-resources.yaml', res_file, {})
+    kubectl('apply', '-f', res_file)
+
+    service_file = '/etc/systemd/system/cdk.master.auth-webhook.service'
+    render('cdk.master.auth-webhook.service', service_file, context)
     check_call(['systemctl', 'daemon-reload'])
-    service_resume('cdk.master.auth-webhook')
+    if service_resume('cdk.master.auth-webhook'):
+        set_flag('kubernetes-master.auth-webhook.started')
+        clear_flag('kubernetes-master.apiserver.configured')
+        build_kubeconfig()
+    else:
+        hookenv.status_set('maintenance',
+                           'Waiting for cdk.master.auth-webhook to start.')
+        hookenv.log("cdk.master.auth-webhook failed to start; will retry")
 
 
 @when('etcd.available', 'tls_client.certs.saved',
@@ -1180,7 +1202,6 @@ def create_tokens_and_sign_auth_requests():
     proxy_token = get_token('system:kube-proxy')
     if not proxy_token:
         setup_tokens(None, 'system:kube-proxy', 'kube-proxy')
-        proxy_token = get_token('system:kube-proxy')
 
     scheduler_token = get_token('system:kube-scheduler')
     if not scheduler_token:
@@ -1842,75 +1863,93 @@ def build_kubeconfig():
     local_server = 'https://{0}:{1}'.format(local_address, 6443)
     public_address, public_port = kubernetes_master.get_api_endpoint()
     public_server = 'https://{0}:{1}'.format(public_address, public_port)
-    ca_exists = ca_crt_path.exists()
-    client_pass = get_token('admin')
+
     # Do we have everything we need?
-    if ca_exists and client_pass:
-        # drop keystone helper script?
-        ks = endpoint_from_flag('keystone-credentials.available.auth')
-        if ks:
-            script_filename = 'kube-keystone.sh'
-            keystone_path = os.path.join(os.sep, 'home', 'ubuntu',
-                                         script_filename)
-            context = {'protocol': ks.credentials_protocol(),
-                       'address': ks.credentials_host(),
-                       'port': ks.credentials_port(),
-                       'version': ks.api_version()}
-            render(script_filename, keystone_path, context)
-        elif is_state('leadership.set.keystone-cdk-addons-configured'):
-            # if addons are configured, we're going to do keystone
-            # just not yet because we don't have creds
-            hookenv.log('Keystone endpoint not found, will retry.')
+    if ca_crt_path.exists():
+        # Make a kubeconfig for our auth-webhook service account. Do this early
+        # since we'll need auth-webhook to get subsequent tokens.
+        auth_webhook_token = kubernetes_master.get_sa_token('auth-webhook-sa')
+        if auth_webhook_token:
+            kubeconfig_path = os.path.join(auth_webhook_root, 'kubeconfig')
+            create_kubeconfig(kubeconfig_path,
+                              local_server, ca_crt_path,
+                              token=auth_webhook_token,
+                              user='auth-webhook')
 
-        cluster_id = None
-        aws_iam = endpoint_from_flag('endpoint.aws-iam.available')
-        if aws_iam:
-            cluster_id = aws_iam.get_cluster_id()
+        client_pass = get_token('admin')
+        if client_pass:
+            # drop keystone helper script?
+            ks = endpoint_from_flag('keystone-credentials.available.auth')
+            if ks:
+                script_filename = 'kube-keystone.sh'
+                keystone_path = os.path.join(os.sep, 'home', 'ubuntu',
+                                             script_filename)
+                context = {'protocol': ks.credentials_protocol(),
+                           'address': ks.credentials_host(),
+                           'port': ks.credentials_port(),
+                           'version': ks.api_version()}
+                render(script_filename, keystone_path, context)
+            elif is_state('leadership.set.keystone-cdk-addons-configured'):
+                # if addons are configured, we're going to do keystone
+                # just not yet because we don't have creds
+                hookenv.log('Keystone endpoint not found, will retry.')
 
-        # Create an absolute path for the kubeconfig file.
-        kubeconfig_path = os.path.join(os.sep, 'home', 'ubuntu', 'config')
+            cluster_id = None
+            aws_iam = endpoint_from_flag('endpoint.aws-iam.available')
+            if aws_iam:
+                cluster_id = aws_iam.get_cluster_id()
 
-        # Create the kubeconfig on this system so users can access the cluster.
-        hookenv.log('Writing kubeconfig file.')
+            # Create an absolute path for the kubeconfig file.
+            kubeconfig_path = os.path.join(os.sep, 'home', 'ubuntu', 'config')
 
-        if ks:
-            create_kubeconfig(kubeconfig_path, public_server, ca_crt_path,
-                              user='admin', token=client_pass,
-                              keystone=True, aws_iam_cluster_id=cluster_id)
+            # Create the kubeconfig on this system so users can access the cluster.
+            hookenv.log('Writing kubeconfig file.')
+
+            if ks:
+                create_kubeconfig(kubeconfig_path, public_server, ca_crt_path,
+                                  user='admin', token=client_pass,
+                                  keystone=True, aws_iam_cluster_id=cluster_id)
+            else:
+                create_kubeconfig(kubeconfig_path, public_server, ca_crt_path,
+                                  user='admin', token=client_pass,
+                                  aws_iam_cluster_id=cluster_id)
+
+            # Make the config file readable by the ubuntu users so juju scp works.
+            cmd = ['chown', 'ubuntu:ubuntu', kubeconfig_path]
+            check_call(cmd)
+
+            # make a kubeconfig for root (same location on k8s-masters and workers)
+            create_kubeconfig(kubeclientconfig_path, local_server, ca_crt_path,
+                              user='admin', token=client_pass)
+
+            # make a kubeconfig for cdk-addons
+            create_kubeconfig(cdk_addons_kubectl_config_path, local_server,
+                              ca_crt_path, user='admin', token=client_pass)
+
+        # make a kubeconfig for our services
+        try:
+            controller_manager_token = get_token('system:kube-controller-manager')
+            proxy_token = get_token('system:kube-proxy')
+            scheduler_token = get_token('system:kube-scheduler')
+        except CalledProcessError as e:
+            # When migrating from tokens to secrets, service secrets may not have
+            # been created yet. We'll come back for these on 'authentication.setup'.
+            hookenv.log('Unable to get service secrets: {}'.format(e))
+            pass
         else:
-            create_kubeconfig(kubeconfig_path, public_server, ca_crt_path,
-                              user='admin', token=client_pass,
-                              aws_iam_cluster_id=cluster_id)
-
-        # Make the config file readable by the ubuntu users so juju scp works.
-        cmd = ['chown', 'ubuntu:ubuntu', kubeconfig_path]
-        check_call(cmd)
-
-        # make a copy in a location shared by kubernetes-worker
-        # and kubernete-master
-        create_kubeconfig(kubeclientconfig_path, local_server, ca_crt_path,
-                          user='admin', token=client_pass)
-
-        # make a copy for cdk-addons to use
-        create_kubeconfig(cdk_addons_kubectl_config_path, local_server,
-                          ca_crt_path, user='admin', token=client_pass)
-
-        # make a kubeconfig for kube-proxy
-        proxy_token = get_token('system:kube-proxy')
-        create_kubeconfig(kubeproxyconfig_path, local_server, ca_crt_path,
-                          token=proxy_token, user='kube-proxy')
-
-        controller_manager_token = get_token('system:kube-controller-manager')
-        create_kubeconfig(kubecontrollermanagerconfig_path,
-                          local_server, ca_crt_path,
-                          token=controller_manager_token,
-                          user='kube-controller-manager')
-
-        scheduler_token = get_token('system:kube-scheduler')
-        create_kubeconfig(kubeschedulerconfig_path,
-                          local_server, ca_crt_path,
-                          token=scheduler_token,
-                          user='kube-scheduler')
+            if proxy_token:
+                create_kubeconfig(kubeproxyconfig_path, local_server, ca_crt_path,
+                                  token=proxy_token, user='kube-proxy')
+            if controller_manager_token:
+                create_kubeconfig(kubecontrollermanagerconfig_path,
+                                  local_server, ca_crt_path,
+                                  token=controller_manager_token,
+                                  user='kube-controller-manager')
+            if scheduler_token:
+                create_kubeconfig(kubeschedulerconfig_path,
+                                  local_server, ca_crt_path,
+                                  token=scheduler_token,
+                                  user='kube-scheduler')
 
 
 def get_dns_ip():
@@ -1961,7 +2000,7 @@ def write_file_with_autogenerated_header(path, contents):
         f.write(header + '\n' + contents)
 
 
-@when('etcd.available')
+@when('etcd.available', 'kubernetes-master.auth-webhook.started')
 @when_not('kubernetes-master.apiserver.configured')
 def configure_apiserver():
     etcd_connection_string = \
@@ -2307,27 +2346,27 @@ def configure_scheduler():
 def setup_tokens(token, username, user, groups=None):
     '''Create a token for kubernetes authentication.
 
-    Add an entry to the 'known_tokens.csv' file if the contents have not yet
-    been migrated to K8s secrets. Otherwise, create a new secret.
+    Create a new secret if known_tokens have been migrated. Otherwise,
+    add an entry to the 'known_tokens.csv' file.
     '''
-    if not is_flag_set('kubernetes-master.token-auth.migrated'):
-        kubernetes_master.create_known_token(token or token_generator(),
-                                             username, user, groups)
-    else:
+    if is_flag_set('kubernetes-master.token-auth.migrated'):
         kubernetes_master.create_secret(token or token_generator(),
                                         username, user, groups)
+    else:
+        kubernetes_master.create_known_token(token or token_generator(),
+                                             username, user, groups)
 
 
 def get_token(username):
     '''Fetch a token for the given username.
 
-    Use the 'known_tokens.csv' file if the contents have not yet been migrated
-    to K8s secrets. Otherwise, grab the token from the user's secret.
+    Grab a token from the given user's secret if known_tokens have been
+    migrated. Otherwise, fetch it from the 'known_tokens.csv' file.
     '''
-    if not is_flag_set('kubernetes-master.token-auth.migrated'):
-        return kubernetes_master.get_csv_password('known_tokens.csv', username)
-    else:
+    if is_flag_set('kubernetes-master.token-auth.migrated'):
         return kubernetes_master.get_secret_password(username)
+    else:
+        return kubernetes_master.get_csv_password('known_tokens.csv', username)
 
 
 def set_token(password, save_salt):
