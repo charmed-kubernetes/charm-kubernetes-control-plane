@@ -266,24 +266,23 @@ def check_for_upgrade_needed():
 
     # File-based auth is gone in 1.19; ensure any entries in basic_auth.csv are
     # added to known_tokens.csv, and any known_tokens entries are created as secrets.
-    if is_leader:
-        if not is_flag_set('kubernetes-master.basic-auth.migrated'):
-            if kubernetes_master.migrate_auth_file(kubernetes_master.AUTH_BASIC_FILE):
-                set_flag('kubernetes-master.basic-auth.migrated')
-            else:
-                hookenv.log('Unable to migrate {} to {}'.format(
-                    kubernetes_master.AUTH_BASIC_FILE,
-                    kubernetes_master.AUTH_TOKENS_FILE
-                ))
-        if not is_flag_set('kubernetes-master.token-auth.migrated'):
-            register_auth_webhook()
-            add_rbac_roles()
-            if kubernetes_master.migrate_auth_file(kubernetes_master.AUTH_TOKENS_FILE):
-                set_flag('kubernetes-master.token-auth.migrated')
-            else:
-                hookenv.log('Unable to migrate {} to Kubernetes secrets'.format(
-                    kubernetes_master.AUTH_TOKENS_FILE
-                ))
+    if not is_flag_set('kubernetes-master.basic-auth.migrated'):
+        if kubernetes_master.migrate_auth_file(kubernetes_master.AUTH_BASIC_FILE):
+            set_flag('kubernetes-master.basic-auth.migrated')
+        else:
+            hookenv.log('Unable to migrate {} to {}'.format(
+                kubernetes_master.AUTH_BASIC_FILE,
+                kubernetes_master.AUTH_TOKENS_FILE
+            ))
+    if not is_flag_set('kubernetes-master.token-auth.migrated'):
+        register_auth_webhook()
+        add_rbac_roles()
+        if kubernetes_master.migrate_auth_file(kubernetes_master.AUTH_TOKENS_FILE):
+            set_flag('kubernetes-master.token-auth.migrated')
+        else:
+            hookenv.log('Unable to migrate {} to Kubernetes secrets'.format(
+                kubernetes_master.AUTH_TOKENS_FILE
+            ))
     set_state('reconfigure.authentication.setup')
     remove_state('authentication.setup')
 
