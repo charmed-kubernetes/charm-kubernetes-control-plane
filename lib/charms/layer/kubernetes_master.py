@@ -228,25 +228,25 @@ def create_known_token(token, username, user, groups=None):
             tokens_by_user.values())
 
 
-def create_secret(token, username, user, groups=None):
+def create_secret(token, username, user, groups=None, ns='auth-webhook'):
     sani_name = re.sub('[^0-9a-zA-Z]+', '-', user)
     secret_id = '{}-secret'.format(sani_name)
-    delete_secret(secret_id)
+    delete_secret(secret_id, ns=ns)
     # The authenticator expects tokens to be in the form user::token
     token_delim = '::'
     if token_delim not in token:
         token = '{}::{}'.format(user, token)
 
     sa_kubectl(
-        '-n', 'auth-webhook', 'create', 'secret', 'generic', secret_id,
+        '-n', ns, 'create', 'secret', 'generic', secret_id,
         "--from-literal=username={}".format(username),
         "--from-literal=groups={}".format(groups),
         "--from-literal=password={}".format(token))
 
 
-def delete_secret(secret_id):
+def delete_secret(secret_id, ns='auth-webhook'):
     try:
-        sa_kubectl('-n', 'auth-webhook', 'delete', 'secret', secret_id)
+        sa_kubectl('-n', ns, 'delete', 'secret', secret_id)
     except CalledProcessError:
         # Most probably a failure to delete an unknown secret; carry on.
         pass
@@ -270,10 +270,10 @@ def get_csv_password(csv_fname, user):
     return None
 
 
-def get_secret_password(username):
+def get_secret_password(username, ns='auth-webhook'):
     try:
         output = sa_kubectl(
-            '-n', 'auth-webhook', 'get', 'secrets', '-o', 'json').decode('UTF-8')
+            '-n', ns, 'get', 'secrets', '-o', 'json').decode('UTF-8')
     except CalledProcessError:
         # NB: Fix race where the apiserver has moved over to webhook auth, but the
         # admin kube config hasn't been updated yet. Handle by constructing a token
@@ -303,10 +303,10 @@ def get_secret_password(username):
     return None
 
 
-def get_sa_token(sa):
+def get_sa_token(sa, ns='auth-webhook'):
     try:
         sa_secret = sa_kubectl(
-            '-n', 'auth-webhook', 'get', 'serviceaccount', '{}'.format(sa),
+            '-n', ns, 'get', 'serviceaccount', '{}'.format(sa),
             '-o', 'jsonpath={.secrets[0].name}').decode('UTF-8')
     except CalledProcessError as e:
         hookenv.log('Unable to get the {} service account secret: {}'.format(sa, e))
@@ -314,7 +314,7 @@ def get_sa_token(sa):
 
     try:
         token_b64 = sa_kubectl(
-            '-n', 'auth-webhook', 'get', 'secret', '{}'.format(sa_secret),
+            '-n', ns, 'get', 'secret', '{}'.format(sa_secret),
             '-o', 'jsonpath={.data.token}')
     except CalledProcessError as e:
         hookenv.log('Unable to get the {} service account token: {}'.format(sa, e))
