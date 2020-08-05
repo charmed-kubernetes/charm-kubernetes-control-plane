@@ -1,0 +1,47 @@
+# K8s resources used when creating serviceaccounts
+{% if namespace != 'default' -%}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ namespace }}
+  labels:
+    name: {{ namespace }}
+{% endif -%}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ name }}
+  namespace: {{ namespace }}
+automountServiceAccountToken: false
+{% if role is none -%}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ name }}-role
+  namespace: {{ namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["*"]
+  verbs: ["*"]
+{% endif -%}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ name }}-rolebinding
+  namespace: {{ namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+{%- if role is none %}
+  name: {{ name }}-role
+{% else %}
+  name: {{ role }}
+{% endif -%}
+subjects:
+- namespace: {{ namespace }}
+  kind: ServiceAccount
+  name: {{ name }}

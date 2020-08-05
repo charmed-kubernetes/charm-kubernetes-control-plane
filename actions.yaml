@@ -58,6 +58,51 @@ upgrade:
           with load balancers conflicting with other clusters in the same
           project but will cause new load balancers to be created which will
           require manual intervention to resolve.
+sa-create:
+  description: Create a new ServiceAccount
+  params:
+    name:
+      type: string
+      description: Name of the serviceaccount to create
+      minLength: 2
+    namespace:
+      type: string
+      description: |
+        Namespace for the serviceaccount. If unspecified, the "default"
+        namespace will be used.
+    role:
+      type: string
+      description: |
+        Role to bind to the serviceaccount. If specified, the role must already
+        exist in the cluster. If unspecified, a new "$name-role" and
+        "$name-rolebinding" will be created.
+  required:
+    - name
+sa-delete:
+  description: |
+    Delete a ServiceAccount and related RoleBinding. Namespaces and Roles are
+    not deleted with this action.
+  params:
+    name:
+      type: string
+      description: Name of the serviceaccount to delete
+      minLength: 2
+    namespace:
+      type: string
+      description: |
+        Namespace of the serviceaccount to delete. If unspecified, the "default"
+        namespace will be used. This is only used to identify the serviceaccount;
+        namespaces are not deleted by this action.
+  required:
+    - name
+sa-list:
+  description: List existing ServiceAccounts
+  params:
+    namespace:
+      type: string
+      description: |
+        Namespace for the serviceaccounts to list. If unspecified, the "default"
+        namespace will be used.
 get-kubeconfig:
   description: Retrieve Kubernetes cluster config, including credentials
 apply-manifest:

@@ -1,0 +1,102 @@
+#!/usr/local/sbin/charm-env python3
+import os
+import sys
+from charmhelpers.core import hookenv
+from charmhelpers.core.hookenv import (
+    action_get,
+    action_set,
+    action_fail,
+    action_name
+)
+from charmhelpers.core.templating import render
+from charms import layer
+from yaml import safe_load as load
+
+# Import charm layers and start reactive
+layer.import_layer_libs()
+hookenv._run_atstart()
+
+os.environ['PATH'] += os.pathsep + os.path.join(os.sep, 'snap', 'bin')
+
+
+def protect_resources(*args):
+    '''Do not allow the action to operate on names used by Charmed Kubernetes.'''
+    for res in args:
+        if res in ['default', 'auth-webhook', 'auth-webhook-sa']:
+            action_fail('Not allowed to {} "{}".'.format(action, res))
+            sys.exit(0)
+
+
+def sa_list():
+    ns = action_get('namespace') or 'default'
+    y = load(layer.kubernetes_common.kubectl(
+        '-n', ns, 'get', 'serviceaccounts', '-o', 'yaml'))
+    serviceaccounts = [i['metadata']['name'] for i in y['items']]
+    action_set({'names': ', '.join(serviceaccounts)})
+    return serviceaccounts
+
+
+def sa_create():
+    ns = action_get('namespace') or 'default'
+    name = action_get('name')
+    role = action_get('role') or None
+    protect_resources(name, role)
+
+    serviceaccounts = sa_list()
+    if name in serviceaccounts:
+        action_fail('SA "{}" already exists in the "{}" namespace.'.format(name, ns))
+        return
+
+    # Create the SA and related resources
+    res_file = '/etc/kubernetes/addons/create-sa.yaml'
+    render('create-sa.yaml.j2', res_file,
+           context={'name': name, 'namespace': ns, 'role': role})
+    output = layer.kubernetes_common.kubectl('apply', '-f', res_file).decode('utf-8')
+
+    # Create a kubeconfig
+    ca_crt = layer.kubernetes_common.ca_crt_path
+    kubeconfig_path = '/home/ubuntu/{}-sa-kubeconfig'.format(name)
+    public_address, public_port = layer.kubernetes_master.get_api_endpoint()
+    public_server = 'https://{0}:{1}'.format(public_address, public_port)
+    token = layer.kubernetes_master.get_sa_token(sa=name, ns=ns)
+
+    layer.kubernetes_common.create_kubeconfig(kubeconfig_path, public_server, ca_crt,
+                                              token=token, user=name)
+    os.chmod(kubeconfig_path, 0o644)
+
+    # Tell the people what they've won
+    fetch_cmd = 'juju scp {}:{} .'.format(hookenv.local_unit(), kubeconfig_path)
+    action_set({'msg': 'SA "{}" created in the "{}" namespace.'.format(name, ns)})
+    action_set({'names': ', '.join(serviceaccounts + [name])})
+    action_set({'output': output})
+    action_set({'kubeconfig': fetch_cmd})
+
+
+def sa_delete():
+    ns = action_get('namespace') or 'default'
+    name = action_get('name')
+    protect_resources(name)
+
+    serviceaccounts = sa_list()
+    if name not in serviceaccounts:
+        action_fail('SA "{}" does not exist in the "{}" namespace.'.format(name, ns))
+        return
+
+    # Only delete SAs and RoleBindings, never Namespaces nor Roles.
+    output = layer.kubernetes_common.kubectl(
+        '-n', ns, 'delete', 'serviceaccount', name)
+    output += layer.kubernetes_common.kubectl(
+        '-n', ns, 'delete', 'rolebinding', '{}-rolebinding'.format(name))
+
+    action_set({'msg': 'SA "{}" deleted from the "{}" namespace.'.format(name, ns)})
+    action_set({'names': ', '.join(sa for sa in serviceaccounts if sa != name)})
+    action_set({'output': output.decode('utf-8')})
+
+
+action = action_name().replace('sa-', '')
+if action == 'create':
+    sa_create()
+elif action == 'list':
+    sa_list()
+elif action == 'delete':
+    sa_delete()
