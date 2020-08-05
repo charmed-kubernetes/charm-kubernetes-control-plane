@@ -4,14 +4,14 @@ After=network.target
 
 [Service]
 User=root
-WorkingDirectory=/root/cdk
+WorkingDirectory=/root/cdk/auth-webhook
 ExecStart={{ charm_dir }}/../.venv/bin/gunicorn \
     --bind {{ host }}:{{ port }} \
     --capture-output \
-    --certfile ./server.crt \
+    --certfile /root/cdk/server.crt \
     --disable-redirect-access-to-syslog \
-    --error-logfile /root/cdk/audit/auth-webhook.log \
-    --keyfile ./server.key \
+    --error-logfile auth-webhook.log \
+    --keyfile /root/cdk/server.key \
     --log-level debug \
     --workers 2 \
     auth-webhook:app

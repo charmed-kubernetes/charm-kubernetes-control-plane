@@ -6,7 +6,7 @@ import logging
 from base64 import b64decode
 from flask import Flask, request, jsonify
 from pathlib import Path
-from subprocess import check_output
+from subprocess import check_output, CalledProcessError
 app = Flask(__name__)
 
 
@@ -15,7 +15,11 @@ def kubectl(*args):
 
     Returns stdout and throws an error if the command fails.
     '''
-    command = ['kubectl', '--kubeconfig=/root/.kube/config'] + list(args)
+    # Try to use our service account kubeconfig; fall back to root if needed
+    kubeconfig = Path('/root/cdk/auth-webhook/kubeconfig')
+    if not kubeconfig.exists():
+        kubeconfig = Path('/root/.kube/config')
+    command = ['kubectl', '--kubeconfig={}'.format(kubeconfig)] + list(args)
     return check_output(command)
 
 
@@ -51,7 +55,13 @@ def check_secrets(token_review):
     app.logger.info('Checking secret')
     token_to_check = token_review['spec']['token']
 
-    output = kubectl('get', 'secrets', '-o', 'json').decode('UTF-8')
+    try:
+        output = kubectl(
+            '-n', 'auth-webhook', 'get', 'secrets', '-o', 'json').decode('UTF-8')
+    except CalledProcessError as e:
+        app.logger.info('Unable to load secrets: {}.'.format(e))
+        return False
+
     secrets = json.loads(output)
     if 'items' in secrets:
         for secret in secrets['items']:
