@@ -252,7 +252,7 @@ def create_secret(token, username, user, groups=None, ns='auth-webhook'):
     sa_kubectl(
         '-n', ns, 'create', 'secret', 'generic', secret_id,
         "--from-literal=username={}".format(username),
-        "--from-literal=groups={}".format(groups),
+        "--from-literal=groups={}".format(groups or ''),
         "--from-literal=password={}".format(token))
 
 

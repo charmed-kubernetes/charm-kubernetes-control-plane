@@ -67,14 +67,10 @@ user-create:
       minLength: 2
     groups:
       type: string
-      description: Optional comma-separated list of groups
-    password:
-      type: string
-      description: Password for the new user
-      minLength: 2
+      description: |
+        Optional comma-separated list of groups eg. 'system:masters,managers'
   required:
     - name
-    - password
 user-delete:
   description: Delete an existing user
   params:
