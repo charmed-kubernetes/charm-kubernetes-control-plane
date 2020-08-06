@@ -1,0 +1,109 @@
+#!/usr/local/sbin/charm-env python3
+import json
+import os
+import sys
+from base64 import b64decode
+from charmhelpers.core import hookenv
+from charmhelpers.core.hookenv import (
+    action_get,
+    action_set,
+    action_fail,
+    action_name
+)
+from charms import layer
+
+os.environ['PATH'] += os.pathsep + os.path.join(os.sep, 'snap', 'bin')
+
+# Default namespace for all CK secrets
+NS = 'auth-webhook'
+
+# Import charm layers and start reactive
+layer.import_layer_libs()
+hookenv._run_atstart()
+
+
+def protect_resources(name):
+    '''Do not allow the action to operate on names used by Charmed Kubernetes.'''
+    if name.startswith('kubelet') or name in ['admin', 'kube-controller-manager',
+                                              'kube-proxy', 'kube-scheduler',
+                                              'system:monitoring']:
+        action_fail('Not allowed to {} "{}".'.format(action, name))
+        sys.exit(0)
+
+
+def user_list():
+    '''Return a list of usernames from Charmed Kubernetes secrets.'''
+    output = layer.kubernetes_common.kubectl(
+        '-n', NS, 'get', 'secrets', '-o', 'json').decode('UTF-8')
+    secrets = json.loads(output)
+    users = []
+    if 'items' in secrets:
+        for secret in secrets['items']:
+            try:
+                username_b64 = secret['data']['username'].encode('UTF-8')
+            except (KeyError, TypeError):
+                # CK secrets will have populated 'data', but not all secrets do
+                continue
+            users += [b64decode(username_b64).decode('UTF-8')]
+    action_set({'users': ', '.join(users)})
+    return users
+
+
+def user_create():
+    user = action_get('name')
+    password = action_get('password')
+    groups = action_get('groups') or None
+    protect_resources(user)
+
+    users = user_list()
+    if user in users:
+        action_fail('User "{}" already exists.'.format(user))
+        return
+
+    # Create the secret
+    layer.kubernetes_master.create_secret(password, user, user, groups, ns=NS)
+
+    # Create a kubeconfig
+    ca_crt = layer.kubernetes_common.ca_crt_path
+    kubeconfig_path = '/home/ubuntu/{}-user-kubeconfig'.format(user)
+    public_address, public_port = layer.kubernetes_master.get_api_endpoint()
+    public_server = 'https://{0}:{1}'.format(public_address, public_port)
+    # TODO: make the token format less magical so it doesn't get out of
+    # sync with the function that creates secrets in k8s-master.py.
+    token = '{}::{}'.format(user, password)
+
+    layer.kubernetes_common.create_kubeconfig(kubeconfig_path, public_server, ca_crt,
+                                              token=token, user=user)
+    os.chmod(kubeconfig_path, 0o644)
+
+    # Tell the people what they've won
+    fetch_cmd = 'juju scp {}:{} .'.format(hookenv.local_unit(), kubeconfig_path)
+    action_set({'msg': 'User "{}" created.'.format(user)})
+    action_set({'users': ', '.join(users + [user])})
+    action_set({'kubeconfig': fetch_cmd})
+
+
+def user_delete():
+    user = action_get('name')
+    protect_resources(user)
+
+    users = user_list()
+    if user not in users:
+        action_fail('User "{}" does not exist.'.format(user))
+        return
+
+    # Delete the secret
+    secret_id = '{}-secret'.format(user)
+    layer.kubernetes_master.delete_secret(secret_id, ns=NS)
+
+    action_set({'msg': 'User "{}" deleted.'.format(user)})
+    action_set({'users': ', '.join(u for u in users if u != user)})
+
+
+action = action_name().replace('user-', '')
+if action == 'create':
+    user_create()
+elif action == 'list':
+    user_list()
+elif action == 'delete':
+    user_delete()
