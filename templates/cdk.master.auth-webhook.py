@@ -69,6 +69,7 @@ def check_secrets(token_review):
                 data_b64 = secret['data']
                 password_b64 = data_b64['password'].encode('UTF-8')
             except (KeyError, TypeError):
+                # CK secrets will have populated 'data', but not all secrets do
                 continue
 
             password = b64decode(password_b64).decode('UTF-8')
@@ -105,7 +106,34 @@ def check_aws_iam(token_review):
 
 
 def check_keystone(token_review):
+    '''Check the request with an external Keystone server.'''
     app.logger.info('Checking Keystone')
+    app.logger.debug('Forwarding to: {{ keystone_service_cluster_ip }}')
+
+    # URL is what CK has always used from keystone-api-server-webhook.yaml
+    url = 'https://{{ keystone_service_cluster_ip }}:8443/webhook'
+    try:
+        try:
+            r = requests.post(url, json=token_review)
+        except requests.exceptions.SSLError:
+            app.logger.debug('SSLError with Keystone; skipping cert validation')
+            r = requests.post(url, json=token_review, verify=False)
+    except Exception as e:
+        app.logger.debug('Failed to contact the Keystone server: {}'.format(e))
+        return False
+
+    # Check if the response is valid
+    try:
+        ks_resp = json.loads(r.text)
+        'authenticated' in ks_resp['status']
+    except (KeyError, TypeError, ValueError) as e:
+        app.logger.debug('Invalid response from Keystone: {}'.format(r.text))
+        return False
+
+    # If authenticated, overwrite our 'req' dict with Keystone's response
+    if ks_resp['status']['authenticated']:
+        token_review = ks_resp
+        return True
     return False
 
 
@@ -144,8 +172,16 @@ def webhook():
     # Make the request unauthenticated by deafult
     req['status'] = {'authenticated': False}
 
-    if (check_known_tokens(req) or check_secrets(req) or
-            check_aws_iam(req) or check_keystone(req)):
+    if (
+        check_known_tokens(req)
+        or check_secrets(req)
+        {%- if keystone_service_cluster_ip %}
+        or check_aws_iam(req)
+        {%- endif %}
+        {%- if keystone_service_cluster_ip %}
+        or check_keystone(req)
+        {%- endif %}
+       ):
         # Successful checks will set auth and user data in the 'req' dict
         app.logger.debug('ACK: {}'.format(req))
     else:

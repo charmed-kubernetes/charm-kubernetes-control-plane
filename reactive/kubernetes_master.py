@@ -1023,8 +1023,14 @@ def register_auth_webhook():
                'host': socket.gethostname(),
                'port': 5000}
 
-    render('cdk.master.auth-webhook.py', auth_webhook_exe, context)
+    context['keystone_service_cluster_ip'] = None
+    if endpoint_from_flag('keystone-credentials.available.auth'):
+        ks_ip = get_service_ip('k8s-keystone-auth-service', errors_fatal=False)
+        if ks_ip:
+            context['keystone_service_cluster_ip'] = ks_ip
+
     render('cdk.master.auth-webhook-conf.yaml', auth_webhook_conf, context)
+    render('cdk.master.auth-webhook.py', auth_webhook_exe, context)
 
     res_file = '/root/cdk/auth-webhook/resources.yaml'
     render('cdk.master.auth-webhook-resources.yaml', res_file, {})
@@ -2076,10 +2082,7 @@ def configure_apiserver():
 
     # only one webhook at a time currently:
     # see https://github.com/kubernetes/kubernetes/issues/65874
-    if ks and aws:
-        hookenv.log('unable to have BOTH Keystone and '
-                    'AWS IAM webhook auth at the same time!')
-    elif aws:
+    if aws:
         api_opts['authentication-token-webhook-config-file'] = aws_iam_webhook
     elif ks:
         ks_ip = None
@@ -2095,7 +2098,6 @@ def configure_apiserver():
             render('keystone-api-server-webhook.yaml',
                    keystone_webhook,
                    context)
-            api_opts['authentication-token-webhook-config-file'] = keystone_webhook # noqa
 
             if hookenv.config('enable-keystone-authorization'):
                 # if user wants authorization, enable it
