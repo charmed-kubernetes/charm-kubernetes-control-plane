@@ -17,10 +17,8 @@
 import base64
 import os
 import re
-import random
 import shutil
 import socket
-import string
 import json
 import ipaddress
 import traceback
@@ -589,7 +587,7 @@ def password_changed():
         return
     elif password == "":
         # Password not initialised
-        password = token_generator()
+        password = kubernetes_master.token_generator()
     setup_tokens(password, 'admin', 'admin', 'system:masters')
     set_state('reconfigure.authentication.setup')
     remove_state('authentication.setup')
@@ -2348,12 +2346,12 @@ def setup_tokens(token, username, user, groups=None):
     Create a new secret if known_tokens have been migrated. Otherwise,
     add an entry to the 'known_tokens.csv' file.
     '''
+    if not token:
+        token = kubernetes_master.token_generator()
     if is_flag_set('kubernetes-master.token-auth.migrated'):
-        kubernetes_master.create_secret(token or token_generator(),
-                                        username, user, groups)
+        kubernetes_master.create_secret(token, username, user, groups)
     else:
-        kubernetes_master.create_known_token(token or token_generator(),
-                                             username, user, groups)
+        kubernetes_master.create_known_token(token, username, user, groups)
 
 
 def get_token(username):
@@ -2375,15 +2373,6 @@ def set_token(password, save_salt):
     param: save_salt - the key to store the value of the token.'''
     db.set(save_salt, password)
     return db.get(save_salt)
-
-
-def token_generator(length=32):
-    ''' Generate a random token for use in passwords and account tokens.
-
-    param: length - the length of the token to generate'''
-    alpha = string.ascii_letters + string.digits
-    token = ''.join(random.SystemRandom().choice(alpha) for _ in range(length))
-    return token
 
 
 @retry(times=3, delay_secs=1)
@@ -2548,7 +2537,7 @@ def getStorageBackend():
 @when('leadership.is_leader')
 @when_not('leadership.set.cluster_tag')
 def create_cluster_tag():
-    cluster_tag = 'kubernetes-{}'.format(token_generator().lower())
+    cluster_tag = 'kubernetes-{}'.format(kubernetes_master.token_generator().lower())
     leader_set(cluster_tag=cluster_tag)
 
 
@@ -2857,7 +2846,7 @@ def revert_secure_storage():
 @when_not('layer.vault-kv.app-kv.set.encryption_key')
 def generate_encryption_key():
     app_kv = vault_kv.VaultAppKV()
-    app_kv['encryption_key'] = token_generator(32)
+    app_kv['encryption_key'] = kubernetes_master.token_generator(32)
 
 
 @when('layer.vault-kv.app-kv.changed.encryption_key',

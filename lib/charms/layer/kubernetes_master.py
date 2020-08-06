@@ -1,7 +1,9 @@
 import csv
 import json
+import random
 import re
 import socket
+import string
 from base64 import b64decode
 from pathlib import Path
 from subprocess import check_output, CalledProcessError, TimeoutExpired
@@ -193,6 +195,16 @@ def sa_kubectl(*args):
         kubeconfig = Path('/root/.kube/config')
     command = ['kubectl', '--kubeconfig={}'.format(kubeconfig)] + list(args)
     return check_output(command)
+
+
+def token_generator(length=32):
+    '''Generate a random token for use in account tokens.
+
+    param: length - the length of the token to generate
+    '''
+    alpha = string.ascii_letters + string.digits
+    token = ''.join(random.SystemRandom().choice(alpha) for _ in range(length))
+    return token
 
 
 def create_known_token(token, username, user, groups=None):
