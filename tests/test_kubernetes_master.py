@@ -7,7 +7,7 @@ from unittest import mock
 from reactive import kubernetes_master
 from charms.layer import kubernetes_common
 from charms.layer.kubernetes_common import get_version, kubectl
-from charms.layer.kubernetes_master import deprecate_auth_file
+from charms.layer import kubernetes_master as charmlib
 from charms.reactive import endpoint_from_flag, set_flag, is_flag_set, clear_flag
 from charmhelpers.core import hookenv, unitdata
 
@@ -24,28 +24,30 @@ def auth_file():
 
 def test_deprecate_auth_file(auth_file):
     """Verify a comment is written by deprecate_auth_file()."""
-    deprecate_auth_file(auth_file)
-    assert auth_file.exists()
-    assert auth_file.read_text().startswith('#')
+    with mock.patch('lib.charms.layer.kubernetes_master.Path.exists',
+                    return_value=True):
+        charmlib.deprecate_auth_file(auth_file)
+        assert auth_file.exists()
+        assert auth_file.read_text().startswith('#')
 
 
-def test_get_password(auth_file):
+def test_get_csv_password(auth_file):
     """Verify expected token is returned."""
     password = 'password'
     user = 'admin'
 
     # Test we handle a missing file
-    assert kubernetes_master.get_password('missing', user) is None
+    with mock.patch('lib.charms.layer.kubernetes_master.Path.is_file',
+                    return_value=False):
+        assert charmlib.get_csv_password('missing', user) is None
 
-    with mock.patch('reactive.kubernetes_master.os.path.join',
-                    return_value=str(auth_file)):
-        # Test we handle a deprecated file
-        deprecate_auth_file(auth_file)
-        assert kubernetes_master.get_password(auth_file, user) is None
+    # Test we handle a deprecated file
+    auth_file.write_text('# Deprecated\n\n')
+    assert charmlib.get_csv_password(auth_file, user) is None
 
-        # Test we handle a valid file
-        auth_file.write_text('{},{},uid,group\n'.format(password, user))
-        assert kubernetes_master.get_password(auth_file, user) == password
+    # Test we handle a valid file
+    auth_file.write_text('{},{},uid,group\n'.format(password, user))
+    assert charmlib.get_csv_password(auth_file, user) == password
 
 
 def test_send_default_cni():

@@ -272,7 +272,7 @@ def get_csv_password(csv_fname, user):
     """Get the password for the given user within the csv file provided."""
     root_cdk = '/root/cdk'
     tokens_fname = Path(root_cdk) / csv_fname
-    if not tokens_fname.is_file:
+    if not tokens_fname.is_file():
         return None
     with open(tokens_fname, 'r') as stream:
         for line in stream:
