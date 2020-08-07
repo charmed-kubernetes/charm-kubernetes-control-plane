@@ -102,16 +102,22 @@ def check_secrets(token_review):
 
 
 def check_aws_iam(token_review):
-    app.logger.info('Checking AWS')
-    return False
+    '''Check the request with an AWS IAM authn server.'''
+    app.logger.info('Checking AWS IAM')
+
+    # URL comes from /root/cdk/aws-iam-webhook.yaml
+    url = '{{ aws_iam_endpoint }}'
+    app.logger.debug('Forwarding to: {}'.format(url))
+
+    return forward_request(token_review, url)
 
 
 def check_keystone(token_review):
     '''Check the request with a Keystone authn server.'''
     app.logger.info('Checking Keystone')
 
-    # URL is what CK has always used from keystone-api-server-webhook.yaml
-    url = 'https://{{ keystone_service_cluster_ip }}:8443/webhook'
+    # URL comes from /root/cdk/keystone/webhook.yaml
+    url = '{{ keystone_endpoint }}'
     app.logger.debug('Forwarding to: {}'.format(url))
 
     return forward_request(token_review, url)
@@ -121,7 +127,7 @@ def check_custom(token_review):
     '''Check the request with a user-specified authn server.'''
     app.logger.info('Checking Custom Endpoint')
 
-    # User will set the entire URL in k8s-master config
+    # User will set the URL in k8s-master config
     url = '{{ custom_authn_endpoint }}'
     app.logger.debug('Forwarding to: {}'.format(url))
 
@@ -199,10 +205,10 @@ def webhook():
     if (
         check_known_tokens(req)
         or check_secrets(req)
-        {%- if aws_authn_endpoint %}
+        {%- if aws_iam_endpoint %}
         or check_aws_iam(req)
         {%- endif %}
-        {%- if keystone_service_cluster_ip %}
+        {%- if keystone_endpoint %}
         or check_keystone(req)
         {%- endif %}
         {%- if custom_authn_endpoint %}

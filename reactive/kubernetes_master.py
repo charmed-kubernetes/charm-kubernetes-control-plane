@@ -975,11 +975,24 @@ def register_auth_webhook():
                'host': socket.gethostname(),
                'port': 5000}
 
-    context['keystone_service_cluster_ip'] = None
+    context['aws_iam_endpoint'] = None
+    if endpoint_from_flag('endpoint.aws-iam.ready'):
+        if Path(aws_iam_webhook).exists():
+            aws_yaml = yaml.safe_load(aws_iam_webhook)
+            try:
+                context['aws_iam_endpoint'] = aws_yaml['clusters'][0]['server']
+            except (KeyError, TypeError):
+                pass
+
+    context['keystone_endpoint'] = None
     if endpoint_from_flag('keystone-credentials.available.auth'):
-        ks_ip = get_service_ip('k8s-keystone-auth-service', errors_fatal=False)
-        if ks_ip:
-            context['keystone_service_cluster_ip'] = ks_ip
+        ks_webhook = keystone_root + '/webhook.yaml'
+        if Path(ks_webhook).exists():
+            ks_yaml = yaml.safe_load(ks_webhook)
+            try:
+                context['keystone_endpoint'] = ks_yaml['clusters'][0]['server']
+            except (KeyError, TypeError):
+                pass
 
     context['custom_authn_endpoint'] = None
     custom_authn = config.get('authn-webhook-endpoint')
