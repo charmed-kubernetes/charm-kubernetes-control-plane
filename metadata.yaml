@@ -21,7 +21,7 @@ tags:
   - master
 subordinate: false
 series:
-    - focal
+  - focal
   - bionic
   - xenial
 peers:
