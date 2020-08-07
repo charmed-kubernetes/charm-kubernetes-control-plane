@@ -754,12 +754,6 @@ def set_final_status():
         hookenv.status_set('blocked', msg)
         return
 
-    aws_iam = endpoint_from_flag('endpoint.aws-iam.ready')
-    if aws_iam and ks:
-        msg = 'Keystone and AWS IAM detected. Must select only one.'
-        hookenv.status_set('blocked', msg)
-        return
-
     upgrade_needed = is_state('kubernetes-master.upgrade-needed')
     upgrade_specified = is_state('kubernetes-master.upgrade-specified')
     if upgrade_needed and not upgrade_specified:
@@ -2050,17 +2044,10 @@ def configure_apiserver():
     auth_mode = hookenv.config('authorization-mode')
 
     ks = endpoint_from_flag('keystone-credentials.available.auth')
-    aws = endpoint_from_flag('endpoint.aws-iam.ready')
-
-    # only one webhook at a time currently:
-    # see https://github.com/kubernetes/kubernetes/issues/65874
-    if aws:
-        api_opts['authentication-token-webhook-config-file'] = aws_iam_webhook
-    elif ks:
+    if ks:
         ks_ip = None
-        if ks:
-            ks_ip = get_service_ip('k8s-keystone-auth-service',
-                                   errors_fatal=False)
+        ks_ip = get_service_ip('k8s-keystone-auth-service',
+                               errors_fatal=False)
         if ks and ks_ip:
             os.makedirs(keystone_root, exist_ok=True)
 
