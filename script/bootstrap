@@ -1,0 +1,8 @@
+#!/bin/bash
+
+set -x
+
+sudo apt update
+sudo apt install -qyf python3
+sudo snap install charm --classic
+sudo snap install yq

@@ -34,4 +34,10 @@ For full install instructions, please see the [Charmed Kubernetes documentation]
 
 For details on configuring and operating this charm, see the [kubernetes-master documentation](https://ubuntu.com/kubernetes/docs/charm-kubernetes-master) on the same site.
 
+# Developers
 
+## Building the charm
+
+```
+make charm
+```
