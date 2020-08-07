@@ -3,6 +3,7 @@
 import csv
 import json
 import logging
+import requests
 from base64 import b64decode
 from flask import Flask, request, jsonify
 from pathlib import Path
@@ -106,33 +107,56 @@ def check_aws_iam(token_review):
 
 
 def check_keystone(token_review):
-    '''Check the request with an external Keystone server.'''
+    '''Check the request with a Keystone authn server.'''
     app.logger.info('Checking Keystone')
-    app.logger.debug('Forwarding to: {{ keystone_service_cluster_ip }}')
 
     # URL is what CK has always used from keystone-api-server-webhook.yaml
     url = 'https://{{ keystone_service_cluster_ip }}:8443/webhook'
+    app.logger.debug('Forwarding to: {}'.format(url))
+
+    return forward_request(token_review, url)
+
+
+def check_custom(token_review):
+    '''Check the request with a user-specified authn server.'''
+    app.logger.info('Checking Custom Endpoint')
+
+    # User will set the entire URL in k8s-master config
+    url = '{{ custom_authn_endpoint }}'
+    app.logger.debug('Forwarding to: {}'.format(url))
+
+    return forward_request(token_review, url)
+
+
+def forward_request(json_req, url):
+    '''Forward a JSON TokenReview request to a url.
+
+    Returns True if the request is authenticated; False if the response is
+    either invalid or authn has been denied.
+    '''
     try:
         try:
-            r = requests.post(url, json=token_review)
+            r = requests.post(url, json=json_req)
         except requests.exceptions.SSLError:
-            app.logger.debug('SSLError with Keystone; skipping cert validation')
-            r = requests.post(url, json=token_review, verify=False)
+            app.logger.debug('SSLError with server; skipping cert validation')
+            r = requests.post(url, json=json_req, verify=False)
     except Exception as e:
-        app.logger.debug('Failed to contact the Keystone server: {}'.format(e))
+        app.logger.debug('Failed to contact server: {}'.format(e))
         return False
 
     # Check if the response is valid
     try:
-        ks_resp = json.loads(r.text)
-        'authenticated' in ks_resp['status']
-    except (KeyError, TypeError, ValueError) as e:
-        app.logger.debug('Invalid response from Keystone: {}'.format(r.text))
+        resp = json.loads(r.text)
+        'authenticated' in resp['status']
+    except (KeyError, TypeError, ValueError):
+        app.logger.debug('Invalid response from server: {}'.format(r.text))
         return False
 
-    # If authenticated, overwrite our 'req' dict with Keystone's response
-    if ks_resp['status']['authenticated']:
-        token_review = ks_resp
+    # NB: When forwarding to an external URL, clobber the original request with
+    # the entire server response. This ensures any additional data that the server
+    # wants to send makes it back to the kube apiserver.
+    if resp['status']['authenticated']:
+        json_req = resp
         return True
     return False
 
@@ -175,11 +199,14 @@ def webhook():
     if (
         check_known_tokens(req)
         or check_secrets(req)
-        {%- if keystone_service_cluster_ip %}
+        {%- if aws_authn_endpoint %}
         or check_aws_iam(req)
         {%- endif %}
         {%- if keystone_service_cluster_ip %}
         or check_keystone(req)
+        {%- endif %}
+        {%- if custom_authn_endpoint %}
+        or check_custom(req)
         {%- endif %}
        ):
         # Successful checks will set auth and user data in the 'req' dict

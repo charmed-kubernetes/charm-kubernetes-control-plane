@@ -1014,6 +1014,7 @@ def add_systemd_file_watcher():
 def register_auth_webhook():
     '''Render auth webhook templates and start the related service.'''
     os.makedirs(auth_webhook_root, exist_ok=True)
+    config = hookenv.config()
 
     # For 'api_ver', match the api version of the authentication.k8s.io TokenReview
     # that k8s-apiserver will be sending:
@@ -1028,6 +1029,11 @@ def register_auth_webhook():
         ks_ip = get_service_ip('k8s-keystone-auth-service', errors_fatal=False)
         if ks_ip:
             context['keystone_service_cluster_ip'] = ks_ip
+
+    context['custom_authn_endpoint'] = None
+    custom_authn = config.get('authn-webhook-endpoint')
+    if custom_authn:
+        context['custom_authn_endpoint'] = custom_authn
 
     render('cdk.master.auth-webhook-conf.yaml', auth_webhook_conf, context)
     render('cdk.master.auth-webhook.py', auth_webhook_exe, context)
