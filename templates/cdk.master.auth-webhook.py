@@ -8,6 +8,7 @@ from base64 import b64decode
 from flask import Flask, request, jsonify
 from pathlib import Path
 from subprocess import check_output, CalledProcessError
+from yaml import safe_load
 app = Flask(__name__)
 
 
@@ -24,11 +25,38 @@ def kubectl(*args):
     return check_output(command)
 
 
-def check_known_tokens(token_review):
-    '''Populate user info if token is found in known_tokens.csv.'''
+def check_token(token_review):
+    '''Populate user info if token is found in auth-related files.'''
     app.logger.info('Checking token')
     token_to_check = token_review['spec']['token']
 
+    # If we have an admin token, short-circuit all other checks. This prevents us
+    # from leaking our admin token to other authn services.
+    admin_kubeconfig = Path('/root/.kube/config')
+    if admin_kubeconfig.exists():
+        with open(admin_kubeconfig) as f:
+            data = safe_load(f)
+            try:
+                admin_token = data['users'][0]['user']['token']
+            except (KeyError, ValueError):
+                # No admin kubeconfig; this is weird since we should always have an
+                # admin kubeconfig, but we shouldn't fail here in case there's
+                # something in known_tokens that should be validated.
+                pass
+            else:
+                if token_to_check == admin_token:
+                    # We have a valid admin
+                    token_review['status'] = {
+                        'authenticated': True,
+                        'user': {
+                            'username': 'admin',
+                            'uid': 'admin',
+                            'groups': ['system:masters']
+                        }
+                    }
+                    return True
+
+    # No admin? We're probably in an upgrade. Check an existing known_tokens.csv.
     csv_fields = ['token', 'username', 'user', 'groups']
     known_tokens = Path('/root/cdk/known_tokens.csv')
     try:
@@ -203,7 +231,7 @@ def webhook():
     req['status'] = {'authenticated': False}
 
     if (
-        check_known_tokens(req)
+        check_token(req)
         or check_secrets(req)
         {%- if aws_iam_endpoint %}
         or check_aws_iam(req)

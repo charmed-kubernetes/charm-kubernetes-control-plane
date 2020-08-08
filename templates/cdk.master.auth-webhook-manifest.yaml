@@ -1,0 +1,8 @@
+# K8s resources used by the webhook authenticator
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: auth-webhook
+  labels:
+    name: auth-webhook
