@@ -21,9 +21,9 @@ tags:
   - master
 subordinate: false
 series:
+  - focal
   - bionic
   - xenial
-  - focal
 peers:
   kube-masters:
     interface: kube-masters
