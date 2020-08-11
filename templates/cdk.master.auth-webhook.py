@@ -5,6 +5,7 @@ import json
 import logging
 import requests
 from base64 import b64decode
+from copy import deepcopy
 from flask import Flask, request, jsonify
 from pathlib import Path
 from subprocess import check_output, CalledProcessError
@@ -23,6 +24,24 @@ def kubectl(*args):
         kubeconfig = Path('/root/.kube/config')
     command = ['kubectl', '--kubeconfig={}'.format(kubeconfig)] + list(args)
     return check_output(command)
+
+
+def log_secret(text, obj, hide=True):
+    '''Log information about a TokenReview object.
+
+    The message will always be logged at the 'debug' level and will be in the
+    form "text: obj". By default, secrets will be hidden. Set 'hide=False' to
+    have the secret printed in the output unobfuscated.
+    '''
+    log_obj = obj
+    if obj and hide:
+        log_obj = deepcopy(obj)
+        try:
+            log_obj['spec']['token'] = '********'
+        except (KeyError, TypeError):
+            # No secret here, carry on
+            pass
+    app.logger.debug('{}: {}'.format(text, log_obj))
 
 
 def check_token(token_review):
@@ -183,7 +202,7 @@ def forward_request(json_req, url):
         resp = json.loads(r.text)
         'authenticated' in resp['status']
     except (KeyError, TypeError, ValueError):
-        app.logger.debug('Invalid response from server: {}'.format(r.text))
+        log_secret(text='Invalid response from server', obj=r.text)
         return False
 
     # NB: When forwarding to an external URL, clobber the original request with
@@ -222,9 +241,9 @@ def webhook():
         valid = False
 
     if valid:
-        app.logger.debug('REQ: {}'.format(req))
+        log_secret(text='REQ', obj=req)
     else:
-        app.logger.info('Invalid request: {}'.format(req))
+        log_secret(text='Invalid request', obj=req)
         return ''  # flask needs to return something that isn't None
 
     # Make the request unauthenticated by deafult
@@ -244,9 +263,9 @@ def webhook():
         {%- endif %}
        ):
         # Successful checks will set auth and user data in the 'req' dict
-        app.logger.debug('ACK: {}'.format(req))
+        log_secret(text='ACK', obj=req)
     else:
-        app.logger.debug('NAK: {}'.format(req))
+        log_secret(text='NAK', obj=req)
 
     return jsonify(req)
 
