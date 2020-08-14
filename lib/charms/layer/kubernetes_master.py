@@ -163,13 +163,8 @@ def deprecate_auth_file(auth_file):
 
 
 def migrate_auth_file(filename):
-    migrate_basic = migrate_known_tokens = False
-    if filename == AUTH_BASIC_FILE:
-        migrate_basic = True
-    elif filename == AUTH_TOKENS_FILE:
-        migrate_known_tokens = True
-
-    with open(filename, 'r') as f:
+    '''Create secrets or known tokens depending on what file is being migrated.'''
+    with open(str(filename), 'r') as f:
         rows = list(csv.reader(f))
 
     for row in rows:
@@ -177,11 +172,13 @@ def migrate_auth_file(filename):
             if row[0].startswith('#'):
                 continue
             else:
-                if migrate_basic:
+                if filename == AUTH_BASIC_FILE:
                     create_known_token(*row)
-                elif migrate_known_tokens:
+                elif filename == AUTH_TOKENS_FILE:
                     create_secret(*row)
                 else:
+                    # log and return if we don't recognize the auth file
+                    hookenv.log('Unknown auth file: {}'.format(filename))
                     return False
         except IndexError:
             pass
@@ -264,7 +261,7 @@ def get_csv_password(csv_fname, user):
     tokens_fname = Path(root_cdk) / csv_fname
     if not tokens_fname.is_file():
         return None
-    with open(tokens_fname, 'r') as stream:
+    with tokens_fname.open('r') as stream:
         for line in stream:
             record = line.split(',')
             try:
@@ -288,7 +285,7 @@ def get_secret_password(username, ns='auth-webhook'):
         if username == 'admin':
             admin_kubeconfig = Path('/root/.kube/config')
             if admin_kubeconfig.exists():
-                with open(admin_kubeconfig) as f:
+                with admin_kubeconfig.open('r') as f:
                     data = safe_load(f)
                     try:
                         token = data['users'][0]['user']['token']

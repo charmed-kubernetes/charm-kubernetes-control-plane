@@ -1,53 +1,15 @@
 import json
-import pytest
-import tempfile
 from ipaddress import ip_interface
-from pathlib import Path
 from unittest import mock
 from reactive import kubernetes_master
 from charms.layer import kubernetes_common
 from charms.layer.kubernetes_common import get_version, kubectl
-from charms.layer import kubernetes_master as charmlib
 from charms.reactive import endpoint_from_flag, set_flag, is_flag_set, clear_flag
 from charmhelpers.core import hookenv, unitdata
 
 
 kubernetes_common.get_networks = lambda cidrs: [ip_interface(cidr.strip()).network
                                                 for cidr in cidrs.split(',')]
-
-
-@pytest.fixture
-def auth_file():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir) / 'test_auth.csv'
-
-
-def test_deprecate_auth_file(auth_file):
-    """Verify a comment is written by deprecate_auth_file()."""
-    with mock.patch('lib.charms.layer.kubernetes_master.Path.exists',
-                    return_value=True):
-        charmlib.deprecate_auth_file(auth_file)
-        assert auth_file.exists()
-        assert auth_file.read_text().startswith('#')
-
-
-def test_get_csv_password(auth_file):
-    """Verify expected token is returned."""
-    password = 'password'
-    user = 'admin'
-
-    # Test we handle a missing file
-    with mock.patch('lib.charms.layer.kubernetes_master.Path.is_file',
-                    return_value=False):
-        assert charmlib.get_csv_password('missing', user) is None
-
-    # Test we handle a deprecated file
-    auth_file.write_text('# Deprecated\n\n')
-    assert charmlib.get_csv_password(auth_file, user) is None
-
-    # Test we handle a valid file
-    auth_file.write_text('{},{},uid,group\n'.format(password, user))
-    assert charmlib.get_csv_password(auth_file, user) == password
 
 
 def test_send_default_cni():
