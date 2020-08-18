@@ -1,15 +1,8 @@
 import base64
 import json
 import pytest
-import sys
 from unittest import mock
-
-
-charms = mock.MagicMock()
-sys.modules['charms'] = charms
-sys.modules['charms.layer'] = charms.layer
-
-from actions import user_actions  # noqa: E402
+from actions import user_actions
 
 
 def test_protect_resources():
@@ -45,33 +38,64 @@ def test_user_list():
         assert secret_id in secret_data.values()
 
 
+@mock.patch('actions.user_actions.os.chmod')
+@mock.patch('actions.user_actions.layer.kubernetes_common')
+@mock.patch('actions.user_actions.layer.kubernetes_master')
 @mock.patch('actions.user_actions.action_get')
-def test_user_create(mock_get):
-    """Verify failure if we create a user that already exists."""
+def test_user_create(mock_get, mock_master, mock_common, mock_chmod):
+    """Verify expected calls are made when creating a user."""
     user = 'testuser'
     secret_id = '{}-secret'.format(user)
     test_data = {
         user: secret_id
     }
 
+    # Ensure failure when user exists
     mock_get.return_value = user
     with mock.patch('actions.user_actions.user_list',
                     return_value=test_data):
         user_actions.user_create()
         assert user_actions.action_fail.called
 
+    # Ensure calls/args when we have a new user
+    user = 'newuser'
+    password = 'password'
+    token = '{}::{}'.format(user, password)
+    mock_get.return_value = user
+    mock_master.token_generator.return_value = password
+    mock_master.get_api_endpoint.return_value = [1, 1]
 
+    with mock.patch('actions.user_actions.user_list',
+                    return_value=test_data):
+        user_actions.user_create()
+    args, kwargs = mock_master.create_secret.call_args
+    assert token in args
+    args, kwargs = mock_common.create_kubeconfig.call_args
+    assert token in kwargs['token']
+
+
+@mock.patch('actions.user_actions.layer.kubernetes_master')
 @mock.patch('actions.user_actions.action_get')
-def test_user_delete(mock_get):
-    """Verify failure if we delete a user that does not exist."""
+def test_user_delete(mock_get, mock_master):
+    """Verify expected calls are made when deleting a user."""
     user = 'testuser'
     secret_id = '{}-secret'.format(user)
     test_data = {
         user: secret_id
     }
 
-    mock_get.return_value = 'testuser2'
+    # Ensure failure when user does not exist
+    mock_get.return_value = 'missinguser'
     with mock.patch('actions.user_actions.user_list',
                     return_value=test_data):
         user_actions.user_delete()
         assert user_actions.action_fail.called
+
+    # Ensure calls/args when we have a valid user
+    mock_get.return_value = user
+
+    with mock.patch('actions.user_actions.user_list',
+                    return_value=test_data):
+        user_actions.user_delete()
+    args, kwargs = mock_master.delete_secret.call_args
+    assert secret_id in args
