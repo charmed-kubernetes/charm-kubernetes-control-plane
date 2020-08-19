@@ -531,18 +531,8 @@ def enable_metric_changed():
 
 @when('config.changed.client_password', 'leadership.is_leader')
 def password_changed():
-    """Handle password change via the charms config."""
-    password = hookenv.config('client_password')
-    if password == "" and is_state('client.password.initialised'):
-        # password_changed is called during an upgrade. Nothing to do.
-        return
-    elif password == "":
-        # Password not initialised
-        password = kubernetes_master.token_generator()
-    setup_tokens(password, 'admin', 'admin', 'system:masters')
-    set_state('reconfigure.authentication.setup')
+    """Handle password change by reconfiguring authentication."""
     remove_state('authentication.setup')
-    set_state('client.password.initialised')
 
 
 @when('config.changed.storage-backend')
@@ -584,15 +574,17 @@ def setup_leader_authentication():
         kubernetes_master.deprecate_auth_file(known_tokens)
         set_flag('kubernetes-master.token-auth.migrated')
 
-        last_pass = get_token('admin')
-        setup_tokens(last_pass, 'admin', 'admin', 'system:masters')
-
         # Generate the default service account token key
         if not os.path.isfile(service_key):
             cmd = ['openssl', 'genrsa', '-out', service_key,
                    '2048']
             check_call(cmd)
         remove_state('reconfigure.authentication.setup')
+
+    # Write the admin token every time we setup authn to ensure we honor a
+    # configured password.
+    client_pass = hookenv.config('client_password') or get_token('admin')
+    setup_tokens(client_pass, 'admin', 'admin', 'system:masters')
 
     create_tokens_and_sign_auth_requests()
 
@@ -1020,12 +1012,15 @@ def register_auth_webhook():
             hookenv.log("cdk.master.auth-webhook failed to start; will retry")
 
 
-@when('kubernetes-master.apiserver.configured')
-@when_not('kubernetes-master.auth-webhook-manifest.applied')
-def apply_auth_webhook_manifest():
-    if kubectl_manifest('create', auth_webhook_man):
-        remove_state('authentication.setup')
-        set_flag('kubernetes-master.auth-webhook-manifest.applied')
+@when('kubernetes-master.apiserver.configured',
+      'kubernetes-master.auth-webhook-service.started')
+@when_not('kubernetes-master.auth-webhook-tokens.setup')
+def setup_auth_webhook_tokens():
+    """Reconfigure authentication to setup auth-webhook tokens."""
+    # Reconfigure authentication so that proper secrets are created
+    # after the apiserver and auth-webhook service are ready.
+    remove_state('authentication.setup')
+    set_flag('kubernetes-master.auth-webhook-tokens.setup')
 
 
 @when('etcd.available', 'tls_client.certs.saved',
@@ -1179,6 +1174,10 @@ def send_cluster_dns_detail(kube_control):
 
 def create_tokens_and_sign_auth_requests():
     """Create tokens for CK users and services."""
+    # NB: This may be called before kube-apiserver is up when bootstrapping new
+    # clusters with auth-webhook. In this case, setup_tokens will be a no-op.
+    # We will re-enter this function once master services are available to
+    # create proper secrets.
     controller_manager_token = get_token('system:kube-controller-manager')
     if not controller_manager_token:
         setup_tokens(None, 'system:kube-controller-manager',
@@ -1869,8 +1868,13 @@ def build_kubeconfig():
         client_pass = get_token('admin')
         if not client_pass:
             # If we made it this far without a password, we're bootstrapping a new
-            # cluster. Create a new token so we can build an admin kubeconfig.
-            client_pass = kubernetes_master.token_generator()
+            # cluster. Create a new token so we can build an admin kubeconfig. The
+            # auth-webhook service will ack this value from the kubeconfig file,
+            # allowing us to continue until the master is started and a proper
+            # secret can be created.
+            client_pass = hookenv.config('client_password') or \
+                kubernetes_master.token_generator()
+            client_pass = 'admin::{}'.format(client_pass)
 
         # drop keystone helper script?
         ks = endpoint_from_flag('keystone-credentials.available.auth')
