@@ -229,17 +229,17 @@ def create_known_token(token, username, user, groups=None):
             tokens_by_user.values())
 
 
-def create_secret(token, username, user, groups=None, ns='auth-webhook'):
+def create_secret(token, username, user, groups=None):
     sani_name = re.sub('[^0-9a-zA-Z]+', '-', user)
     secret_id = '{}-secret'.format(sani_name)
-    delete_secret(secret_id, ns=ns)
+    delete_secret(secret_id)
     # The authenticator expects tokens to be in the form user::token
     token_delim = '::'
     if token_delim not in token:
         token = '{}::{}'.format(user, token)
 
     if kubernetes_common.kubectl_success(
-      '-n', ns, 'create', 'secret', 'generic', secret_id,
+      'create', 'secret', 'generic', secret_id,
       "--from-literal=username={}".format(username),
       "--from-literal=groups={}".format(groups or ''),
       "--from-literal=password={}".format(token)):
@@ -248,11 +248,11 @@ def create_secret(token, username, user, groups=None, ns='auth-webhook'):
         hookenv.log("WARN: Unable to create secret for {}".format(username))
 
 
-def delete_secret(secret_id, ns='auth-webhook'):
+def delete_secret(secret_id):
     '''Delete a given secret id.'''
     # If this fails, it's most likely because we're trying to delete a secret
     # that doesn't exist. Let the caller decide if failure is a problem.
-    return kubernetes_common.kubectl_success('-n', ns, 'delete', 'secret', secret_id)
+    return kubernetes_common.kubectl_success('delete', 'secret', secret_id)
 
 
 def get_csv_password(csv_fname, user):
@@ -273,10 +273,10 @@ def get_csv_password(csv_fname, user):
     return None
 
 
-def get_secret_password(username, ns='auth-webhook'):
+def get_secret_password(username):
     try:
         output = kubernetes_common.kubectl(
-            '-n', ns, 'get', 'secrets', '-o', 'json').decode('UTF-8')
+            'get', 'secrets', '-o', 'json').decode('UTF-8')
     except CalledProcessError:
         # NB: apiserver probably isn't up. This can happen on boostrap or upgrade
         # while trying to build kubeconfig files. If we need the 'admin' token during

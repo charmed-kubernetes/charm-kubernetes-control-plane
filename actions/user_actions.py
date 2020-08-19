@@ -14,9 +14,6 @@ from charms import layer
 
 os.environ['PATH'] += os.pathsep + os.path.join(os.sep, 'snap', 'bin')
 
-# Default namespace for all CK secrets
-NS = 'auth-webhook'
-
 # Import charm layers and start reactive
 layer.import_layer_libs()
 hookenv._run_atstart()
@@ -37,7 +34,7 @@ def protect_resources(name):
 def user_list():
     '''Return a dict of 'username: secret_id' for Charmed Kubernetes users.'''
     output = layer.kubernetes_common.kubectl(
-        '-n', NS, 'get', 'secrets', '-o', 'json').decode('UTF-8')
+        'get', 'secrets', '-o', 'json').decode('UTF-8')
     secrets = json.loads(output)
     users = {}
     if 'items' in secrets:
@@ -67,7 +64,7 @@ def user_create():
     # TODO: make the token format less magical so it doesn't get out of
     # sync with the function that creates secrets in k8s-master.py.
     token = '{}::{}'.format(user, layer.kubernetes_master.token_generator())
-    layer.kubernetes_master.create_secret(token, user, user, groups, ns=NS)
+    layer.kubernetes_master.create_secret(token, user, user, groups)
 
     # Create a kubeconfig
     ca_crt = layer.kubernetes_common.ca_crt_path
@@ -97,7 +94,7 @@ def user_delete():
 
     # Delete the secret
     secret_id = users[user]
-    layer.kubernetes_master.delete_secret(secret_id, ns=NS)
+    layer.kubernetes_master.delete_secret(secret_id)
 
     action_set({'msg': 'User "{}" deleted.'.format(user)})
     action_set({'users': ', '.join(u for u in list(users) if u != user)})

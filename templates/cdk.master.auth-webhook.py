@@ -105,7 +105,7 @@ def check_secrets(token_review):
 
     try:
         output = kubectl(
-            '-n', 'auth-webhook', 'get', 'secrets', '-o', 'json').decode('UTF-8')
+            'get', 'secrets', '-o', 'json').decode('UTF-8')
     except CalledProcessError as e:
         app.logger.info('Unable to load secrets: {}.'.format(e))
         return False

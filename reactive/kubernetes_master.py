@@ -120,7 +120,6 @@ aws_iam_webhook = '/root/cdk/aws-iam-webhook.yaml'
 auth_webhook_root = '/root/cdk/auth-webhook'
 auth_webhook_conf = os.path.join(auth_webhook_root, 'auth-webhook-conf.yaml')
 auth_webhook_exe = os.path.join(auth_webhook_root, 'auth-webhook.py')
-auth_webhook_man = os.path.join(auth_webhook_root, 'auth-webhook-manifest.yaml')
 
 register_trigger(when='endpoint.aws.ready',  # when set
                  set_flag='kubernetes-master.aws.changed')
@@ -997,7 +996,6 @@ def register_auth_webhook():
 
     render('cdk.master.auth-webhook-conf.yaml', auth_webhook_conf, context)
     render('cdk.master.auth-webhook.py', auth_webhook_exe, context)
-    render('cdk.master.auth-webhook-manifest.yaml', auth_webhook_man, {})
 
     service_file = '/etc/systemd/system/cdk.master.auth-webhook.service'
     render('cdk.master.auth-webhook.service', service_file, context)
