@@ -968,7 +968,9 @@ def register_auth_webhook():
     context = {'api_ver': 'v1beta1',
                'charm_dir': hookenv.charm_dir(),
                'host': socket.gethostname(),
-               'port': 5000}
+               'pidfile': 'auth-webhook.pid',
+               'port': 5000,
+               'root_dir': auth_webhook_root}
 
     context['aws_iam_endpoint'] = None
     if endpoint_from_flag('endpoint.aws-iam.ready'):
@@ -996,6 +998,8 @@ def register_auth_webhook():
 
     render('cdk.master.auth-webhook-conf.yaml', auth_webhook_conf, context)
     render('cdk.master.auth-webhook.py', auth_webhook_exe, context)
+    render('cdk.master.auth-webhook.logrotate',
+           '/etc/logrotate.d/auth-webhook', context)
 
     service_file = '/etc/systemd/system/cdk.master.auth-webhook.service'
     render('cdk.master.auth-webhook.service', service_file, context)

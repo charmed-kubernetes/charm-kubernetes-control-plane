@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 User=root
-WorkingDirectory=/root/cdk/auth-webhook
+WorkingDirectory={{ root_dir }}
 ExecStart={{ charm_dir }}/../.venv/bin/gunicorn \
     --bind {{ host }}:{{ port }} \
     --capture-output \
@@ -13,6 +13,7 @@ ExecStart={{ charm_dir }}/../.venv/bin/gunicorn \
     --error-logfile auth-webhook.log \
     --keyfile /root/cdk/server.key \
     --log-level debug \
+    --pid {{ pidfile }} \
     --workers 2 \
     auth-webhook:app
 Restart=always

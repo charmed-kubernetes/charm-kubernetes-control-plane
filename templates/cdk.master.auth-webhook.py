@@ -8,7 +8,7 @@ from base64 import b64decode
 from copy import deepcopy
 from flask import Flask, request, jsonify
 from pathlib import Path
-from subprocess import check_output, CalledProcessError
+from subprocess import check_output, CalledProcessError, TimeoutExpired
 from yaml import safe_load
 app = Flask(__name__)
 
@@ -19,11 +19,15 @@ def kubectl(*args):
     Returns stdout and throws an error if the command fails.
     '''
     # Try to use our service account kubeconfig; fall back to root if needed
+    kubectl_cmd = Path('/snap/bin/kubectl')
+    if not kubectl_cmd.is_file():
+        # Fall back to anywhere on the path if the snap isn't available
+        kubectl_cmd = 'kubectl'
     kubeconfig = Path('/root/cdk/auth-webhook/kubeconfig')
-    if not kubeconfig.exists():
+    if not kubeconfig.is_file():
         kubeconfig = Path('/root/.kube/config')
-    command = ['kubectl', '--kubeconfig={}'.format(kubeconfig)] + list(args)
-    return check_output(command)
+    command = [kubectl_cmd, '--kubeconfig={}'.format(kubeconfig)] + list(args)
+    return check_output(command, timeout=10)
 
 
 def log_secret(text, obj, hide=True):
@@ -106,7 +110,7 @@ def check_secrets(token_review):
     try:
         output = kubectl(
             'get', 'secrets', '-o', 'json').decode('UTF-8')
-    except CalledProcessError as e:
+    except (CalledProcessError, TimeoutExpired) as e:
         app.logger.info('Unable to load secrets: {}.'.format(e))
         return False
 
