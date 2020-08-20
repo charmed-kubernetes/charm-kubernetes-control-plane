@@ -77,7 +77,6 @@ from charms.layer.kubernetes_common import generate_openstack_cloud_config
 from charms.layer.kubernetes_common import write_azure_snap_config
 from charms.layer.kubernetes_common import configure_kube_proxy
 from charms.layer.kubernetes_common import kubeproxyconfig_path
-from charms.layer.kubernetes_common import kubectl_manifest
 from charms.layer.kubernetes_common import get_version
 from charms.layer.kubernetes_common import retry
 from charms.layer.kubernetes_common import ca_crt_path
@@ -85,7 +84,7 @@ from charms.layer.kubernetes_common import server_crt_path
 from charms.layer.kubernetes_common import server_key_path
 from charms.layer.kubernetes_common import client_crt_path
 from charms.layer.kubernetes_common import client_key_path
-from charms.layer.kubernetes_common import kubectl
+from charms.layer.kubernetes_common import kubectl, kubectl_manifest, kubectl_success
 
 from charms.layer.nagios import install_nagios_plugin_from_file
 from charms.layer.nagios import remove_nagios_plugin
@@ -1019,10 +1018,14 @@ def register_auth_webhook():
 @when_not('kubernetes-master.auth-webhook-tokens.setup')
 def setup_auth_webhook_tokens():
     """Reconfigure authentication to setup auth-webhook tokens."""
-    # Reconfigure authentication so that proper secrets are created
-    # after the apiserver and auth-webhook service are ready.
-    remove_state('authentication.setup')
-    set_flag('kubernetes-master.auth-webhook-tokens.setup')
+    # Reconfigure authentication so that proper secrets are created after the
+    # apiserver and auth-webhook service are ready. Even if the apiserver is
+    # configured, it may not be fully started. Only proceed if we can get secrets.
+    if kubectl_success('get', 'secrets'):
+        remove_state('authentication.setup')
+        set_flag('kubernetes-master.auth-webhook-tokens.setup')
+    else:
+        hookenv.log('Secrets are not yet available; will retry')
 
 
 @when('etcd.available', 'tls_client.certs.saved',
