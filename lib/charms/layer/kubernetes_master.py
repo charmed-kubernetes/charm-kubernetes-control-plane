@@ -4,7 +4,8 @@ import random
 import re
 import socket
 import string
-from base64 import b64decode
+import tempfile
+from base64 import b64decode, b64encode
 from pathlib import Path
 import ipaddress
 from subprocess import check_output, CalledProcessError, TimeoutExpired
@@ -18,8 +19,9 @@ from charms.reactive import endpoint_from_flag, is_flag_set
 from charms.layer import kubernetes_common
 
 
-AUTH_BACKUP_EXT = 'pre-migration'
+AUTH_BACKUP_EXT = 'pre-secrets'
 AUTH_BASIC_FILE = '/root/cdk/basic_auth.csv'
+AUTH_SECRET_TYPE = 'juju.is/token-auth'
 AUTH_TOKENS_FILE = '/root/cdk/known_tokens.csv'
 STANDARD_API_PORT = 6443
 CEPH_CONF_DIR = Path('/etc/ceph')
@@ -237,14 +239,22 @@ def create_secret(token, username, user, groups=None):
     if token_delim not in token:
         token = '{}::{}'.format(user, token)
 
-    if kubernetes_common.kubectl_success(
-      'create', 'secret', 'generic', secret_id,
-      "--from-literal=username={}".format(username),
-      "--from-literal=groups={}".format(groups or ''),
-      "--from-literal=password={}".format(token)):
-        hookenv.log("Created secret for {}".format(username))
-    else:
-        hookenv.log("WARN: Unable to create secret for {}".format(username))
+    context = {
+        'type': AUTH_SECRET_TYPE,
+        'secret_id': secret_id,
+        'user': b64encode(user.encode('UTF-8')).decode('utf-8'),
+        'username': b64encode(username.encode('UTF-8')).decode('utf-8'),
+        'password': b64encode(token.encode('UTF-8')).decode('utf-8'),
+        'groups': b64encode(groups.encode('UTF-8')).decode('utf-8') if groups else ''
+    }
+    with tempfile.NamedTemporaryFile() as tmp_manifest:
+        render(
+            'cdk.master.auth-webhook-secret.yaml', tmp_manifest.name, context=context)
+
+        if kubernetes_common.kubectl_manifest('apply', tmp_manifest.name):
+            hookenv.log("Created secret for {}".format(username))
+        else:
+            hookenv.log("WARN: Unable to create secret for {}".format(username))
 
 
 def delete_secret(secret_id):
@@ -275,7 +285,9 @@ def get_csv_password(csv_fname, user):
 def get_secret_password(username):
     try:
         output = kubernetes_common.kubectl(
-            'get', 'secrets', '-o', 'json').decode('UTF-8')
+            'get', 'secrets',
+            '--field-selector', 'type={}'.format(AUTH_SECRET_TYPE),
+            '-o', 'json').decode('UTF-8')
     except CalledProcessError:
         # NB: apiserver probably isn't up. This can happen on boostrap or upgrade
         # while trying to build kubeconfig files. If we need the 'admin' token during
@@ -292,7 +304,7 @@ def get_secret_password(username):
                         pass
         return token
     except FileNotFoundError:
-        # New deployments may ask for a token before snaps are installed.
+        # New deployments may ask for a token before the kubectl snap is installed.
         # Give them nothing!
         return None
 

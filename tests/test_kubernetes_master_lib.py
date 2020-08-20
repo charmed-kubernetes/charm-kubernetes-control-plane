@@ -41,20 +41,23 @@ def test_migrate_auth_file(auth_file):
             assert charmlib.migrate_auth_file(auth_file)
 
 
-@mock.patch('lib.charms.layer.kubernetes_master.kubernetes_common.kubectl_success',
+@mock.patch('lib.charms.layer.kubernetes_master.render')
+@mock.patch('lib.charms.layer.kubernetes_master.kubernetes_common.kubectl_manifest',
             return_value=True)
-def test_create_secret(mock_kubectl):
+def test_create_secret(mock_kubectl, mock_render):
     """Verify valid secret data is sent to kubectl."""
     password = 'password'
     user_id = 'replace$uid'
     secret_id = 'replace-uid'
-    secret_token = '--from-literal=password={}::{}'.format(user_id, password)
+    secret_token = base64.b64encode(
+        '{}::{}'.format(user_id, password).encode('utf-8')).decode('utf-8')
 
     with mock.patch('lib.charms.layer.kubernetes_master.delete_secret'):
         charmlib.create_secret(password, 'admin', user_id, 'groupA,groupB')
-    args, kwargs = mock_kubectl.call_args
-    assert secret_id in args
-    assert secret_token in args
+    assert mock_kubectl.called
+    args, kwargs = mock_render.call_args
+    assert secret_id in kwargs['context']['secret_id']
+    assert secret_token in kwargs['context']['password']
 
 
 @mock.patch('lib.charms.layer.kubernetes_master.kubernetes_common.kubectl_success',
