@@ -230,8 +230,7 @@ def create_known_token(token, username, user, groups=None):
 
 
 def create_secret(token, username, user, groups=None):
-    sani_name = re.sub('[^0-9a-zA-Z]+', '-', user)
-    secret_id = '{}-secret'.format(sani_name)
+    secret_id = re.sub('[^0-9a-zA-Z]+', '-', user)
     delete_secret(secret_id)
     # The authenticator expects tokens to be in the form user::token
     token_delim = '::'

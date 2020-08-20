@@ -47,7 +47,7 @@ def test_create_secret(mock_kubectl):
     """Verify valid secret data is sent to kubectl."""
     password = 'password'
     user_id = 'replace$uid'
-    secret_id = 'replace-uid-secret'
+    secret_id = 'replace-uid'
     secret_token = '--from-literal=password={}::{}'.format(user_id, password)
 
     with mock.patch('lib.charms.layer.kubernetes_master.delete_secret'):

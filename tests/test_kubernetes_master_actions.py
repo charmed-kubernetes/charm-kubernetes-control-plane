@@ -15,9 +15,7 @@ def test_protect_resources():
 
 def test_user_list():
     """Verify user data is parsed correctly from our secrets."""
-    user = 'admin'
-    secret_id = '{}-secret'.format(user)
-
+    user = secret_id = 'admin'
     test_data = {
         'items': [{
             'metadata': {
@@ -44,8 +42,7 @@ def test_user_list():
 @mock.patch('actions.user_actions.action_get')
 def test_user_create(mock_get, mock_master, mock_common, mock_chmod):
     """Verify expected calls are made when creating a user."""
-    user = 'testuser'
-    secret_id = '{}-secret'.format(user)
+    user = secret_id = 'testuser'
     test_data = {
         user: secret_id
     }
@@ -78,8 +75,7 @@ def test_user_create(mock_get, mock_master, mock_common, mock_chmod):
 @mock.patch('actions.user_actions.action_get')
 def test_user_delete(mock_get, mock_master):
     """Verify expected calls are made when deleting a user."""
-    user = 'testuser'
-    secret_id = '{}-secret'.format(user)
+    user = secret_id = 'testuser'
     test_data = {
         user: secret_id
     }
