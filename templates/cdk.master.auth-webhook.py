@@ -23,10 +23,8 @@ def kubectl(*args):
     if not kubectl_cmd.is_file():
         # Fall back to anywhere on the path if the snap isn't available
         kubectl_cmd = 'kubectl'
-    kubeconfig = Path('/root/cdk/auth-webhook/kubeconfig')
-    if not kubeconfig.is_file():
-        kubeconfig = Path('/root/.kube/config')
-    command = [kubectl_cmd, '--kubeconfig={}'.format(kubeconfig)] + list(args)
+    kubeconfig = '/root/.kube/config'
+    command = [str(kubectl_cmd), '--kubeconfig={}'.format(kubeconfig)] + list(args)
     return check_output(command, timeout=10)
 
 
