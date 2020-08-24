@@ -1371,6 +1371,7 @@ def configure_cdk_addons():
             ceph['fsname'] = kubernetes_master.get_cephfs_fsname()
         else:
             cephFsEnabled = "false"
+            ceph['fsname'] = ''
     else:
         cephEnabled = "false"
         cephFsEnabled = "false"
