@@ -1368,7 +1368,7 @@ def configure_cdk_addons():
         default_storage = hookenv.config('default-storage')
         if kubernetes_master.query_cephfs_enabled():
             cephFsEnabled = "true"
-            ceph['fsname'] = kubernetes_master.get_cephfs_fsname()
+            ceph['fsname'] = kubernetes_master.get_cephfs_fsname() or ''
         else:
             cephFsEnabled = "false"
     else:
