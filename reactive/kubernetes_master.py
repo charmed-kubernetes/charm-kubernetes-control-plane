@@ -1185,21 +1185,23 @@ def create_tokens_and_sign_auth_requests():
     # create proper secrets.
     controller_manager_token = get_token('system:kube-controller-manager')
     if not controller_manager_token:
-        setup_tokens(None, 'system:kube-controller-manager',
-                     'kube-controller-manager')
+        setup_tokens(None, 'system:kube-controller-manager', 'kube-controller-manager',
+                     'system:kube-controller-manager')
 
     proxy_token = get_token('system:kube-proxy')
     if not proxy_token:
-        setup_tokens(None, 'system:kube-proxy', 'kube-proxy')
+        setup_tokens(None, 'system:kube-proxy', 'kube-proxy',
+                     'system:node-proxier')
         proxy_token = get_token('system:kube-proxy')
 
     scheduler_token = get_token('system:kube-scheduler')
     if not scheduler_token:
-        setup_tokens(None, 'system:kube-scheduler', 'system:kube-scheduler')
+        setup_tokens(None, 'system:kube-scheduler', 'system:kube-scheduler',
+                     'system:kube-scheduler,system:volume-scheduler')
 
     client_token = get_token('admin')
     if not client_token:
-        setup_tokens(None, 'admin', 'admin', "system:masters")
+        setup_tokens(None, 'admin', 'admin', 'system:masters')
         client_token = get_token('admin')
 
     monitoring_token = get_token('system:monitoring')
