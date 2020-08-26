@@ -88,12 +88,14 @@ def check_token(token_review):
 
     if token_to_check in data_by_token:
         record = data_by_token[token_to_check]
+        # groups are optional; default to an empty string if we don't have any
+        groups = record.get('groups', '').split(',')
         token_review['status'] = {
             'authenticated': True,
             'user': {
                 'username': record['username'],
                 'uid': record['user'],
-                'groups': record['groups'].split(','),
+                'groups': groups,
             }
         }
         return True
@@ -107,7 +109,7 @@ def check_secrets(token_review):
 
     try:
         output = kubectl(
-            'get', 'secrets', '-o', 'json').decode('UTF-8')
+            'get', 'secrets', '-A', '-o', 'json').decode('UTF-8')
     except (CalledProcessError, TimeoutExpired) as e:
         app.logger.info('Unable to load secrets: {}.'.format(e))
         return False

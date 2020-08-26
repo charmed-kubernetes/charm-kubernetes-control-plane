@@ -34,7 +34,7 @@ def protect_resources(name):
 def user_list():
     '''Return a dict of 'username: secret_id' for Charmed Kubernetes users.'''
     output = layer.kubernetes_common.kubectl(
-        'get', 'secrets',
+        'get', 'secrets', '-n', layer.kubernetes_master.AUTH_SECRET_NS,
         '--field-selector', 'type={}'.format(layer.kubernetes_master.AUTH_SECRET_TYPE),
         '-o', 'json').decode('UTF-8')
     secrets = json.loads(output)

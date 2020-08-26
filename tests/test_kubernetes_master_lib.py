@@ -48,15 +48,16 @@ def test_create_secret(mock_kubectl, mock_render):
     """Verify valid secret data is sent to kubectl."""
     password = 'password'
     user_id = 'replace$uid'
-    secret_id = 'replace-uid'
+    secret_name = 'replace-uid'
+    secret_ns = 'kube-system'
     secret_token = base64.b64encode(
         '{}::{}'.format(user_id, password).encode('utf-8')).decode('utf-8')
 
-    with mock.patch('lib.charms.layer.kubernetes_master.delete_secret'):
-        charmlib.create_secret(password, 'admin', user_id, 'groupA,groupB')
+    charmlib.create_secret(password, 'admin', user_id, 'groupA,groupB')
     assert mock_kubectl.called
     args, kwargs = mock_render.call_args
-    assert secret_id in kwargs['context']['secret_id']
+    assert secret_name in kwargs['context']['secret_name']
+    assert secret_ns in kwargs['context']['secret_namespace']
     assert secret_token in kwargs['context']['password']
 
 
