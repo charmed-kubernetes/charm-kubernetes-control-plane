@@ -109,7 +109,7 @@ def check_secrets(token_review):
 
     try:
         output = kubectl(
-            'get', 'secrets', '-A', '-o', 'json').decode('UTF-8')
+            'get', 'secrets', '-n', 'kube-system', '-o', 'json').decode('UTF-8')
     except (CalledProcessError, TimeoutExpired) as e:
         app.logger.info('Unable to load secrets: {}.'.format(e))
         return False
@@ -120,13 +120,13 @@ def check_secrets(token_review):
             try:
                 data_b64 = secret['data']
                 password_b64 = data_b64['password'].encode('UTF-8')
+                username_b64 = data_b64['username'].encode('UTF-8')
             except (KeyError, TypeError):
                 # CK secrets will have populated 'data', but not all secrets do
                 continue
 
             password = b64decode(password_b64).decode('UTF-8')
             if token_to_check == password:
-                username_b64 = data_b64['username'].encode('UTF-8')
                 groups_b64 = data_b64['groups'].encode('UTF-8') \
                     if 'groups' in data_b64 else b''
 
