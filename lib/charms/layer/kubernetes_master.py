@@ -21,6 +21,8 @@ from charms.layer import kubernetes_common
 
 AUTH_BACKUP_EXT = 'pre-secrets'
 AUTH_BASIC_FILE = '/root/cdk/basic_auth.csv'
+AUTH_SECRET_NS = 'kube-system'
+AUTH_SECRET_SUFFIX = 'token-auth'
 AUTH_SECRET_TYPE = 'juju.is/token-auth'
 AUTH_TOKENS_FILE = '/root/cdk/known_tokens.csv'
 STANDARD_API_PORT = 6443
@@ -232,7 +234,9 @@ def create_known_token(token, username, user, groups=None):
 
 
 def create_secret(token, username, user, groups=None):
-    secret_id = re.sub('[^0-9a-zA-Z]+', '-', user)
+    # secret names can only include alphanum and hyphens
+    sani_name = re.sub('[^0-9a-zA-Z]+', '-', user)
+    secret_id = '{}-{}'.format(sani_name, AUTH_SECRET_SUFFIX)
     # The authenticator expects tokens to be in the form user::token
     token_delim = '::'
     if token_delim not in token:
@@ -240,7 +244,8 @@ def create_secret(token, username, user, groups=None):
 
     context = {
         'type': AUTH_SECRET_TYPE,
-        'secret_id': secret_id,
+        'secret_name': secret_id,
+        'secret_namespace': AUTH_SECRET_NS,
         'user': b64encode(user.encode('UTF-8')).decode('utf-8'),
         'username': b64encode(username.encode('UTF-8')).decode('utf-8'),
         'password': b64encode(token.encode('UTF-8')).decode('utf-8'),
@@ -260,7 +265,8 @@ def delete_secret(secret_id):
     '''Delete a given secret id.'''
     # If this fails, it's most likely because we're trying to delete a secret
     # that doesn't exist. Let the caller decide if failure is a problem.
-    return kubernetes_common.kubectl_success('delete', 'secret', secret_id)
+    return kubernetes_common.kubectl_success(
+        'delete', 'secret', '-n', AUTH_SECRET_NS, secret_id)
 
 
 def get_csv_password(csv_fname, user):
@@ -282,9 +288,10 @@ def get_csv_password(csv_fname, user):
 
 
 def get_secret_password(username):
+    """Get the password for the given user from the secret that CK created."""
     try:
         output = kubernetes_common.kubectl(
-            'get', 'secrets',
+            'get', 'secrets', '-n', AUTH_SECRET_NS,
             '--field-selector', 'type={}'.format(AUTH_SECRET_TYPE),
             '-o', 'json').decode('UTF-8')
     except CalledProcessError:

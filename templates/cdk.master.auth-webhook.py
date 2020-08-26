@@ -88,12 +88,14 @@ def check_token(token_review):
 
     if token_to_check in data_by_token:
         record = data_by_token[token_to_check]
+        # groups are optional; default to an empty string if we don't have any
+        groups = record.get('groups', '').split(',')
         token_review['status'] = {
             'authenticated': True,
             'user': {
                 'username': record['username'],
                 'uid': record['user'],
-                'groups': record['groups'].split(','),
+                'groups': groups,
             }
         }
         return True
@@ -107,7 +109,7 @@ def check_secrets(token_review):
 
     try:
         output = kubectl(
-            'get', 'secrets', '-o', 'json').decode('UTF-8')
+            'get', 'secrets', '-n', 'kube-system', '-o', 'json').decode('UTF-8')
     except (CalledProcessError, TimeoutExpired) as e:
         app.logger.info('Unable to load secrets: {}.'.format(e))
         return False
@@ -118,13 +120,13 @@ def check_secrets(token_review):
             try:
                 data_b64 = secret['data']
                 password_b64 = data_b64['password'].encode('UTF-8')
+                username_b64 = data_b64['username'].encode('UTF-8')
             except (KeyError, TypeError):
                 # CK secrets will have populated 'data', but not all secrets do
                 continue
 
             password = b64decode(password_b64).decode('UTF-8')
             if token_to_check == password:
-                username_b64 = data_b64['username'].encode('UTF-8')
                 groups_b64 = data_b64['groups'].encode('UTF-8') \
                     if 'groups' in data_b64 else b''
 
