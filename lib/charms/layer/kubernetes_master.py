@@ -265,7 +265,8 @@ def delete_secret(secret_id):
     '''Delete a given secret id.'''
     # If this fails, it's most likely because we're trying to delete a secret
     # that doesn't exist. Let the caller decide if failure is a problem.
-    return kubernetes_common.kubectl_success('delete', 'secret', secret_id)
+    return kubernetes_common.kubectl_success(
+        'delete', 'secret', '-n', AUTH_SECRET_NS, secret_id)
 
 
 def get_csv_password(csv_fname, user):

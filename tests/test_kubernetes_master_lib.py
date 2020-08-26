@@ -45,7 +45,7 @@ def test_migrate_auth_file(auth_file):
 @mock.patch('lib.charms.layer.kubernetes_master.kubernetes_common.kubectl_manifest',
             return_value=True)
 def test_create_secret(mock_kubectl, mock_render):
-    """Verify valid secret data is sent to kubectl."""
+    """Verify valid secret data is sent to kubectl during create."""
     password = 'password'
     user_id = 'replace$uid'
     secret_name = 'replace-uid'
@@ -64,8 +64,13 @@ def test_create_secret(mock_kubectl, mock_render):
 @mock.patch('lib.charms.layer.kubernetes_master.kubernetes_common.kubectl_success',
             return_value=True)
 def test_delete_secret(mock_kubectl):
-    """Verify we get a bool back from the kubectl call."""
+    """Verify valid secret data is sent to kubectl during delete."""
+    secret_ns = 'kube-system'
+
+    # We should call kubectl with our namespace and return a bool
     assert charmlib.delete_secret('secret-id')
+    args, kwargs = mock_kubectl.call_args
+    assert secret_ns in args
 
 
 def test_get_csv_password(auth_file):
