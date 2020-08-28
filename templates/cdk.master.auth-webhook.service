@@ -14,7 +14,7 @@ ExecStart={{ charm_dir }}/../.venv/bin/gunicorn \
     --keyfile /root/cdk/server.key \
     --log-level debug \
     --pid {{ pidfile }} \
-    --workers 2 \
+    --workers {{ num_workers }} \
     auth-webhook:app
 Restart=always
 

@@ -8,7 +8,7 @@ from base64 import b64decode
 from copy import deepcopy
 from flask import Flask, request, jsonify
 from pathlib import Path
-from subprocess import check_output, CalledProcessError, TimeoutExpired
+from subprocess import check_call, check_output, CalledProcessError, TimeoutExpired
 from yaml import safe_load
 app = Flask(__name__)
 
@@ -104,9 +104,16 @@ def check_token(token_review):
 
 def check_secrets(token_review):
     '''Populate user info if token is found in k8s secrets.'''
-    app.logger.info('Checking secret')
-    token_to_check = token_review['spec']['token']
+    # Only check secrets if kube-apiserver is up
+    try:
+        output = check_call(['systemctl', 'is-active', 'snap.kube-apiserver.daemon'])
+    except CalledProcessError:
+        app.logger.info('Skipping secret check: kube-apiserver is not ready')
+        return False
+    else:
+        app.logger.info('Checking secret')
 
+    token_to_check = token_review['spec']['token']
     try:
         output = kubectl(
             'get', 'secrets', '-n', 'kube-system', '-o', 'json').decode('UTF-8')
