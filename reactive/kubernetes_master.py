@@ -119,6 +119,7 @@ aws_iam_webhook = '/root/cdk/aws-iam-webhook.yaml'
 auth_webhook_root = '/root/cdk/auth-webhook'
 auth_webhook_conf = os.path.join(auth_webhook_root, 'auth-webhook-conf.yaml')
 auth_webhook_exe = os.path.join(auth_webhook_root, 'auth-webhook.py')
+auth_webhook_svc = '/etc/systemd/system/cdk.master.auth-webhook.service'
 
 register_trigger(when='endpoint.aws.ready',  # when set
                  set_flag='kubernetes-master.aws.changed')
@@ -955,6 +956,7 @@ def add_systemd_file_watcher():
 @restart_on_change({
     auth_webhook_conf: ['cdk.master.auth-webhook'],
     auth_webhook_exe: ['cdk.master.auth-webhook'],
+    auth_webhook_svc: ['cdk.master.auth-webhook'],
     })
 def register_auth_webhook():
     '''Render auth webhook templates and start the related service.'''
@@ -1001,8 +1003,7 @@ def register_auth_webhook():
     render('cdk.master.auth-webhook.logrotate',
            '/etc/logrotate.d/auth-webhook', context)
 
-    service_file = '/etc/systemd/system/cdk.master.auth-webhook.service'
-    render('cdk.master.auth-webhook.service', service_file, context)
+    render('cdk.master.auth-webhook.service', auth_webhook_svc, context)
     if not is_flag_set('kubernetes-master.auth-webhook-service.started'):
         check_call(['systemctl', 'daemon-reload'])
         if service_resume('cdk.master.auth-webhook'):
