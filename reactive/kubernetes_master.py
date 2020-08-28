@@ -28,6 +28,7 @@ from pathlib import Path
 from subprocess import check_call
 from subprocess import check_output
 from subprocess import CalledProcessError
+from time import sleep
 from urllib.request import Request, urlopen
 
 import charms.coordinator
@@ -877,7 +878,21 @@ def master_services_down():
     failing_services = []
     for service in master_services:
         daemon = 'snap.{}.daemon'.format(service)
-        if not host.service_running(daemon):
+
+        # Give each service up to a minute to become active; this is especially
+        # needed now that controller-mgr/scheduler/proxy need the apiserver
+        # to validate their token against a k8s secret.
+        attempt = 0
+        delay = 10
+        times = 6
+        while attempt < times:
+            hookenv.log(
+                'Checking if {} is active ({} / {})'.format(daemon, attempt, times))
+            if host.service_running(daemon):
+                break
+            sleep(delay)
+            attempt += 1
+        else:
             failing_services.append(service)
     return failing_services
 
