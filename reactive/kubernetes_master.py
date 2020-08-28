@@ -969,7 +969,6 @@ def register_auth_webhook():
     context = {'api_ver': 'v1beta1',
                'charm_dir': hookenv.charm_dir(),
                'host': socket.gethostname(),
-               'num_workers': config.get('authn-webhook-workers', 5),
                'pidfile': 'auth-webhook.pid',
                'port': 5000,
                'root_dir': auth_webhook_root}
@@ -1003,6 +1002,14 @@ def register_auth_webhook():
     render('cdk.master.auth-webhook.logrotate',
            '/etc/logrotate.d/auth-webhook', context)
 
+    # Set the number of gunicorn workers based on our core count. (2*cores)+1 is
+    # recommended: https://docs.gunicorn.org/en/stable/design.html#how-many-workers
+    try:
+        cores = check_output(['nproc']).decode('utf-8').strip()
+    except CalledProcessError:
+        # Our default architecture is 2-cores for k8s-master units
+        cores = 2
+    context['num_workers'] = int(cores) * 2 + 1
     render('cdk.master.auth-webhook.service', auth_webhook_svc, context)
     if not is_flag_set('kubernetes-master.auth-webhook-service.started'):
         check_call(['systemctl', 'daemon-reload'])

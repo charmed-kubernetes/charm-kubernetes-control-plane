@@ -335,11 +335,3 @@ options:
       respond with appropriate authentication details. For more info, please refer
       to the upstream documentation at
       https://kubernetes.io/docs/reference/access-authn-authz/authentication/#webhook-token-authentication
-  authn-webhook-workers:
-    type: int
-    default: 5
-    description: |
-      Number of authenticator webhook service workers. The recommended value is
-      (2 * cores) + 1:
-
-      https://docs.gunicorn.org/en/stable/design.html#how-many-workers
