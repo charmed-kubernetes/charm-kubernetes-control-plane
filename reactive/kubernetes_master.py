@@ -967,6 +967,7 @@ def register_auth_webhook():
     context = {'api_ver': 'v1beta1',
                'charm_dir': hookenv.charm_dir(),
                'host': socket.gethostname(),
+               'num_workers': config.get('authn-webhook-workers', 5),
                'pidfile': 'auth-webhook.pid',
                'port': 5000,
                'root_dir': auth_webhook_root}
