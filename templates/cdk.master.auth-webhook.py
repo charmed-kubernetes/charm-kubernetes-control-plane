@@ -216,11 +216,11 @@ def forward_request(json_req, url):
         log_secret(text='Invalid response from server', obj=r.text)
         return False
 
-    # NB: When forwarding to an external URL, clobber the original request with
-    # the entire server response. This ensures any additional data that the server
-    # wants to send makes it back to the kube apiserver.
+    # NB: When a forwarded request is authenticated, set the 'status' field to
+    # whatever the external server sends us. This ensures any status fields that
+    # the server wants to send makes it back to the kube apiserver.
     if resp['status']['authenticated']:
-        json_req = resp
+        json_req['status'] = resp['status']
         return True
     return False
 
