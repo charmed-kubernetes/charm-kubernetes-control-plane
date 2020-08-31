@@ -55,7 +55,7 @@ def check_token(token_review):
     # from leaking our admin token to other authn services.
     admin_kubeconfig = Path('/root/.kube/config')
     if admin_kubeconfig.exists():
-        with open(admin_kubeconfig) as f:
+        with admin_kubeconfig.open('r') as f:
             data = safe_load(f)
             try:
                 admin_token = data['users'][0]['user']['token']
