@@ -983,7 +983,7 @@ def register_auth_webhook():
     #   https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18
     context = {'api_ver': 'v1beta1',
                'charm_dir': hookenv.charm_dir(),
-               'host': socket.gethostname(),
+               'host': '127.0.0.1',
                'pidfile': 'auth-webhook.pid',
                'port': 5000,
                'root_dir': auth_webhook_root}
