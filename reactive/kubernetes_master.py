@@ -983,7 +983,7 @@ def register_auth_webhook():
     #   https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18
     context = {'api_ver': 'v1beta1',
                'charm_dir': hookenv.charm_dir(),
-               'host': '127.0.0.1',
+               'host': get_ingress_address('kube-api-endpoint'),
                'pidfile': 'auth-webhook.pid',
                'port': 5000,
                'root_dir': auth_webhook_root}
@@ -1026,8 +1026,11 @@ def register_auth_webhook():
         cores = 2
     context['num_workers'] = int(cores) * 2 + 1
     render('cdk.master.auth-webhook.service', auth_webhook_svc, context)
-    if not is_flag_set('kubernetes-master.auth-webhook-service.started'):
+    if any_file_changed([auth_webhook_svc]):
+        # if the service file has changed (or is new),
+        # we have to inform systemd about it
         check_call(['systemctl', 'daemon-reload'])
+    if not is_flag_set('kubernetes-master.auth-webhook-service.started'):
         if service_resume('cdk.master.auth-webhook'):
             set_flag('kubernetes-master.auth-webhook-service.started')
             clear_flag('kubernetes-master.apiserver.configured')
