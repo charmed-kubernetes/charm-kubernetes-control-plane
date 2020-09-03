@@ -990,21 +990,28 @@ def register_auth_webhook():
 
     context['aws_iam_endpoint'] = None
     if endpoint_from_flag('endpoint.aws-iam.ready'):
-        if Path(aws_iam_webhook).exists():
-            aws_yaml = yaml.safe_load(aws_iam_webhook)
+        aws_webhook = Path(aws_iam_webhook)
+        if aws_webhook.exists():
+            aws_yaml = yaml.safe_load(aws_webhook.read_text())
             try:
-                context['aws_iam_endpoint'] = aws_yaml['clusters'][0]['server']
+                context['aws_iam_endpoint'] = \
+                    aws_yaml['clusters'][0]['cluster']['server']
             except (KeyError, TypeError):
+                hookenv.log(
+                    'Unable to find server in AWS IAM webhook: {}'.format(aws_yaml))
                 pass
 
     context['keystone_endpoint'] = None
     if endpoint_from_flag('keystone-credentials.available.auth'):
-        ks_webhook = keystone_root + '/webhook.yaml'
-        if Path(ks_webhook).exists():
-            ks_yaml = yaml.safe_load(ks_webhook)
+        ks_webhook = Path(keystone_root) / 'webhook.yaml'
+        if ks_webhook.exists():
+            ks_yaml = yaml.safe_load(ks_webhook.read_text())
             try:
-                context['keystone_endpoint'] = ks_yaml['clusters'][0]['server']
+                context['keystone_endpoint'] = \
+                    ks_yaml['clusters'][0]['cluster']['server']
             except (KeyError, TypeError):
+                hookenv.log(
+                    'Unable to find server in Keystone webhook: {}'.format(ks_yaml))
                 pass
 
     context['custom_authn_endpoint'] = None
