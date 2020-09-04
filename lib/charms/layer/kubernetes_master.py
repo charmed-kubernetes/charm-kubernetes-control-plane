@@ -1,20 +1,36 @@
+import csv
 import json
+import random
+import re
 import socket
+import string
+import tempfile
+from base64 import b64decode, b64encode
 from pathlib import Path
+import ipaddress
 from subprocess import check_output, CalledProcessError, TimeoutExpired
+from yaml import safe_load
 
 from charmhelpers.core import hookenv
 from charmhelpers.core.templating import render
+from charmhelpers.core import unitdata
 from charmhelpers.fetch import apt_install
 from charms.reactive import endpoint_from_flag, is_flag_set
-
 from charms.layer import kubernetes_common
 
 
+AUTH_BACKUP_EXT = 'pre-secrets'
+AUTH_BASIC_FILE = '/root/cdk/basic_auth.csv'
+AUTH_SECRET_NS = 'kube-system'
+AUTH_SECRET_SUFFIX = 'token-auth'
+AUTH_SECRET_TYPE = 'juju.is/token-auth'
+AUTH_TOKENS_FILE = '/root/cdk/known_tokens.csv'
 STANDARD_API_PORT = 6443
 CEPH_CONF_DIR = Path('/etc/ceph')
 CEPH_CONF = CEPH_CONF_DIR / 'ceph.conf'
 CEPH_KEYRING = CEPH_CONF_DIR / 'ceph.client.admin.keyring'
+
+db = unitdata.kv()
 
 
 def get_external_lb_endpoints():
@@ -114,7 +130,7 @@ def query_cephfs_enabled():
     try:
         out = check_output(['ceph', 'mds', 'versions',
                             '-c', str(CEPH_CONF)], timeout=60)
-        return bool(json.loads(out))
+        return bool(json.loads(out.decode()))
     except CalledProcessError:
         hookenv.log('Unable to determine if CephFS is enabled', 'ERROR')
         return False
@@ -133,3 +149,260 @@ def get_cephfs_fsname():
     for fs in data:
         if 'ceph-fs_data' in fs['data_pools']:
             return fs['name']
+
+
+def deprecate_auth_file(auth_file):
+    """
+    In 1.19+, file-based authentication was deprecated in favor of webhook
+    auth. Write out generic files that inform the user of this.
+    """
+    csv_file = Path(auth_file)
+    csv_file.parent.mkdir(exist_ok=True)
+
+    csv_backup = Path('{}.{}'.format(csv_file, AUTH_BACKUP_EXT))
+    if csv_file.exists() and not csv_backup.exists():
+        csv_file.rename(csv_backup)
+    with csv_file.open('w') as f:
+        f.write('# File-based authentication was removed in Charmed Kubernetes 1.19\n')
+
+
+def migrate_auth_file(filename):
+    '''Create secrets or known tokens depending on what file is being migrated.'''
+    with open(str(filename), 'r') as f:
+        rows = list(csv.reader(f))
+
+    for row in rows:
+        try:
+            if row[0].startswith('#'):
+                continue
+            else:
+                if filename == AUTH_BASIC_FILE:
+                    create_known_token(*row)
+                elif filename == AUTH_TOKENS_FILE:
+                    create_secret(*row)
+                else:
+                    # log and return if we don't recognize the auth file
+                    hookenv.log('Unknown auth file: {}'.format(filename))
+                    return False
+        except IndexError:
+            pass
+    deprecate_auth_file(filename)
+    return True
+
+
+def token_generator(length=32):
+    '''Generate a random token for use in account tokens.
+
+    param: length - the length of the token to generate
+    '''
+    alpha = string.ascii_letters + string.digits
+    token = ''.join(random.SystemRandom().choice(alpha) for _ in range(length))
+    return token
+
+
+def create_known_token(token, username, user, groups=None):
+    known_tokens = Path(AUTH_TOKENS_FILE)
+    known_tokens.parent.mkdir(exist_ok=True)
+    csv_fields = ['token', 'username', 'user', 'groups']
+
+    try:
+        with known_tokens.open('r') as f:
+            tokens_by_user = {r['user']: r for r in csv.DictReader(f, csv_fields)}
+    except FileNotFoundError:
+        tokens_by_user = {}
+    tokens_by_username = {r['username']: r for r in tokens_by_user.values()}
+
+    if user in tokens_by_user:
+        record = tokens_by_user[user]
+    elif username in tokens_by_username:
+        record = tokens_by_username[username]
+    else:
+        record = tokens_by_user[user] = {}
+    record.update({
+        'token': token,
+        'username': username,
+        'user': user,
+        'groups': groups,
+    })
+
+    if not record['groups']:
+        del record['groups']
+
+    with known_tokens.open('w') as f:
+        csv.DictWriter(f, csv_fields, lineterminator='\n').writerows(
+            tokens_by_user.values())
+
+
+def create_secret(token, username, user, groups=None):
+    # secret names can only include alphanum and hyphens
+    sani_name = re.sub('[^0-9a-zA-Z]+', '-', user)
+    secret_id = '{}-{}'.format(sani_name, AUTH_SECRET_SUFFIX)
+    # The authenticator expects tokens to be in the form user::token
+    token_delim = '::'
+    if token_delim not in token:
+        token = '{}::{}'.format(user, token)
+
+    context = {
+        'type': AUTH_SECRET_TYPE,
+        'secret_name': secret_id,
+        'secret_namespace': AUTH_SECRET_NS,
+        'user': b64encode(user.encode('UTF-8')).decode('utf-8'),
+        'username': b64encode(username.encode('UTF-8')).decode('utf-8'),
+        'password': b64encode(token.encode('UTF-8')).decode('utf-8'),
+        'groups': b64encode(groups.encode('UTF-8')).decode('utf-8') if groups else ''
+    }
+    with tempfile.NamedTemporaryFile() as tmp_manifest:
+        render(
+            'cdk.master.auth-webhook-secret.yaml', tmp_manifest.name, context=context)
+
+        if kubernetes_common.kubectl_manifest('apply', tmp_manifest.name):
+            hookenv.log("Created secret for {}".format(username))
+        else:
+            hookenv.log("WARN: Unable to create secret for {}".format(username))
+
+
+def delete_secret(secret_id):
+    '''Delete a given secret id.'''
+    # If this fails, it's most likely because we're trying to delete a secret
+    # that doesn't exist. Let the caller decide if failure is a problem.
+    return kubernetes_common.kubectl_success(
+        'delete', 'secret', '-n', AUTH_SECRET_NS, secret_id)
+
+
+def get_csv_password(csv_fname, user):
+    """Get the password for the given user within the csv file provided."""
+    root_cdk = '/root/cdk'
+    tokens_fname = Path(root_cdk) / csv_fname
+    if not tokens_fname.is_file():
+        return None
+    with tokens_fname.open('r') as stream:
+        for line in stream:
+            record = line.split(',')
+            try:
+                if record[1] == user:
+                    return record[0]
+            except IndexError:
+                # probably a blank line or comment; move on
+                continue
+    return None
+
+
+def get_secret_password(username):
+    """Get the password for the given user from the secret that CK created."""
+    try:
+        output = kubernetes_common.kubectl(
+            'get', 'secrets', '-n', AUTH_SECRET_NS,
+            '--field-selector', 'type={}'.format(AUTH_SECRET_TYPE),
+            '-o', 'json').decode('UTF-8')
+    except CalledProcessError:
+        # NB: apiserver probably isn't up. This can happen on boostrap or upgrade
+        # while trying to build kubeconfig files. If we need the 'admin' token during
+        # this time, pull it directly out of the kubeconfig file if possible.
+        token = None
+        if username == 'admin':
+            admin_kubeconfig = Path('/root/.kube/config')
+            if admin_kubeconfig.exists():
+                with admin_kubeconfig.open('r') as f:
+                    data = safe_load(f)
+                    try:
+                        token = data['users'][0]['user']['token']
+                    except (KeyError, ValueError):
+                        pass
+        return token
+    except FileNotFoundError:
+        # New deployments may ask for a token before the kubectl snap is installed.
+        # Give them nothing!
+        return None
+
+    secrets = json.loads(output)
+    if 'items' in secrets:
+        for secret in secrets['items']:
+            try:
+                data_b64 = secret['data']
+                password_b64 = data_b64['password'].encode('UTF-8')
+                username_b64 = data_b64['username'].encode('UTF-8')
+            except (KeyError, TypeError):
+                # CK authn secrets will have populated 'data', but not all secrets do
+                continue
+
+            password = b64decode(password_b64).decode('UTF-8')
+            secret_user = b64decode(username_b64).decode('UTF-8')
+            if username == secret_user:
+                return password
+    return None
+
+
+try:
+    ipaddress.IPv4Network.subnet_of
+except AttributeError:
+    # Returns True if a is subnet of b
+    # This method is copied from cpython as it is available only from
+    # python 3.7
+    # https://github.com/python/cpython/blob/3.7/Lib/ipaddress.py#L1000
+    def _is_subnet_of(a, b):
+        try:
+            # Always false if one is v4 and the other is v6.
+            if a._version != b._version:
+                raise TypeError("{} and {} are not of the same version".format(
+                    a, b))
+            return (b.network_address <= a.network_address and
+                    b.broadcast_address >= a.broadcast_address)
+        except AttributeError:
+            raise TypeError("Unable to test subnet containment "
+                            "between {} and {}".format(a, b))
+    ipaddress.IPv4Network.subnet_of = _is_subnet_of
+    ipaddress.IPv6Network.subnet_of = _is_subnet_of
+
+
+def is_service_cidr_expansion():
+    service_cidr_from_db = db.get('kubernetes-master.service-cidr')
+    service_cidr_from_config = hookenv.config('service-cidr')
+    if not service_cidr_from_db:
+        return False
+
+    # Do not consider as expansion if both old and new service cidr are same
+    if service_cidr_from_db == service_cidr_from_config:
+        return False
+
+    current_networks = kubernetes_common.get_networks(service_cidr_from_db)
+    new_networks = kubernetes_common.get_networks(service_cidr_from_config)
+    if len(current_networks) != len(new_networks) or \
+       not all(cur.subnet_of(new) for cur, new in zip(current_networks,
+                                                      new_networks)):
+        hookenv.log("WARN: New k8s service cidr not superset of old one")
+        return False
+
+    return True
+
+
+def service_cidr():
+    ''' Return the charm's service-cidr config'''
+    frozen_cidr = db.get('kubernetes-master.service-cidr')
+    return frozen_cidr or hookenv.config('service-cidr')
+
+
+def freeze_service_cidr():
+    ''' Freeze the service CIDR. Once the apiserver has started, we can no
+    longer safely change this value. '''
+    frozen_service_cidr = db.get('kubernetes-master.service-cidr')
+    if not frozen_service_cidr or is_service_cidr_expansion():
+        db.set('kubernetes-master.service-cidr', hookenv.config(
+            'service-cidr'))
+
+
+def get_preferred_service_network(service_cidrs):
+    '''Get the network preferred for cluster service, preferring IPv4'''
+    net_ipv4 = kubernetes_common.get_ipv4_network(service_cidrs)
+    net_ipv6 = kubernetes_common.get_ipv6_network(service_cidrs)
+    return net_ipv4 or net_ipv6
+
+
+def get_dns_ip():
+    return kubernetes_common.get_service_ip('kube-dns',
+                                            namespace='kube-system')
+
+
+def get_kubernetes_service_ips():
+    '''Get the IP address(es) for the kubernetes service based on the cidr.'''
+    return [next(network.hosts()).exploded
+            for network in kubernetes_common.get_networks(service_cidr())]

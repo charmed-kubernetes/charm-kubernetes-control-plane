@@ -58,6 +58,30 @@ upgrade:
           with load balancers conflicting with other clusters in the same
           project but will cause new load balancers to be created which will
           require manual intervention to resolve.
+user-create:
+  description: Create a new user
+  params:
+    name:
+      type: string
+      description: Username for the new user
+      minLength: 2
+    groups:
+      type: string
+      description: |
+        Optional comma-separated list of groups eg. 'system:masters,managers'
+  required:
+    - name
+user-delete:
+  description: Delete an existing user
+  params:
+    name:
+      type: string
+      description: Username of the user to delete
+      minLength: 2
+  required:
+    - name
+user-list:
+  description: List existing users
 get-kubeconfig:
   description: Retrieve Kubernetes cluster config, including credentials
 apply-manifest:

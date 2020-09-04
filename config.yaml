@@ -111,7 +111,7 @@ options:
       will not be loaded.
   channel:
     type: string
-    default: "1.18/stable"
+    default: "1.19/stable"
     description: |
       Snap channel to install Kubernetes master services from
   client_password:
@@ -148,7 +148,7 @@ options:
         --runtime-config=batch/v2alpha1=true --profiling=true
   authorization-mode:
     type: string
-    default: "AlwaysAllow"
+    default: "Node,RBAC"
     description: |
       Comma separated authorization modes. Allowed values are
       "RBAC", "Node", "Webhook", "ABAC", "AlwaysDeny" and "AlwaysAllow".
@@ -272,9 +272,11 @@ options:
   dashboard-auth:
     type: string
     description: |
-      Method of authentication for the Kubernetes dashboard. Allowed values are "auto", 
-      "basic", and "token". If set to "auto", basic auth is used unless Keystone is 
+      Method of authentication for the Kubernetes dashboard. Allowed values are "auto",
+      "basic", and "token". If set to "auto", basic auth is used unless Keystone is
       related to kubernetes-master, in which case token auth is used.
+
+      DEPRECATED: this option has no effect on Kubernetes 1.19 and above.
     default: "auto"
   loadbalancer-ips:
     type: string
@@ -301,6 +303,7 @@ options:
         hostPath:
           path: /grafana
           type: Directory
+
       DEPRECATED: this option has no effect on Kubernetes 1.18 and above.
     default: |
       influxdb:
@@ -319,3 +322,16 @@ options:
 
       If unspecified, then the default CNI network is chosen alphabetically.
     default: ""
+  authn-webhook-endpoint:
+    type: string
+    default: ""
+    description: |
+      Custom endpoint to check when authenticating kube-apiserver requests.
+      This must be an https url accessible by the k8s-master units. For example:
+
+      https://your.server:8443/authenticate
+
+      When a JSON-serialized TokenReview object is POSTed to this endpoint, it must
+      respond with appropriate authentication details. For more info, please refer
+      to the upstream documentation at
+      https://kubernetes.io/docs/reference/access-authn-authz/authentication/#webhook-token-authentication
