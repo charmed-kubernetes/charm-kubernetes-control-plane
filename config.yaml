@@ -184,6 +184,11 @@ options:
     description: |
       The storage class to make the default storage class. Allowed values are "auto",
       "none", "ceph-xfs", "ceph-ext4", "cephfs". Note: Only works in Kubernetes >= 1.10
+  cephfs-mounter:
+    type: string
+    default: "default"
+    description: |
+      The client driver used for cephfs based storage. Options are "fuse", "kernel" and "default".
   keystone-policy:
     default: |
       apiVersion: v1
