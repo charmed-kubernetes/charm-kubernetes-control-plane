@@ -418,14 +418,19 @@ def create_or_update_cohort_keys():
     leader_set(cohort_keys=json.dumps(cohort_keys))
     hookenv.log('Snap cohort keys have been created.')
 
+    # Prime revision info so we can detect changes later
+    cohort_revs = kubernetes_master.get_snap_revs(cohort_snaps)
+    data_changed('leader-cohort-revs', cohort_revs)
+
 
 @when('kubernetes-master.snaps.installed',
-      'leadership.is_leader')
+      'leadership.is_leader',
+      'leadership.set.cohort_keys')
 def check_cohort_updates():
-    for snapname in cohort_snaps:
-        if snap.is_refresh_available(snapname):
-            leader_set(cohort_keys=None)
-            return
+    cohort_revs = kubernetes_master.get_snap_revs(cohort_snaps)
+    if data_changed('leader-cohort-revs', cohort_revs):
+        leader_set(cohort_keys=None)
+        hookenv.log('Snap cohort revisions have changed.')
 
 
 @when('kubernetes-master.snaps.installed',
