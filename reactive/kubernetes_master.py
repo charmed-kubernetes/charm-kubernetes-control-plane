@@ -2642,6 +2642,7 @@ def request_integration():
         })
         cloud.enable_object_storage_management()
         cloud.enable_security_management()
+        cloud.enable_loadbalancer_management()
     cloud.enable_instance_inspection()
     cloud.enable_network_management()
     cloud.enable_dns_management()
