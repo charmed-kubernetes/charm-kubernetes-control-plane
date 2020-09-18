@@ -2711,6 +2711,7 @@ def update_cloud_config():
         remove_state('kubernetes-master.cloud.ready')
         remove_state('endpoint.azure.ready.changed')
 
+
 def _cdk_addons_template_path():
     return Path('/snap/cdk-addons/current/templates')
 
