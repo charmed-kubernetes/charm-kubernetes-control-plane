@@ -2642,6 +2642,7 @@ def request_integration():
         })
         cloud.enable_object_storage_management()
         cloud.enable_security_management()
+        cloud.enable_loadbalancer_management()
     cloud.enable_instance_inspection()
     cloud.enable_network_management()
     cloud.enable_dns_management()
@@ -2691,7 +2692,8 @@ def cloud_ready():
 
 @when('kubernetes-master.cloud.ready')
 @when_any('endpoint.openstack.ready.changed',
-          'endpoint.vsphere.ready.changed')
+          'endpoint.vsphere.ready.changed',
+          'endpoint.azure.ready.changed')
 def update_cloud_config():
     '''Signal that cloud config has changed.
 
@@ -2705,6 +2707,9 @@ def update_cloud_config():
     if is_state('endpoint.vsphere.ready.changed'):
         remove_state('kubernetes-master.cloud.ready')
         remove_state('endpoint.vsphere.ready.changed')
+    if is_state('endpoint.azure.ready.changed'):
+        remove_state('kubernetes-master.cloud.ready')
+        remove_state('endpoint.azure.ready.changed')
 
 
 def _cdk_addons_template_path():
