@@ -433,6 +433,7 @@ def get_snap_revs(snaps):
                 d = yaml_data['channels'][channel].split()
                 snap_rev = d[2].strip("()")
             except (KeyError, IndexError):
-                hookenv.log('Could not determine revision for snap: {}'.format(s))
+                hookenv.log('Could not determine revision for snap: {}'.format(s),
+                            level=hookenv.WARNING)
         rev_info[s] = snap_rev
     return rev_info
