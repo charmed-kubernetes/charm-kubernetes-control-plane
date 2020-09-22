@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 from unittest import mock
 
+from charmhelpers.core import hookenv
 from lib.charms.layer import kubernetes_master as charmlib
 
 
@@ -116,3 +117,44 @@ def test_get_secret_password():
     with mock.patch('lib.charms.layer.kubernetes_master.kubernetes_common.kubectl',
                     return_value=secrets):
         assert charmlib.get_secret_password(user) == password
+
+
+def test_get_snap_revs():
+    """Verify expected revision data."""
+    channel = 'test_channel'
+    revision = 'test_rev'
+    snap = 'test_snap'
+
+    # empty test data should return a dict with None as the revision
+    test_data = {}
+    revs = json.dumps(test_data).encode('utf-8')
+    with mock.patch('lib.charms.layer.kubernetes_master.check_output',
+                    return_value=revs):
+        revs = charmlib.get_snap_revs([snap])
+        assert revs[snap] is None
+
+    # invalid test data should return a dict with None as the revision
+    test_data = {
+        'channels': {
+            channel: 'make indexerror'
+        }
+    }
+    revs = json.dumps(test_data).encode('utf-8')
+    hookenv.config.return_value = channel
+    with mock.patch('lib.charms.layer.kubernetes_master.check_output',
+                    return_value=revs):
+        revs = charmlib.get_snap_revs([snap])
+        assert revs[snap] is None
+
+    # valid test data should return a dict containing our test revision
+    test_data = {
+        'channels': {
+            channel: 'version date {} size notes'.format(revision)
+        }
+    }
+    revs = json.dumps(test_data).encode('utf-8')
+    hookenv.config.return_value = channel
+    with mock.patch('lib.charms.layer.kubernetes_master.check_output',
+                    return_value=revs):
+        revs = charmlib.get_snap_revs([snap])
+        assert revs[snap] == revision
