@@ -444,19 +444,9 @@ def safely_join_cohort():
     application joins the new cohort at a time. This allows us to roll out
     snap refreshes without risking all units going down at once.
     '''
-    # It's possible to join a cohort before snapd knows about the snap proxy.
-    # When this happens, we'll join a cohort, yet install default snaps. We
-    # won't refresh those until the leader keys change. Ensure we always
-    # check for available refreshes even if the leader keys haven't changed.
-    force_join = False
-    for snapname in cohort_snaps:
-        if snap.is_refresh_available(snapname):
-            force_join = True
-            break
-
     cohort_keys = leader_get('cohort_keys')
     # NB: initial data-changed is always true
-    if data_changed('leader-cohorts', cohort_keys) or force_join:
+    if data_changed('leader-cohorts', cohort_keys):
         clear_flag('kubernetes-master.cohorts.joined')
         clear_flag('kubernetes-master.cohorts.sent')
         charms.coordinator.acquire('cohort')

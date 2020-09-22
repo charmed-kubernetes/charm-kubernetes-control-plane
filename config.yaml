@@ -178,6 +178,8 @@ options:
       as possible. You may also set a custom string as described in the
       'refresh.timer' section here:
         https://forum.snapcraft.io/t/system-options/87
+
+      DEPRECATED in 1.19: Manage installed snap versions with snap-proxy.
   default-storage:
     type: string
     default: "auto"
