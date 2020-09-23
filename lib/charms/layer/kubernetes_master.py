@@ -406,3 +406,34 @@ def get_kubernetes_service_ips():
     '''Get the IP address(es) for the kubernetes service based on the cidr.'''
     return [next(network.hosts()).exploded
             for network in kubernetes_common.get_networks(service_cidr())]
+
+
+def get_snap_revs(snaps):
+    '''Get a dict of snap revisions for a given list of snaps.'''
+    channel = hookenv.config('channel')
+    rev_info = {}
+    for s in sorted(snaps):
+        try:
+            # valid info should looke like:
+            #  ...
+            #  channels:
+            #    latest/stable:    1.18.8         2020-08-27 (1595) 22MB classic
+            #    latest/candidate: 1.18.8         2020-08-27 (1595) 22MB classic
+            #  ...
+            info = check_output(['snap', 'info', s]).decode('utf8', errors='ignore')
+        except CalledProcessError:
+            # If 'snap info' fails for whatever reason, just empty the info
+            info = ''
+        snap_rev = None
+        yaml_data = safe_load(info)
+        if yaml_data and 'channels' in yaml_data:
+            try:
+                # valid data should look like:
+                #  ['1.18.8', '2020-08-27', '(1604)', '21MB', 'classic']
+                d = yaml_data['channels'][channel].split()
+                snap_rev = d[2].strip("()")
+            except (KeyError, IndexError):
+                hookenv.log('Could not determine revision for snap: {}'.format(s),
+                            level=hookenv.WARNING)
+        rev_info[s] = snap_rev
+    return rev_info

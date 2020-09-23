@@ -416,16 +416,23 @@ def create_or_update_cohort_keys():
         cohort_key = snap.create_cohort_snapshot(snapname)
         cohort_keys[snapname] = cohort_key
     leader_set(cohort_keys=json.dumps(cohort_keys))
-    hookenv.log('Snap cohort keys have been created.')
+    hookenv.log('Snap cohort keys have been created.', level=hookenv.INFO)
+
+    # Prime revision info so we can detect changes later
+    cohort_revs = kubernetes_master.get_snap_revs(cohort_snaps)
+    data_changed('leader-cohort-revs', cohort_revs)
+    hookenv.log('Tracking cohort revisions: {}'.format(cohort_revs),
+                level=hookenv.DEBUG)
 
 
 @when('kubernetes-master.snaps.installed',
-      'leadership.is_leader')
+      'leadership.is_leader',
+      'leadership.set.cohort_keys')
 def check_cohort_updates():
-    for snapname in cohort_snaps:
-        if snap.is_refresh_available(snapname):
-            leader_set(cohort_keys=None)
-            return
+    cohort_revs = kubernetes_master.get_snap_revs(cohort_snaps)
+    if data_changed('leader-cohort-revs', cohort_revs):
+        leader_set(cohort_keys=None)
+        hookenv.log('Snap cohort revisions have changed.', level=hookenv.INFO)
 
 
 @when('kubernetes-master.snaps.installed',
@@ -439,19 +446,9 @@ def safely_join_cohort():
     application joins the new cohort at a time. This allows us to roll out
     snap refreshes without risking all units going down at once.
     '''
-    # It's possible to join a cohort before snapd knows about the snap proxy.
-    # When this happens, we'll join a cohort, yet install default snaps. We
-    # won't refresh those until the leader keys change. Ensure we always
-    # check for available refreshes even if the leader keys haven't changed.
-    force_join = False
-    for snapname in cohort_snaps:
-        if snap.is_refresh_available(snapname):
-            force_join = True
-            break
-
     cohort_keys = leader_get('cohort_keys')
     # NB: initial data-changed is always true
-    if data_changed('leader-cohorts', cohort_keys) or force_join:
+    if data_changed('leader-cohorts', cohort_keys):
         clear_flag('kubernetes-master.cohorts.joined')
         clear_flag('kubernetes-master.cohorts.sent')
         charms.coordinator.acquire('cohort')
@@ -473,15 +470,8 @@ def join_or_update_cohorts():
         if snap.is_installed(snapname):  # we also manage workers' cohorts
             hookenv.status_set('maintenance', 'Joining snap cohort.')
             snap.join_cohort_snapshot(snapname, cohort_key)
-    hookenv.log('{} has joined the snap cohort'.format(hookenv.local_unit()))
-
-    # If we have peers, tell them we've joined the cohort. This is needed so
-    # we don't tell workers about cohorts until all masters are refreshed.
-    kube_masters = endpoint_from_flag('kube-masters.connected')
-    if kube_masters:
-        kube_masters.set_cohort_keys(cohort_keys)
-
     set_flag('kubernetes-master.cohorts.joined')
+    hookenv.log('{} has joined the snap cohort'.format(hookenv.local_unit()))
 
 
 @when('kubernetes-master.snaps.installed',
@@ -499,15 +489,29 @@ def send_cohorts():
     kube_control = endpoint_from_flag('kube-control.connected')
     kube_masters = endpoint_from_flag('kube-masters.connected')
 
-    if kube_masters:
+    # If we have peers, tell them we've joined the cohort. This is needed so
+    # we don't tell workers about cohorts until all masters are in-sync.
+    goal_peers = len(list(hookenv.expected_peer_units()))
+    if goal_peers > 0:
+        if kube_masters:
+            # tell peers about the cohort keys
+            kube_masters.set_cohort_keys(cohort_keys)
+        else:
+            msg = 'Waiting for {} peers before setting the cohort.'.format(goal_peers)
+            hookenv.log(msg, level=hookenv.DEBUG)
+            return
+
         if is_flag_set('kube-masters.cohorts.ready'):
+            # tell workers about the cohort keys
             kube_control.set_cohort_keys(cohort_keys)
             hookenv.log('{} (peer) sent cohort keys to workers'.format(
                 hookenv.local_unit()))
         else:
-            hookenv.log('Waiting for k8s-masters to agree on cohorts.')
+            msg = 'Waiting for k8s-masters to agree on cohorts.'
+            hookenv.log(msg, level=hookenv.DEBUG)
             return
     else:
+        # tell workers about the cohort keys
         kube_control.set_cohort_keys(cohort_keys)
         hookenv.log('{} (single) sent cohort keys to workers'.format(
             hookenv.local_unit()))
