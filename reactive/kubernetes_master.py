@@ -474,9 +474,15 @@ def join_or_update_cohorts():
 
     # If we have peers, tell them we've joined the cohort. This is needed so
     # we don't tell workers about cohorts until all masters are refreshed.
-    kube_masters = endpoint_from_flag('kube-masters.connected')
-    if kube_masters:
-        kube_masters.set_cohort_keys(cohort_keys)
+    goal_peers = len(list(hookenv.expected_peer_units()))
+    if goal_peers > 0:
+        kube_masters = endpoint_from_flag('kube-masters.connected')
+        if kube_masters:
+            kube_masters.set_cohort_keys(cohort_keys)
+        else:
+            msg = 'Waiting for {} peers before setting the cohort.'.format(goal_peers)
+            hookenv.log(msg, level=hookenv.DEBUG)
+            return
 
     set_flag('kubernetes-master.cohorts.joined')
 
@@ -503,6 +509,7 @@ def send_cohorts():
                 hookenv.local_unit()))
         else:
             hookenv.log('Waiting for k8s-masters to agree on cohorts.')
+            clear_flag('kubernetes-master.cohorts.joined')
             return
     else:
         kube_control.set_cohort_keys(cohort_keys)
