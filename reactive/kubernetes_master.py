@@ -86,6 +86,7 @@ from charms.layer.kubernetes_common import server_key_path
 from charms.layer.kubernetes_common import client_crt_path
 from charms.layer.kubernetes_common import client_key_path
 from charms.layer.kubernetes_common import kubectl, kubectl_manifest, kubectl_success
+from charms.layer.kubernetes_common import _get_vmware_uuid
 
 from charms.layer.nagios import install_nagios_plugin_from_file
 from charms.layer.nagios import remove_nagios_plugin
@@ -2719,13 +2720,7 @@ def _write_vsphere_snap_config(component):
     # find a uuid from sysfs unless a global config value is set. Our strict
     # snaps cannot read sysfs, so let's do it in the charm. An invalid uuid is
     # not fatal for storage, but it will muddy the logs; try to get it right.
-    uuid_file = '/sys/class/dmi/id/product_uuid'
-    try:
-        with open(uuid_file, 'r') as f:
-            uuid = f.read().strip()
-    except IOError as err:
-        hookenv.log("Unable to read UUID from sysfs: {}".format(err))
-        uuid = 'UNKNOWN'
+    uuid = _get_vmware_uuid()
 
     comp_cloud_config_path = cloud_config_path(component)
     comp_cloud_config_path.write_text('\n'.join([
