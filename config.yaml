@@ -179,7 +179,8 @@ options:
       'refresh.timer' section here:
         https://forum.snapcraft.io/t/system-options/87
 
-      DEPRECATED in 1.19: Manage installed snap versions with snap-proxy.
+      DEPRECATED in 1.19: Manage installed snap versions with the snap-store-proxy model config.
+      See: https://snapcraft.io/snap-store-proxy and https://juju.is/docs/offline-mode-strategies#heading--snap-specific-proxy
   default-storage:
     type: string
     default: "auto"
