@@ -1194,21 +1194,29 @@ def etcd_data_change(etcd):
 @when('cdk-addons.configured')
 def send_cluster_dns_detail(kube_control):
     ''' Send cluster DNS info '''
-    try:
-        dns_provider = get_dns_provider()
-    except InvalidDnsProvider:
-        hookenv.log(traceback.format_exc())
-        return
-    dns_enabled = dns_provider != 'none'
-    dns_domain = hookenv.config('dns_domain')
-    dns_ip = None
-    if dns_enabled:
+    dns_provider = endpoint_from_flag('dns-provider.available')
+    if dns_provider:
+        details = dns_provider.details()
+        kube_control.set_dns(details['port'],
+                             details['domain'],
+                             details['sdn-ip'],
+                             True)
+    else:
         try:
-            dns_ip = kubernetes_master.get_dns_ip()
-        except CalledProcessError:
-            hookenv.log("DNS addon service not ready yet")
+            dns_provider = get_dns_provider()
+        except InvalidDnsProvider:
+            hookenv.log(traceback.format_exc())
             return
-    kube_control.set_dns(53, dns_domain, dns_ip, dns_enabled)
+        dns_enabled = dns_provider != 'none'
+        dns_domain = hookenv.config('dns_domain')
+        dns_ip = None
+        if dns_enabled:
+            try:
+                dns_ip = kubernetes_master.get_dns_ip()
+            except CalledProcessError:
+                hookenv.log("DNS addon service not ready yet")
+                return
+        kube_control.set_dns(53, dns_domain, dns_ip, dns_enabled)
 
 
 def create_tokens_and_sign_auth_requests():
