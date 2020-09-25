@@ -139,9 +139,9 @@ register_trigger(when='kubernetes-master.ceph.configured',
                  set_flag='cdk-addons.reconfigure')
 register_trigger(when_not='kubernetes-master.ceph.configured',
                  set_flag='cdk-addons.reconfigure')
-register_trigger(when='keystone-credentials.available.auth',
+register_trigger(when='keystone-credentials.available',
                  set_flag='cdk-addons.reconfigure')
-register_trigger(when_not='keystone-credentials.available.auth',
+register_trigger(when_not='keystone-credentials.available',
                  set_flag='cdk-addons.reconfigure')
 register_trigger(when='kubernetes-master.aws.changed',
                  set_flag='cdk-addons.reconfigure')
@@ -756,7 +756,7 @@ def set_final_status():
         hookenv.status_set(status, 'Waiting for workers.')
         return
 
-    ks = endpoint_from_flag('keystone-credentials.available.auth')
+    ks = endpoint_from_flag('keystone-credentials.available')
     if ks and ks.api_version() == '2':
         msg = 'Keystone auth v2 detected. v3 is required.'
         hookenv.status_set('blocked', msg)
@@ -1007,7 +1007,7 @@ def register_auth_webhook():
                 pass
 
     context['keystone_endpoint'] = None
-    if endpoint_from_flag('keystone-credentials.available.auth'):
+    if endpoint_from_flag('keystone-credentials.available'):
         ks_webhook = Path(keystone_root) / 'webhook.yaml'
         if ks_webhook.exists():
             ks_yaml = yaml.safe_load(ks_webhook.read_text())
@@ -1416,7 +1416,7 @@ def configure_cdk_addons():
         cephFsEnabled = "false"
 
     keystone = {}
-    ks = endpoint_from_flag('keystone-credentials.available.auth')
+    ks = endpoint_from_flag('keystone-credentials.available')
     if ks:
         keystoneEnabled = "true"
         keystone['cert'] = '/root/cdk/server.crt'
@@ -1923,7 +1923,7 @@ def build_kubeconfig():
             client_pass = 'admin::{}'.format(client_pass)
 
         # drop keystone helper script?
-        ks = endpoint_from_flag('keystone-credentials.available.auth')
+        ks = endpoint_from_flag('keystone-credentials.available')
         if ks:
             script_filename = 'kube-keystone.sh'
             keystone_path = os.path.join(os.sep, 'home', 'ubuntu',
@@ -2102,7 +2102,7 @@ def configure_apiserver():
 
     auth_mode = hookenv.config('authorization-mode')
 
-    ks = endpoint_from_flag('keystone-credentials.available.auth')
+    ks = endpoint_from_flag('keystone-credentials.available')
     if ks:
         ks_ip = None
         ks_ip = get_service_ip('k8s-keystone-auth-service',
@@ -2757,7 +2757,7 @@ def regen_keystone_policy():
     clear_flag('kubernetes-master.keystone-policy-handled')
 
 
-@when('keystone-credentials.available.auth',
+@when('keystone-credentials.available',
       'leadership.is_leader', 'kubernetes-master.apiserver.configured')
 @when_not('kubernetes-master.keystone-policy-handled')
 def generate_keystone_configmap():
@@ -2778,16 +2778,14 @@ def generate_keystone_configmap():
         # and wait for them to fix it.
         set_flag('kubernetes-master.keystone-policy-error')
 
-    # note that information is surfaced to the user in
-    # the code above where we write status. It will
-    # notify the user we are waiting on the policy file
-    # to apply if the keystone-credentials.available.auth
-    # flag is set, but
+    # note that information is surfaced to the user in the code above where we
+    # write status. It will notify the user we are waiting on the policy file
+    # to apply if the keystone-credentials.available flag is set, but
     # kubernetes-master.keystone-policy-handled is not set.
 
 
 @when('leadership.is_leader', 'kubernetes-master.keystone-policy-handled')
-@when_not('keystone-credentials.available.auth')
+@when_not('keystone-credentials.available')
 def remove_keystone():
     clear_flag('kubernetes-master.apiserver.configured')
     if not os.path.exists(keystone_policy_path):
@@ -2817,12 +2815,12 @@ def keystone_kick_apiserver():
     clear_flag('kubernetes-master.apiserver.configured')
 
 
-@when('keystone-credentials.available.auth', 'certificates.ca.available',
+@when('keystone-credentials.available', 'certificates.ca.available',
       'certificates.client.cert.available', 'authentication.setup',
       'etcd.available', 'leadership.set.keystone-cdk-addons-configured')
 def keystone_config():
     # first, we have to have the service set up before we can render this stuff
-    ks = endpoint_from_flag('keystone-credentials.available.auth')
+    ks = endpoint_from_flag('keystone-credentials.available')
     data = {
         'host': ks.credentials_host(),
         'proto': ks.credentials_protocol(),
