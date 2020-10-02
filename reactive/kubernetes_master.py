@@ -1216,7 +1216,7 @@ def send_cluster_dns_detail(kube_control):
             except CalledProcessError:
                 hookenv.log("DNS addon service not ready yet")
                 return
-        kube_control.set_dns(53, dns_domain, dns_ip, dns_enabled)
+            kube_control.set_dns(53, dns_domain, dns_ip, dns_enabled)
 
 
 def create_tokens_and_sign_auth_requests():
