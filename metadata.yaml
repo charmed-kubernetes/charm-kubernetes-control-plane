@@ -68,6 +68,8 @@ requires:
     interface: azure-integration
   keystone-credentials:
     interface: keystone-credentials
+  dns-provider:
+    interface: kube-dns
 resources:
   core:
     type: file
