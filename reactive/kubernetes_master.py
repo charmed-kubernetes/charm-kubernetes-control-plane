@@ -431,7 +431,7 @@ def create_or_update_cohort_keys():
       'leadership.set.cohort_keys')
 def check_cohort_updates():
     cohort_revs = kubernetes_master.get_snap_revs(cohort_snaps)
-    if data_changed('leader-cohort-revs', cohort_revs):
+    if cohort_revs and data_changed('leader-cohort-revs', cohort_revs):
         leader_set(cohort_keys=None)
         hookenv.log('Snap cohort revisions have changed.', level=hookenv.INFO)
 
