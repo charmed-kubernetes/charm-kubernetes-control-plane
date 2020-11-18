@@ -1032,11 +1032,14 @@ def register_auth_webhook():
     # Set the number of gunicorn workers based on our core count. (2*cores)+1 is
     # recommended: https://docs.gunicorn.org/en/stable/design.html#how-many-workers
     try:
-        cores = check_output(['nproc']).decode('utf-8').strip()
+        cores = int(check_output(['nproc']).decode('utf-8').strip())
     except CalledProcessError:
         # Our default architecture is 2-cores for k8s-master units
         cores = 2
-    context['num_workers'] = int(cores) * 2 + 1
+    else:
+        # Put an upper bound on cores; more than 12ish workers is overkill
+        cores = 6 if cores > 6 else cores
+    context['num_workers'] = cores * 2 + 1
     render('cdk.master.auth-webhook.service', auth_webhook_svc, context)
     if any_file_changed([auth_webhook_svc]):
         # if the service file has changed (or is new),
