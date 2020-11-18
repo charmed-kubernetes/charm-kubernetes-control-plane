@@ -298,31 +298,39 @@ def add_rbac_roles():
     with open(tokens_fname, 'w') as ftokens:
         with open(tokens_backup_fname, 'r') as stream:
             for line in stream:
+                if line.startswith('#'):
+                    continue
                 record = line.strip().split(',')
-                # token, username, user, groups
-                if record[2] == 'admin' and len(record) == 3:
-                    towrite = '{0},{1},{2},"{3}"\n'.format(record[0],
-                                                           record[1],
-                                                           record[2],
-                                                           'system:masters')
-                    ftokens.write(towrite)
+                try:
+                    # valid line looks like: token,username,user,groups
+                    if record[2] == 'admin' and len(record) == 3:
+                        towrite = '{0},{1},{2},"{3}"\n'.format(record[0],
+                                                               record[1],
+                                                               record[2],
+                                                               'system:masters')
+                        ftokens.write(towrite)
+                        continue
+                    if record[2] == 'kube_proxy':
+                        towrite = '{0},{1},{2}\n'.format(record[0],
+                                                         'system:kube-proxy',
+                                                         'kube-proxy')
+                        ftokens.write(towrite)
+                        continue
+                    if record[2] == 'kube_controller_manager':
+                        towrite = '{0},{1},{2}\n'.format(
+                            record[0], 'system:kube-controller-manager',
+                            'kube-controller-manager')
+                        ftokens.write(towrite)
+                        continue
+                    if record[2] == 'kubelet' and record[1] == 'kubelet':
+                        continue
+                except IndexError:
+                    msg = 'Skipping invalid line from {}: {}'.format(
+                        tokens_backup_fname, line)
+                    hookenv.log(msg, level=hookenv.DEBUG)
                     continue
-                if record[2] == 'kube_proxy':
-                    towrite = '{0},{1},{2}\n'.format(record[0],
-                                                     'system:kube-proxy',
-                                                     'kube-proxy')
-                    ftokens.write(towrite)
-                    continue
-                if record[2] == 'kube_controller_manager':
-                    towrite = '{0},{1},{2}\n'.format(
-                        record[0], 'system:kube-controller-manager',
-                        'kube-controller-manager')
-                    ftokens.write(towrite)
-                    continue
-                if record[2] == 'kubelet' and record[1] == 'kubelet':
-                    continue
-
-                ftokens.write('{}'.format(line))
+                else:
+                    ftokens.write('{}'.format(line))
 
 
 def rename_file_idempotent(source, destination):
