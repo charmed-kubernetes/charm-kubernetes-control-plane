@@ -198,12 +198,13 @@ def forward_request(json_req, url):
     Returns True if the request is authenticated; False if the response is
     either invalid or authn has been denied.
     '''
+    timeout = 10
     try:
         try:
-            r = requests.post(url, json=json_req)
+            r = requests.post(url, json=json_req, timeout=timeout)
         except requests.exceptions.SSLError:
             app.logger.debug('SSLError with server; skipping cert validation')
-            r = requests.post(url, json=json_req, verify=False)
+            r = requests.post(url, json=json_req, verify=False, timeout=timeout)
     except Exception as e:
         app.logger.debug('Failed to contact server: {}'.format(e))
         return False
