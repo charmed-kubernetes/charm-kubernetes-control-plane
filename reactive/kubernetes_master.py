@@ -283,6 +283,11 @@ def post_series_upgrade():
     remove_state('kubernetes-master.components.started')
 
 
+@hook('leader-elected')
+def leader_elected():
+    clear_flag('authentication.setup')
+
+
 def add_rbac_roles():
     '''Update the known_tokens file with proper groups.
 
@@ -648,6 +653,12 @@ def setup_non_leader_authentication():
 
     if any_file_changed(keys):
         remove_state('kubernetes-master.components.started')
+
+    # Clear stale creds from the kube-control relation so that the leader can
+    # assume full control of them.
+    kube_control = endpoint_from_flag('kube-control.connected')
+    if kube_control:
+        kube_control.clear_creds()
 
     remove_state('kube-control.requests.changed')
     set_state('authentication.setup')
