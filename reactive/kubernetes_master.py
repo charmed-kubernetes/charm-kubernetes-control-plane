@@ -2094,6 +2094,8 @@ def configure_apiserver():
     api_opts['anonymous-auth'] = 'false'
     api_opts['authentication-token-webhook-cache-ttl'] = '1m0s'
     api_opts['authentication-token-webhook-config-file'] = auth_webhook_conf
+    api_opts['service-account-issuer'] = 'https://kubernetes.default.svc'
+    api_opts['service-account-signing-key-file'] = '/root/cdk/serviceaccount.key'
     api_opts['service-account-key-file'] = '/root/cdk/serviceaccount.key'
     api_opts['kubelet-preferred-address-types'] = \
         'InternalIP,Hostname,InternalDNS,ExternalDNS,ExternalIP'
