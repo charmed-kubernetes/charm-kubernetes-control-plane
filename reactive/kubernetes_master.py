@@ -1377,11 +1377,16 @@ def send_data():
 @when('config.changed.extra_sans', 'certificates.available',
       'kube-api-endpoint.available')
 def update_certificates():
-    # Using the config.changed.extra_sans flag to catch changes.
-    # IP changes will take ~5 minutes or so to propagate, but
-    # it will update.
-    send_data()
-    clear_flag('config.changed.extra_sans')
+    if (is_flag_set("certificates.available") and
+            is_flag_set("kube-api-endpoint.available")):
+        # Using the config.changed.extra_sans flag to catch changes.
+        # IP changes will take ~5 minutes or so to propagate, but
+        # it will update.
+        send_data()
+        clear_flag('config.changed.extra_sans')
+    else:
+        hookenv.log("relations 'certificates' or "
+                    "'kube-api-endpoint' is missing", "ERROR")
 
 
 @when('kubernetes-master.components.started',
