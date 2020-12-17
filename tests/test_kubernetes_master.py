@@ -101,11 +101,11 @@ def test_service_cidr_expansion():
 
 
 @mock.patch("reactive.kubernetes_master.get_flags")
-def test_check_flags(mock_get_flags):
+def test_get_unset_flags(mock_get_flags):
     mock_get_flags.return_value = ["test.available"]
 
-    missing_flags = kubernetes_master.check_flags("test.available",
-                                                  "not-set-flag.available")
+    missing_flags = kubernetes_master.get_unset_flags("test.available",
+                                                      "not-set-flag.available")
     assert missing_flags == ["not-set-flag.available"]
 
 
@@ -118,6 +118,6 @@ def test_update_certificates_with_missing_relations(mock_send_data,
     mock_get_flags.return_value = ["test.available"]
 
     kubernetes_master.update_certificates()
-    hookenv.log.assert_any_call("Missing relation: 'certificates.available, "
+    hookenv.log.assert_any_call("Missing relations: 'certificates.available, "
                                 "kube-api-endpoint.available'", hookenv.ERROR)
     mock_send_data.assert_not_called()

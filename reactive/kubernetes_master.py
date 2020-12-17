@@ -1374,8 +1374,14 @@ def send_data():
                                    key_path=client_key_path)
 
 
-def check_flags(*flags):
-    """Check if any of the provided flags missing and return them if so."""
+def get_unset_flags(*flags):
+    """Check if any of the provided flags missing and return them if so.
+
+    :param flags: list of reactive flags
+    :type flags: non-keyword args, str
+    :returns: list of unset flags filtered from the parameters shared
+    :rtype: List[str]
+    """
     active_flags = get_flags()
     return [flag for flag in flags if flag not in active_flags]
 
@@ -1386,11 +1392,11 @@ def update_certificates():
     # NOTE: This handler may be called by another function. Two relationships
     # are required, otherwise the send_data function fails.
     # (until the relations are available)
-    missing_relations = check_flags("certificates.available",
-                                    "kube-api-endpoint.available")
+    missing_relations = get_unset_flags("certificates.available",
+                                        "kube-api-endpoint.available")
     if missing_relations:
         hookenv.log(
-            "Missing relation: '{}'".format(", ".join(missing_relations)),
+            "Missing relations: '{}'".format(", ".join(missing_relations)),
             hookenv.ERROR)
         return
 
