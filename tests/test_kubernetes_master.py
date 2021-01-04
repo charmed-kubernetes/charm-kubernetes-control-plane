@@ -98,3 +98,26 @@ def test_service_cidr_expansion():
     unitdata.kv().get.return_value = '10.152.0.0/16'
     update_for_service_cidr_expansion()
     assert kubectl.call_count == 4
+
+
+@mock.patch("reactive.kubernetes_master.get_flags")
+def test_get_unset_flags(mock_get_flags):
+    mock_get_flags.return_value = ["test.available"]
+
+    missing_flags = kubernetes_master.get_unset_flags("test.available",
+                                                      "not-set-flag.available")
+    assert missing_flags == ["not-set-flag.available"]
+
+
+@mock.patch("reactive.kubernetes_master.get_flags")
+@mock.patch("reactive.kubernetes_master.send_data")
+def test_update_certificates_with_missing_relations(mock_send_data,
+                                                    mock_get_flags):
+    # NOTE (rgildein): This test only tests whether the send_data function
+    # has been called, if required relations are missing.
+    mock_get_flags.return_value = ["test.available"]
+
+    kubernetes_master.update_certificates()
+    hookenv.log.assert_any_call("Missing relations: 'certificates.available, "
+                                "kube-api-endpoint.available'", hookenv.ERROR)
+    mock_send_data.assert_not_called()
