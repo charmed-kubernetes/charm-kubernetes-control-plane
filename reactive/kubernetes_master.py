@@ -37,7 +37,7 @@ from charms.leadership import leader_get, leader_set
 from charms.reactive import hook
 from charms.reactive import remove_state, clear_flag
 from charms.reactive import set_state, set_flag
-from charms.reactive import is_state, is_flag_set
+from charms.reactive import is_state, is_flag_set, get_flags, all_flags_set
 from charms.reactive import endpoint_from_flag
 from charms.reactive import when, when_any, when_not, when_none
 from charms.reactive import register_trigger
@@ -1374,9 +1374,32 @@ def send_data():
                                    key_path=client_key_path)
 
 
+def get_unset_flags(*flags):
+    """Check if any of the provided flags missing and return them if so.
+
+    :param flags: list of reactive flags
+    :type flags: non-keyword args, str
+    :returns: list of unset flags filtered from the parameters shared
+    :rtype: List[str]
+    """
+    active_flags = get_flags()
+    return [flag for flag in flags if flag not in active_flags]
+
+
 @when('config.changed.extra_sans', 'certificates.available',
       'kube-api-endpoint.available')
 def update_certificates():
+    # NOTE: This handler may be called by another function. Two relationships
+    # are required, otherwise the send_data function fails.
+    # (until the relations are available)
+    missing_relations = get_unset_flags("certificates.available",
+                                        "kube-api-endpoint.available")
+    if missing_relations:
+        hookenv.log(
+            "Missing relations: '{}'".format(", ".join(missing_relations)),
+            hookenv.ERROR)
+        return
+
     # Using the config.changed.extra_sans flag to catch changes.
     # IP changes will take ~5 minutes or so to propagate, but
     # it will update.
@@ -2961,8 +2984,7 @@ def configure_hacluster():
         add_service_to_hacluster(service, daemon)
 
     # get a new cert
-    if (is_state('certificates.available') and
-            is_state('kube-api-endpoint.available')):
+    if all_flags_set("certificates.available", "kube-api-endpoint.available"):
         send_data()
 
     # update workers
@@ -2980,8 +3002,7 @@ def remove_hacluster():
         remove_service_from_hacluster(service, daemon)
 
     # get a new cert
-    if (is_state('certificates.available') and
-            is_state('kube-api-endpoint.available')):
+    if all_flags_set("certificates.available", "kube-api-endpoint.available"):
         send_data()
     # update workers
     if (is_state('kube-api-endpoint.available')):
