@@ -703,6 +703,11 @@ def set_app_version():
     hookenv.application_version_set(version.split(b' v')[-1].rstrip())
 
 
+@when_not('certificates.available')
+def missing_certificates_notice():
+    hookenv.status_set('blocked', 'Missing relation to certificate authority.')
+
+
 @hookenv.atstart
 def check_vault_pending():
     try:
@@ -891,6 +896,10 @@ def set_final_status():
     if is_leader and ks and \
        not is_flag_set('kubernetes-master.keystone-policy-handled'):
         hookenv.status_set('waiting', 'Waiting to apply keystone policy file.')
+        return
+
+    if not is_flag_set('certificates.available'):
+        missing_certificates_notice()
         return
 
     hookenv.status_set('active', 'Kubernetes master running.')
