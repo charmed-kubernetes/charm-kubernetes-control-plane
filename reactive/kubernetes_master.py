@@ -1764,7 +1764,8 @@ def create_rbac_resources():
     # (see the send_data handler, above).
     proxy_users = [
         'client',
-        'system:kube-apiserver'
+        'system:kube-apiserver',
+        'system:kubelet'
     ]
 
     context = {'juju_application': hookenv.service_name(),
