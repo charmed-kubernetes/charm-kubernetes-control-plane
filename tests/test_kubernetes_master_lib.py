@@ -1,6 +1,7 @@
 import base64
 import json
 import pytest
+import re
 import tempfile
 from pathlib import Path
 from unittest import mock
@@ -72,6 +73,12 @@ def test_delete_secret(mock_kubectl):
     assert charmlib.delete_secret('secret-id')
     args, kwargs = mock_kubectl.call_args
     assert secret_ns in args
+
+
+def test_generate_rfc1123():
+    """Verify genereated string is RFC 1123 compliant."""
+    id = charmlib.generate_rfc1123()
+    assert re.sub('[^0-9a-z.-]+', '-', id) == id
 
 
 def test_get_csv_password(auth_file):

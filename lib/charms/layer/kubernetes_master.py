@@ -247,7 +247,7 @@ def create_known_token(token, username, user, groups=None):
 
 def create_secret(token, username, user, groups=None):
     # secret IDs must be unique and rfc1123 compliant
-    uniq_name = re.sub('[^0-9a-z]+', '-', user.lower()) + generate_rfc1123(10)
+    uniq_name = re.sub('[^0-9a-z.-]+', '-', user.lower()) + generate_rfc1123(10)
     secret_id = '{}-{}'.format(uniq_name, AUTH_SECRET_SUFFIX)
     # The authenticator expects tokens to be in the form user::token
     token_delim = '::'
