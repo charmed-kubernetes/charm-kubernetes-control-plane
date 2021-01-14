@@ -66,7 +66,9 @@ def user_create():
     # TODO: make the token format less magical so it doesn't get out of
     # sync with the function that creates secrets in k8s-master.py.
     token = '{}::{}'.format(user, layer.kubernetes_master.token_generator())
-    layer.kubernetes_master.create_secret(token, user, user, groups)
+    if not layer.kubernetes_master.create_secret(token, user, user, groups):
+        action_fail('Failed to create secret for: {}'.format(user))
+        return
 
     # Create a kubeconfig
     ca_crt = layer.kubernetes_common.ca_crt_path

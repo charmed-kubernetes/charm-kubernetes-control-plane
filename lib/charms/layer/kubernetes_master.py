@@ -190,6 +190,18 @@ def migrate_auth_file(filename):
     return True
 
 
+def generate_rfc1123(length=10):
+    '''Generate a random string compliant with RFC 1123.
+
+    https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-subdomain-names
+
+    param: length - the length of the string to generate
+    '''
+    length = 253 if length > 253 else length
+    options = string.ascii_lowercase + string.digits + '-' + '.'
+    return ''.join(random.SystemRandom().choice(options) for _ in range(length))
+
+
 def token_generator(length=32):
     '''Generate a random token for use in account tokens.
 
@@ -234,9 +246,9 @@ def create_known_token(token, username, user, groups=None):
 
 
 def create_secret(token, username, user, groups=None):
-    # secret names can only include alphanum and hyphens
-    sani_name = re.sub('[^0-9a-zA-Z]+', '-', user)
-    secret_id = '{}-{}'.format(sani_name, AUTH_SECRET_SUFFIX)
+    # secret IDs must be unique and rfc1123 compliant
+    uniq_name = re.sub('[^0-9a-z]+', '-', user.lower()) + generate_rfc1123(10)
+    secret_id = '{}-{}'.format(uniq_name, AUTH_SECRET_SUFFIX)
     # The authenticator expects tokens to be in the form user::token
     token_delim = '::'
     if token_delim not in token:
@@ -257,8 +269,10 @@ def create_secret(token, username, user, groups=None):
 
         if kubernetes_common.kubectl_manifest('apply', tmp_manifest.name):
             hookenv.log("Created secret for {}".format(username))
+            return True
         else:
             hookenv.log("WARN: Unable to create secret for {}".format(username))
+            return False
 
 
 def delete_secret(secret_id):
