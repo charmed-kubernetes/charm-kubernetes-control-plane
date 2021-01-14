@@ -247,8 +247,8 @@ def create_known_token(token, username, user, groups=None):
 
 def create_secret(token, username, user, groups=None):
     # secret IDs must be unique and rfc1123 compliant
-    uniq_name = re.sub('[^0-9a-z.-]+', '-', user.lower())
-    secret_id = '{}-{}-{}'.format(uniq_name, generate_rfc1123(10), AUTH_SECRET_SUFFIX)
+    sani_name = re.sub('[^0-9a-z.-]+', '-', user.lower())
+    secret_id = '{}-{}-{}'.format(sani_name, generate_rfc1123(10), AUTH_SECRET_SUFFIX)
     # The authenticator expects tokens to be in the form user::token
     token_delim = '::'
     if token_delim not in token:

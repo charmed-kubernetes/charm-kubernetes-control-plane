@@ -1,6 +1,7 @@
 #!/usr/local/sbin/charm-env python3
 import json
 import os
+import re
 import sys
 from base64 import b64decode
 from charmhelpers.core import hookenv
@@ -60,6 +61,12 @@ def user_create():
     users = user_list()
     if user in list(users):
         action_fail('User "{}" already exists.'.format(user))
+        return
+
+    # Validate the name
+    if re.search('[^0-9A-Za-z@.-]+', user):
+        msg = "User name may only contain alphanumeric characters, '@', '-' or '.'"
+        action_fail(msg)
         return
 
     # Create the secret

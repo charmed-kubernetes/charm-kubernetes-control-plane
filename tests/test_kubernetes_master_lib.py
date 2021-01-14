@@ -78,7 +78,7 @@ def test_delete_secret(mock_kubectl):
 def test_generate_rfc1123():
     """Verify genereated string is RFC 1123 compliant."""
     id = charmlib.generate_rfc1123()
-    assert re.sub('[^0-9a-z.-]+', '-', id) == id
+    assert re.search('[^0-9a-z.-]+', id) is None
 
 
 def test_get_csv_password(auth_file):
