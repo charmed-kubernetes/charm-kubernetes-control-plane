@@ -1,0 +1,145 @@
+description: A minimal two-machine Kubernetes cluster, appropriate for development.
+series: focal
+machines:
+  '0':
+    constraints: cores=2 mem=4G root-disk=16G
+    series: focal
+  '1':
+    constraints: cores=4 mem=4G root-disk=16G
+    series: focal
+services:
+  containerd:
+    charm: cs:~containers/containerd
+    resources: {}
+  easyrsa:
+    charm: cs:~containers/easyrsa
+    num_units: 1
+    resources:
+      easyrsa: 5
+    to:
+    - '1'
+  etcd:
+    charm: cs:~containers/etcd
+    num_units: 1
+    options:
+      channel: 3.4/stable
+    resources:
+      core: 0
+      etcd: 3
+      snapshot: 0
+    to:
+    - '0'
+  flannel:
+    charm: cs:~containers/flannel
+    resources:
+      flannel-amd64: 653
+      flannel-arm64: 650
+      flannel-s390x: 637
+  kubernetes-master:
+    charm: {{master_charm}}
+    constraints: cores=2 mem=4G root-disk=16G
+    expose: true
+    num_units: 1
+    options:
+      channel: 1.20/stable
+      pod-security-policy: |
+        apiVersion: policy/v1beta1
+        kind: PodSecurityPolicy
+        metadata:
+          name: privileged
+          annotations:
+            seccomp.security.alpha.kubernetes.io/allowedProfileNames: '*'
+        spec:
+          privileged: true
+          allowPrivilegeEscalation: true
+          allowedCapabilities:
+          - '*'
+          volumes:
+          - '*'
+          hostNetwork: true
+          hostPorts:
+          - min: 0
+            max: 65535
+          hostIPC: true
+          hostPID: true
+          runAsUser:
+            rule: 'RunAsAny'
+          seLinux:
+            rule: 'RunAsAny'
+          supplementalGroups:
+            rule: 'RunAsAny'
+          fsGroup:
+            rule: 'RunAsAny'
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRole
+        metadata:
+          name: privileged
+        rules:
+        - apiGroups: ['policy']
+          resources: ['podsecuritypolicies']
+          verbs:     ['use']
+          resourceNames:
+          - privileged
+
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRoleBinding
+        metadata:
+          name: privileged
+        roleRef:
+          kind: ClusterRole
+          name: privileged
+          apiGroup: rbac.authorization.k8s.io
+        subjects:
+        - kind: Group
+          name: system:serviceaccounts
+          apiGroup: rbac.authorization.k8s.io
+    resources:
+      cdk-addons: 0
+      core: 0
+      kube-apiserver: 0
+      kube-controller-manager: 0
+      kube-proxy: 0
+      kube-scheduler: 0
+      kubectl: 0
+    to:
+    - '0'
+  kubernetes-worker:
+    charm: cs:~containers/kubernetes-worker
+    constraints: cores=4 mem=4G root-disk=16G
+    expose: true
+    num_units: 1
+    options:
+      channel: 1.20/stable
+    resources:
+      cni-amd64: 690
+      cni-arm64: 681
+      cni-s390x: 693
+      core: 0
+      kube-proxy: 0
+      kubectl: 0
+      kubelet: 0
+    to:
+    - '1'
+relations:
+- - kubernetes-master:kube-api-endpoint
+  - kubernetes-worker:kube-api-endpoint
+- - kubernetes-master:kube-control
+  - kubernetes-worker:kube-control
+- - kubernetes-master:certificates
+  - easyrsa:client
+- - kubernetes-master:etcd
+  - etcd:db
+- - kubernetes-worker:certificates
+  - easyrsa:client
+- - etcd:certificates
+  - easyrsa:client
+- - flannel:etcd
+  - etcd:db
+- - flannel:cni
+  - kubernetes-master:cni
+- - flannel:cni
+  - kubernetes-worker:cni
+- - containerd:containerd
+  - kubernetes-worker:container-runtime
+- - containerd:containerd
+  - kubernetes-master:container-runtime
