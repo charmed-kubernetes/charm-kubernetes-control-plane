@@ -343,3 +343,13 @@ options:
       respond with appropriate authentication details. For more info, please refer
       to the upstream documentation at
       https://kubernetes.io/docs/reference/access-authn-authz/authentication/#webhook-token-authentication
+  pod-security-policy:
+    type: string
+    default: ""
+    description: |
+      Default RBAC pod security policy [0] and privileged cluster roles formatted
+      as a YAML file as a string.
+      A good example of a PSP policy can be found here [1].
+
+      [0] https://kubernetes.io/docs/concepts/policy/pod-security-policy/
+      [1] https://github.com/kubernetes/examples/blob/master/staging/podsecuritypolicy/rbac/policies.yaml

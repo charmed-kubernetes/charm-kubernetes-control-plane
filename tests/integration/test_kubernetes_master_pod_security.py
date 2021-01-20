@@ -7,7 +7,7 @@ log = logging.getLogger(__name__)
 
 
 @pytest.mark.abort_on_fail
-async def test_build_and_deploy_pod_security_policy(ops_test):
+async def test_build_and_deploy(ops_test):
     bundle = ops_test.render_bundle(
         "tests/data/bundle_pod_security_policy.yaml",
         master_charm=await ops_test.build_charm("."),
