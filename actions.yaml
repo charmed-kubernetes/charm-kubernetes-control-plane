@@ -63,7 +63,9 @@ user-create:
   params:
     name:
       type: string
-      description: Username for the new user
+      description: |
+        Username for the new user. This value must only contain alphanumeric
+        characters, '@', '-' or '.'.
       minLength: 2
     groups:
       type: string

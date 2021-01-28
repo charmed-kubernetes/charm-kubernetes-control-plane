@@ -54,6 +54,13 @@ def test_user_create(mock_get, mock_master, mock_common, mock_chmod):
         user_actions.user_create()
         assert user_actions.action_fail.called
 
+    # Ensure failure when user name is invalid
+    mock_get.return_value = 'FunnyBu;sness'
+    with mock.patch('actions.user_actions.user_list',
+                    return_value=test_data):
+        user_actions.user_create()
+        assert user_actions.action_fail.called
+
     # Ensure calls/args when we have a new user
     user = 'newuser'
     password = 'password'
