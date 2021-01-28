@@ -198,8 +198,17 @@ def generate_rfc1123(length=10):
     param: length - the length of the string to generate
     '''
     length = 253 if length > 253 else length
-    options = string.ascii_lowercase + string.digits + '-' + '.'
-    return ''.join(random.SystemRandom().choice(options) for _ in range(length))
+    first_last_opts = string.ascii_lowercase + string.digits
+    middle_opts = first_last_opts + '-' + '.'
+
+    # ensure first and last chars are alphanum
+    length -= 2
+    rand_str = (
+        random.SystemRandom().choice(first_last_opts) +
+        ''.join(random.SystemRandom().choice(middle_opts) for _ in range(length)) +
+        random.SystemRandom().choice(first_last_opts)
+    )
+    return rand_str
 
 
 def token_generator(length=32):
