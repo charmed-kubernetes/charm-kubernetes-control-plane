@@ -22,7 +22,6 @@ from charms.layer import kubernetes_common
 AUTH_BACKUP_EXT = 'pre-secrets'
 AUTH_BASIC_FILE = '/root/cdk/basic_auth.csv'
 AUTH_SECRET_NS = 'kube-system'
-AUTH_SECRET_SUFFIX = 'token-auth'
 AUTH_SECRET_TYPE = 'juju.is/token-auth'
 AUTH_TOKENS_FILE = '/root/cdk/known_tokens.csv'
 STANDARD_API_PORT = 6443
@@ -190,6 +189,27 @@ def migrate_auth_file(filename):
     return True
 
 
+def generate_rfc1123(length=10):
+    '''Generate a random string compliant with RFC 1123.
+
+    https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-subdomain-names
+
+    param: length - the length of the string to generate
+    '''
+    length = 253 if length > 253 else length
+    first_last_opts = string.ascii_lowercase + string.digits
+    middle_opts = first_last_opts + '-' + '.'
+
+    # ensure first and last chars are alphanum
+    length -= 2
+    rand_str = (
+        random.SystemRandom().choice(first_last_opts) +
+        ''.join(random.SystemRandom().choice(middle_opts) for _ in range(length)) +
+        random.SystemRandom().choice(first_last_opts)
+    )
+    return rand_str
+
+
 def token_generator(length=32):
     '''Generate a random token for use in account tokens.
 
@@ -234,9 +254,9 @@ def create_known_token(token, username, user, groups=None):
 
 
 def create_secret(token, username, user, groups=None):
-    # secret names can only include alphanum and hyphens
-    sani_name = re.sub('[^0-9a-zA-Z]+', '-', user)
-    secret_id = '{}-{}'.format(sani_name, AUTH_SECRET_SUFFIX)
+    # secret IDs must be unique and rfc1123 compliant
+    sani_name = re.sub('[^0-9a-z.-]+', '-', user.lower())
+    secret_id = 'auth-{}-{}'.format(sani_name, generate_rfc1123(10))
     # The authenticator expects tokens to be in the form user::token
     token_delim = '::'
     if token_delim not in token:
@@ -257,8 +277,10 @@ def create_secret(token, username, user, groups=None):
 
         if kubernetes_common.kubectl_manifest('apply', tmp_manifest.name):
             hookenv.log("Created secret for {}".format(username))
+            return True
         else:
             hookenv.log("WARN: Unable to create secret for {}".format(username))
+            return False
 
 
 def delete_secret(secret_id):
