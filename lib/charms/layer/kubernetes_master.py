@@ -22,7 +22,6 @@ from charms.layer import kubernetes_common
 AUTH_BACKUP_EXT = 'pre-secrets'
 AUTH_BASIC_FILE = '/root/cdk/basic_auth.csv'
 AUTH_SECRET_NS = 'kube-system'
-AUTH_SECRET_SUFFIX = 'token-auth'
 AUTH_SECRET_TYPE = 'juju.is/token-auth'
 AUTH_TOKENS_FILE = '/root/cdk/known_tokens.csv'
 STANDARD_API_PORT = 6443
@@ -257,7 +256,7 @@ def create_known_token(token, username, user, groups=None):
 def create_secret(token, username, user, groups=None):
     # secret IDs must be unique and rfc1123 compliant
     sani_name = re.sub('[^0-9a-z.-]+', '-', user.lower())
-    secret_id = '{}-{}-{}'.format(sani_name, generate_rfc1123(10), AUTH_SECRET_SUFFIX)
+    secret_id = 'auth-{}-{}'.format(sani_name, generate_rfc1123(10))
     # The authenticator expects tokens to be in the form user::token
     token_delim = '::'
     if token_delim not in token:
