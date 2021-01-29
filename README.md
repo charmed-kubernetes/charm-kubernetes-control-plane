@@ -49,5 +49,5 @@ tox
 ```
 
 Note that the unit tests use [`charms.unit_test`](https://pypi.org/project/charms.unit-test/)
-so all charms.reactive helpers are automatically patched with fakes, so little manual
-patching needs to be done and things like `set_flag` and `is_flag_set` can be used directly.
+so all charms.reactive helpers are automatically patched with fakes and little manual
+patching needs to be done. Things like `set_flag` and `is_flag_set` can be used directly.
