@@ -37,7 +37,7 @@ from charms.leadership import leader_get, leader_set
 from charms.reactive import hook
 from charms.reactive import remove_state, clear_flag
 from charms.reactive import set_state, set_flag
-from charms.reactive import is_state, is_flag_set, get_flags, all_flags_set
+from charms.reactive import is_state, is_flag_set, get_unset_flags, all_flags_set
 from charms.reactive import endpoint_from_flag
 from charms.reactive import when, when_any, when_not, when_none
 from charms.reactive import register_trigger
@@ -1377,18 +1377,6 @@ def send_data():
     tls_client.request_client_cert('system:kube-apiserver',
                                    crt_path=client_crt_path,
                                    key_path=client_key_path)
-
-
-def get_unset_flags(*flags):
-    """Check if any of the provided flags missing and return them if so.
-
-    :param flags: list of reactive flags
-    :type flags: non-keyword args, str
-    :returns: list of unset flags filtered from the parameters shared
-    :rtype: List[str]
-    """
-    active_flags = get_flags()
-    return [flag for flag in flags if flag not in active_flags]
 
 
 @when('config.changed.extra_sans', 'certificates.available',
