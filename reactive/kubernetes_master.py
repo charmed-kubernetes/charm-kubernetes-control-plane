@@ -731,6 +731,11 @@ def set_final_status():
         hookenv.status_set('blocked',
                            'Series upgrade in progress')
         return
+
+    if not is_flag_set('certificates.available'):
+        hookenv.status_set('blocked', 'Missing relation to certificate authority.')
+        return
+
     if is_flag_set('kubernetes-master.secure-storage.failed'):
         hookenv.status_set('blocked',
                            'Failed to configure encryption; '

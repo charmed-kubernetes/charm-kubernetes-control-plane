@@ -100,24 +100,28 @@ def test_service_cidr_expansion():
     assert kubectl.call_count == 4
 
 
-@mock.patch("reactive.kubernetes_master.get_flags")
-def test_get_unset_flags(mock_get_flags):
-    mock_get_flags.return_value = ["test.available"]
-
-    missing_flags = kubernetes_master.get_unset_flags("test.available",
-                                                      "not-set-flag.available")
-    assert missing_flags == ["not-set-flag.available"]
-
-
-@mock.patch("reactive.kubernetes_master.get_flags")
 @mock.patch("reactive.kubernetes_master.send_data")
-def test_update_certificates_with_missing_relations(mock_send_data,
-                                                    mock_get_flags):
+def test_update_certificates_with_missing_relations(mock_send_data):
     # NOTE (rgildein): This test only tests whether the send_data function
     # has been called, if required relations are missing.
-    mock_get_flags.return_value = ["test.available"]
+    set_flag('test_available')
 
     kubernetes_master.update_certificates()
     hookenv.log.assert_any_call("Missing relations: 'certificates.available, "
                                 "kube-api-endpoint.available'", hookenv.ERROR)
     mock_send_data.assert_not_called()
+
+
+def test_status_set_on_missing_ca():
+    """Test that set_final_status() will set blocked state if CA is missing"""
+    set_flag("certificates.available")
+    set_flag("kubernetes-master.secure-storage.failed")
+    kubernetes_master.set_final_status()
+    hookenv.status_set.assert_called_with('blocked',
+                                          'Failed to configure encryption; '
+                                          'secrets are unencrypted or inaccessible')
+    clear_flag("certificates.available")
+    kubernetes_master.set_final_status()
+    hookenv.status_set.assert_called_with('blocked',
+                                          'Missing relation to certificate '
+                                          'authority.')
