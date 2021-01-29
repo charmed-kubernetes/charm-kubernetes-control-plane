@@ -100,14 +100,6 @@ def test_service_cidr_expansion():
     assert kubectl.call_count == 4
 
 
-def test_get_unset_flags():
-    set_flag("test.available")
-
-    missing_flags = kubernetes_master.get_unset_flags("test.available",
-                                                      "not-set-flag.available")
-    assert missing_flags == ["not-set-flag.available"]
-
-
 @mock.patch("reactive.kubernetes_master.send_data")
 def test_update_certificates_with_missing_relations(mock_send_data):
     # NOTE (rgildein): This test only tests whether the send_data function
