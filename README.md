@@ -48,6 +48,6 @@ make charm
 tox
 ```
 
-Note that the unit tests use [`charms.unit_test`][https://pypi.org/project/charms.unit-test/]
+Note that the unit tests use [`charms.unit_test`](https://pypi.org/project/charms.unit-test/)
 so all charms.reactive helpers are automatically patched with fakes, so little manual
 patching needs to be done and things like `set_flag` and `is_flag_set` can be used directly.
