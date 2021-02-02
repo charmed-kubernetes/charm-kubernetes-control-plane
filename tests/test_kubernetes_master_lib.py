@@ -46,7 +46,9 @@ def test_migrate_auth_file(auth_file):
 @mock.patch('lib.charms.layer.kubernetes_master.render')
 @mock.patch('lib.charms.layer.kubernetes_master.kubernetes_common.kubectl_manifest',
             return_value=True)
-def test_create_secret(mock_kubectl, mock_render):
+@mock.patch('lib.charms.layer.kubernetes_master.get_secret_names',
+            return_value={})
+def test_create_secret(mock_secrets, mock_kubectl, mock_render):
     """Verify valid secret data is sent to kubectl during create."""
     password = 'password'
     user_id = 'replace$uid'
