@@ -145,7 +145,7 @@ def check_secrets(token_review):
                 username = uid = b64decode(username_b64).decode('UTF-8')
                 pw_delim = '::'
                 if pw_delim in password:
-                    uid = password.split(pw_delim)[0]
+                    uid = password.rsplit(pw_delim, 1)[0]
                 groups = b64decode(groups_b64).decode('UTF-8').split(',')
                 token_review['status'] = {
                     'authenticated': True,

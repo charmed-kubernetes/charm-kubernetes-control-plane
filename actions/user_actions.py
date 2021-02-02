@@ -64,8 +64,8 @@ def user_create():
         return
 
     # Validate the name
-    if re.search('[^0-9A-Za-z@.-]+', user):
-        msg = "User name may only contain alphanumeric characters, '@', '-' or '.'"
+    if re.search('[^0-9A-Za-z:@.-]+', user):
+        msg = "User name may only contain alphanumeric characters, ':', '@', '-' or '.'"
         action_fail(msg)
         return
 
