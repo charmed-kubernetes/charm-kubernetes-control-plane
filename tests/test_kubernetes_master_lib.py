@@ -102,6 +102,29 @@ def test_get_csv_password(auth_file):
     assert charmlib.get_csv_password(auth_file, user) == password
 
 
+def test_get_secret_names():
+    """Verify expected {username: secret_id} dict is returned."""
+    secret = 'mine'
+    user = 'admin'
+
+    test_data = {
+        'items': [{
+            'data': {
+                'username': base64.b64encode(user.encode('utf-8')).decode('utf-8'),
+            },
+            'metadata': {
+                'name': secret,
+            }
+        }]
+    }
+    secrets = json.dumps(test_data).encode('utf-8')
+
+    # valid user should return a valid secret
+    with mock.patch('lib.charms.layer.kubernetes_master.kubernetes_common.kubectl',
+                    return_value=secrets):
+        assert charmlib.get_secret_names()[user] == secret
+
+
 def test_get_secret_password():
     """Verify expected secret token is returned."""
     password = 'password'
