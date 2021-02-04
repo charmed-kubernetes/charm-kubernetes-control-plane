@@ -15,7 +15,8 @@ os.environ['PATH'] += os.pathsep + os.path.join(os.sep, 'snap', 'bin')
 
 
 def kubectl(args):
-    cmd = ['kubectl'] + args
+    cmd = ["kubectl", "--kubeconfig=/home/ubuntu/config"]
+    cmd.extend(args)
     return check_output(cmd)
 
 
