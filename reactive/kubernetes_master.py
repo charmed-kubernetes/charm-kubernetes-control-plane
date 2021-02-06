@@ -1089,6 +1089,8 @@ def setup_auth_webhook_tokens():
     # configured, it may not be fully started. Only proceed if we can get secrets.
     if kubectl_success('get', 'secrets'):
         remove_state('authentication.setup')
+        create_tokens_and_sign_auth_requests()
+        build_kubeconfig()
         set_flag('kubernetes-master.auth-webhook-tokens.setup')
     else:
         hookenv.log('Secrets are not yet available; will retry')
