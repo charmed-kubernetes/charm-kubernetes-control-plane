@@ -1,7 +1,0 @@
-#!/bin/bash
-set -x
-
-export PATH=/snap/bin:$PATH
-: "${CHARM_BUILD_DIR:=/tmp/charms}"
-
-charm build -r --force -o "$CHARM_BUILD_DIR"
