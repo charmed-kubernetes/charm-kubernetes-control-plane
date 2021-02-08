@@ -1289,8 +1289,10 @@ def create_tokens_and_sign_auth_requests():
             continue
         kubelet_token = get_token(username)
         if not kubelet_token:
-            # Usernames have to be in the form of system:node:<nodeName>
-            userid = "kubelet-{}".format(request[0].split('/')[1])
+            # Username will be in the form of system:node:<nodeName>.
+            # User ID will be a worker <unitName>, and while not used today, we store
+            # this in case it becomes useful to map a secret to a unit in the future.
+            userid = request[0]
             setup_tokens(None, username, userid, group)
             kubelet_token = get_token(username)
         # When bootstrapping a new cluster, we may not have all our secrets yet.

@@ -1,9 +1,7 @@
 #!/usr/local/sbin/charm-env python3
-import json
 import os
 import re
 import sys
-from base64 import b64decode
 from charmhelpers.core import hookenv
 from charmhelpers.core.hookenv import (
     action_get,
@@ -34,23 +32,9 @@ def protect_resources(name):
 
 def user_list():
     '''Return a dict of 'username: secret_id' for Charmed Kubernetes users.'''
-    output = layer.kubernetes_common.kubectl(
-        'get', 'secrets', '-n', layer.kubernetes_master.AUTH_SECRET_NS,
-        '--field-selector', 'type={}'.format(layer.kubernetes_master.AUTH_SECRET_TYPE),
-        '-o', 'json').decode('UTF-8')
-    secrets = json.loads(output)
-    users = {}
-    if 'items' in secrets:
-        for secret in secrets['items']:
-            try:
-                secret_id = secret['metadata']['name']
-                username_b64 = secret['data']['username'].encode('UTF-8')
-            except (KeyError, TypeError):
-                # CK secrets will have populated 'data', but not all secrets do
-                continue
-            users[b64decode(username_b64).decode('UTF-8')] = secret_id
-    action_set({'users': ', '.join(list(users))})
-    return users
+    secrets = layer.kubernetes_master.get_secret_names()
+    action_set({'users': ', '.join(list(secrets))})
+    return secrets
 
 
 def user_create():
@@ -64,8 +48,8 @@ def user_create():
         return
 
     # Validate the name
-    if re.search('[^0-9A-Za-z@.-]+', user):
-        msg = "User name may only contain alphanumeric characters, '@', '-' or '.'"
+    if re.search('[^0-9A-Za-z:@.-]+', user):
+        msg = "User name may only contain alphanumeric characters, ':', '@', '-' or '.'"
         action_fail(msg)
         return
 
