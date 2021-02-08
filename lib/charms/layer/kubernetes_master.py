@@ -325,6 +325,7 @@ def get_secret_names():
     except (CalledProcessError, FileNotFoundError):
         # The api server may not be up, or we may be trying to run kubelet before
         # the snap is installed. Send back an empty dict.
+        hookenv.log('Unable to get existing secrets', level=hookenv.WARNING)
         return {}
 
     secrets = json.loads(output)
