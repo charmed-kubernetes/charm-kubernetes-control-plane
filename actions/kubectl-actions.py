@@ -3,12 +3,7 @@ import os
 import json
 import tempfile
 import subprocess
-from charmhelpers.core.hookenv import (
-    action_get,
-    action_set,
-    action_fail,
-    action_name
-)
+from charmhelpers.core.hookenv import action_get, action_set, action_fail, action_name
 
 
 def _kubectl(args):
@@ -21,7 +16,8 @@ def _kubectl(args):
     cmd = ["kubectl", "--kubeconfig=/home/ubuntu/config"]
     cmd.extend(args)
     return subprocess.check_output(
-        cmd, env=env,
+        cmd,
+        env=env,
         stderr=subprocess.STDOUT,
     )
 
@@ -52,15 +48,18 @@ def apply_manifest():
             json.dump(manifest, manifest_file)
         output = _kubectl(["apply", "-f", apply_path])
 
-        action_set({
-            "summary": "Manifest applied.",
-            "output": output.decode("utf-8"),
-        })
+        action_set(
+            {
+                "summary": "Manifest applied.",
+                "output": output.decode("utf-8"),
+            }
+        )
     except subprocess.CalledProcessError as e:
         action_fail(
             "kubectl failed with exit code {} and message: {}".format(
-                e.returncode,
-                e.output))
+                e.returncode, e.output
+            )
+        )
     except json.JSONDecodeError as e:
         action_fail("Failed to parse JSON manifest: {}".format(str(e)))
     except Exception as e:
