@@ -40,11 +40,11 @@ jobs:
         run: tox -vve unit
   integration-test:
     name: Integration test with LXD
-    runs-on: ubuntu-latest
+    runs-on: localhost-1
     strategy:
       matrix:
         python: [3.6, 3.7, 3.8, 3.9]
-    timeout-minutes: 80
+    timeout-minutes: 360
     steps:
       - name: Check out code
         uses: actions/checkout@v2
