@@ -55,7 +55,5 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install tox
-      - name: Setup operator test environment
-        uses: charmed-kubernetes/actions-operator@master
       - name: Run test
         run: tox -e integration
