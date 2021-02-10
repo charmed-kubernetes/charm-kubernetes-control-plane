@@ -17,7 +17,7 @@ services:
     resources:
       easyrsa: 5
     to:
-    - lxd:0
+    - '1'
   etcd:
     charm: cs:~containers/etcd
     num_units: 1
