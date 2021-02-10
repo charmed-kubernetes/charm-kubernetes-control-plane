@@ -894,8 +894,9 @@ def set_final_status():
         return
 
     if unready:
+        plural = "s" if len(unready) > 1 else ""
         msg = "Waiting for {} kube-system pod{} to start"
-        msg = msg.format(len(unready), "s"[len(unready) == 1:])
+        msg = msg.format(len(unready), plural)
         hookenv.status_set("waiting", msg)
         return
 
