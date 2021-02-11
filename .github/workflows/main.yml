@@ -45,5 +45,9 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v2
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
       - name: Run test
         run: tox -e integration
