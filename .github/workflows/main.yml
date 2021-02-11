@@ -39,8 +39,8 @@ jobs:
       - name: Run test
         run: tox -vve unit
   integration-test:
-    name: Integration test with LXD
-    runs-on: localhost-1
+    name: Integration test with VMWare
+    runs-on: self-hosted
     timeout-minutes: 360
     steps:
       - name: Check out code
