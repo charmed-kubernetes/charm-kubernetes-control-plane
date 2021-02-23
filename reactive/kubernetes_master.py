@@ -2658,7 +2658,7 @@ def poke_network_unavailable():
     http_header = ("Authorization", "Bearer {}".format(client_token))
 
     try:
-        output = kubectl("kubectl", "get", "nodes", "-o", "json").decode("utf-8")
+        output = kubectl("get", "nodes", "-o", "json").decode("utf-8")
         nodes = json.loads(output)["items"]
     except CalledProcessError:
         hookenv.log("failed to get kube-system nodes")
