@@ -2556,13 +2556,11 @@ def poke_network_unavailable():
     local_address = get_ingress_address('kube-api-endpoint')
     local_server = 'https://{0}:{1}'.format(local_address, 6443)
 
-    cmd = ['kubectl', 'get', 'nodes', '-o', 'json']
-
     client_token = get_token('admin')
     http_header = ('Authorization', 'Bearer {}'.format(client_token))
 
     try:
-        output = check_output(cmd).decode('utf-8')
+        output = kubectl("get", "nodes", "-o", "json").decode("utf-8")
         nodes = json.loads(output)['items']
     except CalledProcessError:
         hookenv.log('failed to get kube-system nodes')
