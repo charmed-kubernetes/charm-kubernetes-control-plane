@@ -851,6 +851,12 @@ def set_final_status():
         )
         return
 
+    auth_setup = is_flag_set("authentication.setup")
+    webhook_tokens_setup = is_flag_set("kubernetes-master.auth-webhook-tokens.setup")
+    if auth_setup and not webhook_tokens_setup:
+        hookenv.status_set("waiting", "Failed to setup auth-webhook tokens; will retry")
+        return
+
     if is_state("kubernetes-master.components.started"):
         # All services should be up and running at this point. Double-check...
         failing_services = master_services_down()
@@ -1139,20 +1145,24 @@ def register_auth_webhook():
 @when(
     "kubernetes-master.apiserver.configured",
     "kubernetes-master.auth-webhook-service.started",
+    "authentication.setup",
 )
 @when_not("kubernetes-master.auth-webhook-tokens.setup")
 def setup_auth_webhook_tokens():
-    """Reconfigure authentication to setup auth-webhook tokens."""
-    # Reconfigure authentication so that proper secrets are created after the
-    # apiserver and auth-webhook service are ready. Even if the apiserver is
-    # configured, it may not be fully started. Only proceed if we can get secrets.
-    if kubectl_success("get", "secrets"):
-        remove_state("authentication.setup")
-        create_tokens_and_sign_auth_requests()
-        build_kubeconfig()
-        set_flag("kubernetes-master.auth-webhook-tokens.setup")
-    else:
+    """Reconfigure authentication to setup auth-webhook tokens.
+
+    If authentication has been setup with a non-auth-webhook configuration,
+    convert it to use auth-webhook tokens instead. Alternatively, if the
+    auth-webhook setup failed, this will also ensure that it is retried.
+    """
+    # Even if the apiserver is configured, it may not be fully started. Only
+    # proceed if we can get secrets.
+    if not kubectl_success("get", "secrets"):
         hookenv.log("Secrets are not yet available; will retry")
+        return
+    if create_tokens_and_sign_auth_requests():
+        # Force setup_leader_authentication to be re-run.
+        remove_state("authentication.setup")
 
 
 @when(
@@ -1316,6 +1326,7 @@ def send_cluster_dns_detail(kube_control):
 
 def create_tokens_and_sign_auth_requests():
     """Create tokens for CK users and services."""
+    clear_flag("kubernetes-master.auth-webhook-tokens.setup")
     # NB: This may be called before kube-apiserver is up when bootstrapping new
     # clusters with auth-webhook. In this case, setup_tokens will be a no-op.
     # We will re-enter this function once master services are available to
@@ -1342,8 +1353,17 @@ def create_tokens_and_sign_auth_requests():
     if not monitoring_token:
         setup_tokens(None, "system:monitoring", "system:monitoring")
 
+    if not (proxy_token and client_token):
+        # When bootstrapping a new cluster, we may not have all our secrets yet.
+        # Do not let the kubelets start without all the needed tokens.
+        hookenv.log(
+            "Missing required tokens for kubelet startup; will retry", hookenv.WARNING
+        )
+        return False
+
     kube_control = endpoint_from_flag("kube-control.connected")
     requests = kube_control.auth_user() if kube_control else []
+    any_failed = False
     for request in requests:
         username = request[1]["user"]
         group = request[1]["group"]
@@ -1357,16 +1377,21 @@ def create_tokens_and_sign_auth_requests():
             userid = request[0]
             setup_tokens(None, username, userid, group)
             kubelet_token = get_token(username)
-        # When bootstrapping a new cluster, we may not have all our secrets yet.
-        # Do not let the kubelets start without all the needed tokens. We'll check
-        # this each time 'authentication.setup' is cleared.
-        if kubelet_token and proxy_token and client_token:
-            kube_control.sign_auth_request(
-                request[0], username, kubelet_token, proxy_token, client_token
+        if not kubelet_token:
+            hookenv.log(
+                "Failed to create token for {}; will retry".format(username),
+                hookenv.WARNING,
             )
-        else:
-            hookenv.log("Missing required tokens for kubelet startup; will retry")
-            break
+            any_failed = True
+            continue
+        kube_control.sign_auth_request(
+            request[0], username, kubelet_token, proxy_token, client_token
+        )
+    if not any_failed:
+        set_flag("kubernetes-master.auth-webhook-tokens.setup")
+        return True
+    else:
+        return False
 
 
 @when("kube-api-endpoint.available")
