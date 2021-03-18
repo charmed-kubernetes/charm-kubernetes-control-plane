@@ -197,16 +197,8 @@ def generate_rfc1123(length=10):
     param: length - the length of the string to generate
     """
     length = 253 if length > 253 else length
-    first_last_opts = string.ascii_lowercase + string.digits
-    middle_opts = first_last_opts + "-" + "."
-
-    # ensure first and last chars are alphanum
-    length -= 2
-    rand_str = (
-        random.SystemRandom().choice(first_last_opts)
-        + "".join(random.SystemRandom().choice(middle_opts) for _ in range(length))
-        + random.SystemRandom().choice(first_last_opts)
-    )
+    valid_chars = string.ascii_lowercase + string.digits
+    rand_str = "".join(random.SystemRandom().choice(valid_chars) for _ in range(length))
     return rand_str
 
 

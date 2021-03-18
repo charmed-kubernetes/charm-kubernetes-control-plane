@@ -131,3 +131,63 @@ def test_status_set_on_missing_ca():
     hookenv.status_set.assert_called_with(
         "blocked", "Missing relation to certificate " "authority."
     )
+
+
+@mock.patch("reactive.kubernetes_master.setup_tokens")
+@mock.patch("reactive.kubernetes_master.get_token")
+def test_create_token_sign_auth_requests(get_token, setup_tokens):
+    set_flag("kubernetes-master.auth-webhook-tokens.setup")
+    kube_control = endpoint_from_flag.return_value
+    get_token.return_value = None
+    clear_flag("kubernetes-master.auth-webhook-tokens.setup")
+    assert not kubernetes_master.create_tokens_and_sign_auth_requests()
+    assert kube_control.sign_auth_request.call_count == 0
+    assert not is_flag_set("kubernetes-master.auth-webhook-tokens.setup")
+
+    endpoint_from_flag.return_value = None
+    get_token.return_value = True
+    clear_flag("kubernetes-master.auth-webhook-tokens.setup")
+    assert kubernetes_master.create_tokens_and_sign_auth_requests()
+    assert kube_control.sign_auth_request.call_count == 0
+    assert is_flag_set("kubernetes-master.auth-webhook-tokens.setup")
+
+    endpoint_from_flag.return_value = kube_control
+    kube_control.auth_user.return_value = [
+        (None, {"user": "foo", "group": "foo"}),
+        (None, {"user": None, "group": None}),
+    ]
+    clear_flag("kubernetes-master.auth-webhook-tokens.setup")
+    assert kubernetes_master.create_tokens_and_sign_auth_requests()
+    assert kube_control.sign_auth_request.call_count == 1
+    assert is_flag_set("kubernetes-master.auth-webhook-tokens.setup")
+
+    kube_control.auth_user.return_value = [
+        (None, {"user": "foo", "group": "foo"}),
+        (None, {"user": "bar", "group": "bar"}),
+    ]
+    clear_flag("kubernetes-master.auth-webhook-tokens.setup")
+    assert kubernetes_master.create_tokens_and_sign_auth_requests()
+    assert kube_control.sign_auth_request.call_count == 3
+    assert is_flag_set("kubernetes-master.auth-webhook-tokens.setup")
+
+
+@mock.patch("reactive.kubernetes_master.create_tokens_and_sign_auth_requests")
+@mock.patch("reactive.kubernetes_master.kubectl_success")
+def test_setup_auth_webhook_tokens(kcs, ctsar):
+    kcs.return_value = False
+    ctsar.return_value = True
+    set_flag("authentication.setup")
+    kubernetes_master.setup_auth_webhook_tokens()
+    assert is_flag_set("authentication.setup")
+
+    kcs.return_value = True
+    ctsar.return_value = False
+    set_flag("authentication.setup")
+    kubernetes_master.setup_auth_webhook_tokens()
+    assert is_flag_set("authentication.setup")
+
+    kcs.return_value = True
+    ctsar.return_value = True
+    set_flag("authentication.setup")
+    kubernetes_master.setup_auth_webhook_tokens()
+    assert not is_flag_set("authentication.setup")
