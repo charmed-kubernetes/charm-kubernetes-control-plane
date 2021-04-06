@@ -4,8 +4,9 @@ from unittest import mock
 from reactive import kubernetes_master
 from charms.layer import kubernetes_common
 from charms.layer.kubernetes_common import get_version, kubectl
-from charms.reactive import endpoint_from_flag, set_flag, is_flag_set, clear_flag
-from charmhelpers.core import hookenv, unitdata
+from charms.reactive import endpoint_from_flag, endpoint_from_name
+from charms.reactive import set_flag, is_flag_set, clear_flag
+from charmhelpers.core import hookenv, host, unitdata
 
 
 kubernetes_common.get_networks = lambda cidrs: [
@@ -131,6 +132,51 @@ def test_status_set_on_missing_ca():
     hookenv.status_set.assert_called_with(
         "blocked", "Missing relation to certificate " "authority."
     )
+
+
+def test_stauts_set_on_incomplete_lb():
+    """Test that set_final_status() will set waiting if LB is pending."""
+    set_flag("certificates.available")
+    clear_flag("kubernetes-master.secure-storage.failed")
+    set_flag("kube-control.connected")
+    set_flag("kubernetes-master.components.started")
+    set_flag("cdk-addons.configured")
+    set_flag("kubernetes-master.system-monitoring-rbac-role.applied")
+    hookenv.config.return_value = "auto"
+    host.service_running.return_value = True
+    kubectl.side_effect = None
+    kubectl.return_value = b'{"items": []}'
+
+    # test no LB relation
+    hookenv.goal_state.return_value = {}
+    kubernetes_master.set_final_status()
+    hookenv.status_set.assert_called_with("active", mock.ANY)
+
+    # test legacy kube-api-endpoint relation
+    hookenv.goal_state.return_value = {
+        "relations": {"kube-api-endpoint": None}
+    }
+    kubernetes_master.set_final_status()
+    hookenv.status_set.assert_called_with(
+        "waiting", "Waiting for kube-api-endpoint relation"
+    )
+    set_flag("kube-api-endpoint.available")
+    kubernetes_master.set_final_status()
+    hookenv.status_set.assert_called_with("active", mock.ANY)
+
+    # test new lb-provider relation
+    clear_flag("kube-api-endpoint.available")
+    hookenv.goal_state.return_value = {
+        "relations": {"lb-provider": None}
+    }
+    endpoint_from_name.return_value.has_response = False
+    kubernetes_master.set_final_status()
+    hookenv.status_set.assert_called_with(
+        "waiting", "Waiting for lb-provider"
+    )
+    endpoint_from_name.return_value.has_response = True
+    kubernetes_master.set_final_status()
+    hookenv.status_set.assert_called_with("active", mock.ANY)
 
 
 @mock.patch("reactive.kubernetes_master.setup_tokens")
