@@ -153,9 +153,7 @@ def test_stauts_set_on_incomplete_lb():
     hookenv.status_set.assert_called_with("active", mock.ANY)
 
     # test legacy kube-api-endpoint relation
-    hookenv.goal_state.return_value = {
-        "relations": {"kube-api-endpoint": None}
-    }
+    hookenv.goal_state.return_value = {"relations": {"kube-api-endpoint": None}}
     kubernetes_master.set_final_status()
     hookenv.status_set.assert_called_with(
         "waiting", "Waiting for kube-api-endpoint relation"
@@ -166,14 +164,10 @@ def test_stauts_set_on_incomplete_lb():
 
     # test new lb-provider relation
     clear_flag("kube-api-endpoint.available")
-    hookenv.goal_state.return_value = {
-        "relations": {"lb-provider": None}
-    }
+    hookenv.goal_state.return_value = {"relations": {"lb-provider": None}}
     endpoint_from_name.return_value.has_response = False
     kubernetes_master.set_final_status()
-    hookenv.status_set.assert_called_with(
-        "waiting", "Waiting for lb-provider"
-    )
+    hookenv.status_set.assert_called_with("waiting", "Waiting for lb-provider")
     endpoint_from_name.return_value.has_response = True
     kubernetes_master.set_final_status()
     hookenv.status_set.assert_called_with("active", mock.ANY)
