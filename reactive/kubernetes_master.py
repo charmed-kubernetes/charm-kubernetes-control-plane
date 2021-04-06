@@ -1429,8 +1429,7 @@ def push_service_data():
 @when("endpoint.lb-provider.available")
 @when_not("kubernetes-master.sent-lb-request")
 def request_load_balancer():
-    """Request a LB from the related provider.
-    """
+    """Request a LB from the related provider."""
     lb_provider = endpoint_from_name("lb-provider")
     req = lb_provider.get_request("api-server")
     req.protocol = req.protocols.tcp
@@ -1458,10 +1457,9 @@ def send_api_endpoints():
     if not endpoints:
         for relation in kube_control.relations:
             endpoints.append(kubernetes_master.get_api_endpoint(relation))
-    kube_control.set_api_endpoints([
-        "https://{}:{}".format(address, port)
-        for address, port in endpoints
-    ])
+    kube_control.set_api_endpoints(
+        ["https://{}:{}".format(address, port) for address, port in endpoints]
+    )
 
 
 @when("certificates.available", "cni.available")
@@ -2732,8 +2730,9 @@ def poke_network_unavailable():
     in a while.
     """
     local_address = get_ingress_address("kube-control")
-    local_server = "https://{0}:{1}".format(local_address,
-                                            kubernetes_master.STANDARD_API_PORT)
+    local_server = "https://{0}:{1}".format(
+        local_address, kubernetes_master.STANDARD_API_PORT
+    )
 
     client_token = get_token("admin")
     http_header = ("Authorization", "Bearer {}".format(client_token))
