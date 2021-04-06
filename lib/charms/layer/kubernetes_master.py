@@ -15,7 +15,7 @@ from charmhelpers.core import hookenv
 from charmhelpers.core.templating import render
 from charmhelpers.core import unitdata
 from charmhelpers.fetch import apt_install
-from charms.reactive import endpoint_from_flag, is_flag_set
+from charms.reactive import endpoint_from_flag, endpoint_from_name, is_flag_set
 from charms.layer import kubernetes_common
 
 
@@ -60,10 +60,14 @@ def get_lb_endpoints():
     relation.
     """
     external_lb_endpoints = get_external_lb_endpoints()
+    lb_provider = endpoint_from_name("lb-provider")
+    lb_response = lb_provider.get_response("api-server")
     loadbalancer = endpoint_from_flag("loadbalancer.available")
 
     if external_lb_endpoints:
         return external_lb_endpoints
+    elif lb_response and lb_response.address:
+        return [(lb_response.address, STANDARD_API_PORT)]
     elif loadbalancer:
         lb_addresses = loadbalancer.get_addresses_ports()
         return [(host.get("public-address"), host.get("port")) for host in lb_addresses]

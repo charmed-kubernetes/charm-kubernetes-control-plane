@@ -29,6 +29,9 @@ peers:
     interface: kube-masters
 provides:
   kube-api-endpoint:
+    # kube-api-endpoint is deprecated. Its functionality has been rolled into
+    # the kube-control interface. The relation endpoint will be removed in a
+    # future release.
     interface: http
   cluster-dns:
     # kube-dns is deprecated. Its functionality has been rolled into the
@@ -70,6 +73,8 @@ requires:
     interface: keystone-credentials
   dns-provider:
     interface: kube-dns
+  lb-provider:
+    interface: loadbalancer
 resources:
   core:
     type: file

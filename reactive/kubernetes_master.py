@@ -37,8 +37,8 @@ from charms.leadership import leader_get, leader_set
 from charms.reactive import hook
 from charms.reactive import remove_state, clear_flag
 from charms.reactive import set_state, set_flag
-from charms.reactive import is_state, is_flag_set, get_unset_flags, all_flags_set
-from charms.reactive import endpoint_from_flag
+from charms.reactive import is_state, is_flag_set, get_unset_flags
+from charms.reactive import endpoint_from_flag, endpoint_from_name
 from charms.reactive import when, when_any, when_not, when_none
 from charms.reactive import register_trigger
 from charms.reactive import data_changed, any_file_changed
@@ -800,13 +800,16 @@ def set_final_status():
         hookenv.status_set("waiting", "Waiting for cloud integration")
         return
 
-    if not is_state("kube-api-endpoint.available"):
-        if "kube-api-endpoint" in goal_state.get("relations", {}):
-            status = "waiting"
-        else:
-            status = "blocked"
-        hookenv.status_set(status, "Waiting for kube-api-endpoint relation")
-        return
+    if "kube-api-endpoint" in goal_state.get("relations", {}):
+        if not is_state("kube-api-endpoint.available"):
+            hookenv.status_set("waiting", "Waiting for kube-api-endpoint relation")
+            return
+
+    if "lb-provider" in goal_state.get("relations", {}):
+        lb_provider = endpoint_from_name("lb-provider")
+        if not lb_provider.has_response:
+            hookenv.status_set("waiting", "Waiting for lb-provider")
+            return
 
     if not is_state("kube-control.connected"):
         if "kube-control" in goal_state.get("relations", {}):
@@ -1405,7 +1408,11 @@ def create_tokens_and_sign_auth_requests():
 @when("kube-api-endpoint.available")
 def push_service_data():
     """Send configuration to the load balancer, and close access to the
-    public interface"""
+    public interface.
+
+    Note: This approach is deprecated in favor of the less complicated
+    lb-provider + kube-control approach.
+    """
     kube_api = endpoint_from_flag("kube-api-endpoint.available")
 
     external_endpoints = kubernetes_master.get_external_lb_endpoints()
@@ -1418,12 +1425,49 @@ def push_service_data():
         kube_api.configure(kubernetes_master.STANDARD_API_PORT)
 
 
-@when("certificates.available", "kube-api-endpoint.available", "cni.available")
+@when("leadership.is_leader")
+@when("endpoint.lb-provider.available")
+@when_not("kubernetes-master.sent-lb-request")
+def request_load_balancer():
+    """Request a LB from the related provider.
+    """
+    lb_provider = endpoint_from_name("lb-provider")
+    req = lb_provider.get_request("api-server")
+    req.protocol = req.protocols.tcp
+    port = kubernetes_master.STANDARD_API_PORT
+    req.port_mapping = {port: port}
+    req.public = True
+    if not req.health_checks:
+        req.add_health_check(
+            protocol=req.protocols.http,
+            port=8080,
+            path="/livez",
+        )
+    lb_provider.send_request(req)
+    set_flag("kubernetes-master.sent-lb-request")
+
+
+@when("kube-control.connected")
+def send_api_endpoints():
+    kube_control = endpoint_from_name("kube-control")
+    lb_provider = endpoint_from_name("lb-provider")
+    if lb_provider.is_available and not lb_provider.has_response:
+        # waiting for lb-provider
+        return
+    endpoints = kubernetes_master.get_lb_endpoints()
+    if not endpoints:
+        for relation in kube_control.relations:
+            endpoints.append(kubernetes_master.get_api_endpoint(relation))
+    kube_control.set_api_endpoints([
+        "https://{}:{}".format(address, port)
+        for address, port in endpoints
+    ])
+
+
+@when("certificates.available", "cni.available")
 def send_data():
     """Send the data that is required to create a server certificate for
     this server."""
-    kube_api_endpoint = endpoint_from_flag("kube-api-endpoint.available")
-
     # Use the public ip of this unit as the Common Name for the certificate.
     common_name = hookenv.unit_public_ip()
 
@@ -1438,7 +1482,8 @@ def send_data():
 
     # Get ingress address (this is probably already covered by bind_ips,
     # but list it explicitly as well just in case it's not).
-    ingress_ip = get_ingress_address(kube_api_endpoint.endpoint_name)
+    old_ingress_ip = get_ingress_address("kube-api-endpoint")
+    new_ingress_ip = get_ingress_address("kube-control")
 
     domain = hookenv.config("dns_domain")
     # Create SANs that the tls layer will add to the server cert.
@@ -1447,7 +1492,8 @@ def send_data():
             # The CN field is checked as a hostname, so if it's an IP, it
             # won't match unless also included in the SANs as an IP field.
             common_name,
-            ingress_ip,
+            old_ingress_ip,
+            new_ingress_ip,
             socket.gethostname(),
             socket.getfqdn(),
             "kubernetes",
@@ -2685,8 +2731,9 @@ def poke_network_unavailable():
     discussion about refactoring the affected code but nothing has happened
     in a while.
     """
-    local_address = get_ingress_address("kube-api-endpoint")
-    local_server = "https://{0}:{1}".format(local_address, 6443)
+    local_address = get_ingress_address("kube-control")
+    local_server = "https://{0}:{1}".format(local_address,
+                                            kubernetes_master.STANDARD_API_PORT)
 
     client_token = get_token("admin")
     http_header = ("Authorization", "Bearer {}".format(client_token))
@@ -3168,11 +3215,11 @@ def configure_hacluster():
         add_service_to_hacluster(service, daemon)
 
     # get a new cert
-    if all_flags_set("certificates.available", "kube-api-endpoint.available"):
+    if is_flag_set("certificates.available"):
         send_data()
 
     # update workers
-    if is_state("kube-api-endpoint.available"):
+    if is_state("kube-control.connected"):
         push_service_data()
 
     set_flag("hacluster-configured")
@@ -3186,10 +3233,12 @@ def remove_hacluster():
         remove_service_from_hacluster(service, daemon)
 
     # get a new cert
-    if all_flags_set("certificates.available", "kube-api-endpoint.available"):
+    if is_flag_set("certificates.available"):
         send_data()
     # update workers
-    if is_state("kube-api-endpoint.available"):
+    if is_flag_set("kube-api-endpoint.available"):
+        push_service_data()
+    if is_flag_set("kube-control.connected"):
         push_service_data()
 
     clear_flag("hacluster-configured")
