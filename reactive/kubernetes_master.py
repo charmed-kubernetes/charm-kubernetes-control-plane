@@ -1449,6 +1449,10 @@ def request_load_balancer():
 @when("kube-control.connected")
 def send_api_endpoints():
     kube_control = endpoint_from_name("kube-control")
+    if not hasattr(kube_control, "set_api_endpoints"):
+        # built with an old version of the kube-control interface
+        # the old kube-api-endpoint relation must be used instead
+        return
     lb_provider = endpoint_from_name("lb-provider")
     if lb_provider.is_available and not lb_provider.has_response:
         # waiting for lb-provider
