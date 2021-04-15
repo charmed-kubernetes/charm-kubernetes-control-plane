@@ -32,10 +32,9 @@ CEPH_KEYRING = CEPH_CONF_DIR / "ceph.client.admin.keyring"
 db = unitdata.kv()
 
 
-def get_external_lb_endpoints():
+def get_endpoints_from_config():
     """
-    Return a list of any external API load-balancer endpoints that have
-    been manually configured.
+    Return a list of any manually configured API endpoints.
     """
     ha_connected = is_flag_set("ha.connected")
     forced_lb_ips = hookenv.config("loadbalancer-ips").split()
@@ -54,45 +53,105 @@ def get_external_lb_endpoints():
         return []
 
 
-def get_lb_endpoints():
+def get_internal_api_endpoints(relation=None):
     """
-    Return all load-balancer endpoints, whether from manual config or via
-    relation.
-    """
-    external_lb_endpoints = get_external_lb_endpoints()
-    lb_provider = endpoint_from_name("lb-provider")
-    lb_response = lb_provider.get_response("api-server")
-    loadbalancer = endpoint_from_flag("loadbalancer.available")
+    Determine the best API endpoints for an internal client to connect to.
 
-    if external_lb_endpoints:
-        return external_lb_endpoints
-    elif lb_response and lb_response.address:
-        return [(lb_response.address, STANDARD_API_PORT)]
-    elif loadbalancer:
+    If a relation is given, it will try to take that into account.
+
+    May return an empty list if an endpoint is expected but not yet available.
+    """
+    try:
+        goal_state = hookenv.goal_state()
+    except NotImplementedError:
+        goal_state = {}
+    goal_state.setdefault("relations", {})
+
+    # Config takes precedence.
+    endpoints_from_config = get_endpoints_from_config()
+    if endpoints_from_config:
+        return endpoints_from_config
+
+    # If the internal LB relation is attached, use that or nothing. If it's
+    # not attached but the external LB relation is, use that or nothing.
+    for lb_endpoint in ("loadbalancer-internal", "loadbalancer-external"):
+        if lb_endpoint in goal_state["relations"]:
+            lb_provider = endpoint_from_name(lb_endpoint)
+            lb_response = lb_provider.get_response("kube-api")
+            if not lb_response or lb_response.error:
+                return []
+            return [(lb_response.address, STANDARD_API_PORT)]
+
+    # Support the older loadbalancer relation (public-address interface).
+    if "loadbalancer" in goal_state["relations"]:
+        loadbalancer = endpoint_from_flag("loadbalancer.available")
         lb_addresses = loadbalancer.get_addresses_ports()
         return [(host.get("public-address"), host.get("port")) for host in lb_addresses]
-    else:
-        return []
+
+    # No LBs of any kind, so fall back to ingress-address.
+    if not relation:
+        kube_control = endpoint_from_name("kube-control")
+        if not kube_control.relations:
+            return []
+        relation = kube_control.relations[0]
+    ingress_address = hookenv.ingress_address(
+        relation.relation_id, hookenv.local_unit()
+    )
+    return [(ingress_address, STANDARD_API_PORT)]
 
 
-def get_api_endpoint(relation=None):
+def get_external_api_endpoints():
     """
-    Determine the best endpoint for a client to connect to.
+    Determine the best API endpoints for an external client to connect to.
 
-    If a relation is given, it will take that into account when choosing an
-    endpoint.
+    May return an empty list if an endpoint is expected but not yet available.
     """
-    endpoints = get_lb_endpoints()
-    if endpoints:
-        # select a single endpoint based on our local unit number
-        return endpoints[kubernetes_common.get_unit_number() % len(endpoints)]
-    elif relation:
-        ingress_address = hookenv.ingress_address(
-            relation.relation_id, hookenv.local_unit()
-        )
-        return (ingress_address, STANDARD_API_PORT)
-    else:
-        return (hookenv.unit_public_ip(), STANDARD_API_PORT)
+    try:
+        goal_state = hookenv.goal_state()
+    except NotImplementedError:
+        goal_state = {}
+    goal_state.setdefault("relations", {})
+
+    # Config takes precedence.
+    endpoints_from_config = get_endpoints_from_config()
+    if endpoints_from_config:
+        return endpoints_from_config
+
+    # If the external LB relation is attached, use that or nothing. If it's
+    # not attached but the internal LB relation is, use that or nothing.
+    for lb_type in ("external", "internal"):
+        lb_endpoint = "loadbalancer-" + lb_type
+        lb_name = "api-server-" + lb_type
+        if lb_endpoint in goal_state["relations"]:
+            lb_provider = endpoint_from_name(lb_endpoint)
+            lb_response = lb_provider.get_response(lb_name)
+            if not lb_response or lb_response.error:
+                return []
+            return [(lb_response.address, STANDARD_API_PORT)]
+
+    # Support the older loadbalancer relation (public-address interface).
+    if "loadbalancer" in goal_state["relations"]:
+        loadbalancer = endpoint_from_flag("loadbalancer.available")
+        lb_addresses = loadbalancer.get_addresses_ports()
+        return [(host.get("public-address"), host.get("port")) for host in lb_addresses]
+
+    # No LBs of any kind, so fall back to public-address.
+    return [(hookenv.unit_public_ip(), STANDARD_API_PORT)]
+
+
+def get_api_urls(endpoints):
+    """
+    Convert a list of API server endpoints to URLs.
+    """
+    return ["https://{0}:{1}".format(*endpoint) for endpoint in endpoints]
+
+
+def get_api_url(endpoints):
+    """
+    Choose an API endpoint from the list and build a URL from it.
+    """
+    urls = get_api_urls(endpoints)
+    return urls[kubernetes_common.get_unit_number() % len(urls)]
 
 
 def install_ceph_common():

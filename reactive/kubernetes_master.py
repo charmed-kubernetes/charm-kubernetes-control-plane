@@ -805,11 +805,12 @@ def set_final_status():
             hookenv.status_set("waiting", "Waiting for kube-api-endpoint relation")
             return
 
-    if "lb-provider" in goal_state.get("relations", {}):
-        lb_provider = endpoint_from_name("lb-provider")
-        if not lb_provider.has_response:
-            hookenv.status_set("waiting", "Waiting for lb-provider")
-            return
+    for lb_endpoint in ("loadbalancer-internal", "loadbalancer-external"):
+        if lb_endpoint in goal_state.get("relations", {}):
+            lb_provider = endpoint_from_name(lb_endpoint)
+            if not lb_provider.has_response:
+                hookenv.status_set("waiting", "Waiting for " + lb_endpoint)
+                return
 
     if not is_state("kube-control.connected"):
         if "kube-control" in goal_state.get("relations", {}):
@@ -1409,61 +1410,53 @@ def create_tokens_and_sign_auth_requests():
 def push_service_data():
     """Send configuration to the load balancer, and close access to the
     public interface.
-
-    Note: This approach is deprecated in favor of the less complicated
-    lb-provider + kube-control approach.
     """
     kube_api = endpoint_from_flag("kube-api-endpoint.available")
 
-    external_endpoints = kubernetes_master.get_external_lb_endpoints()
-    if external_endpoints:
-        addresses = [e[0] for e in external_endpoints]
+    endpoints = kubernetes_master.get_endpoints_from_config()
+    if endpoints:
+        addresses = [e[0] for e in endpoints]
         kube_api.configure(kubernetes_master.STANDARD_API_PORT, addresses, addresses)
     else:
-        # no external addresses configured, so rely on the interface layer
+        # no manually configured LBs, so rely on the interface layer
         # to use the ingress address for each relation
         kube_api.configure(kubernetes_master.STANDARD_API_PORT)
 
 
 @when("leadership.is_leader")
-@when("endpoint.lb-provider.available")
-@when_not("kubernetes-master.sent-lb-request")
-def request_load_balancer():
-    """Request a LB from the related provider."""
-    lb_provider = endpoint_from_name("lb-provider")
-    req = lb_provider.get_request("api-server")
-    req.protocol = req.protocols.tcp
-    port = kubernetes_master.STANDARD_API_PORT
-    req.port_mapping = {port: port}
-    req.public = True
-    if not req.health_checks:
-        req.add_health_check(
-            protocol=req.protocols.http,
-            port=8080,
-            path="/livez",
-        )
-    lb_provider.send_request(req)
-    set_flag("kubernetes-master.sent-lb-request")
+@when_any(
+    "endpoint.loadbalancer-internal.available",
+    "endpoint.loadbalancer-external.available",
+)
+def request_load_balancers():
+    """Request LBs from the related provider(s)."""
+    for lb_type in ("internal", "external"):
+        lb_provider = endpoint_from_name("loadbalancer-" + lb_type)
+        req = lb_provider.get_request("api-server-" + lb_type)
+        req.protocol = req.protocols.tcp
+        api_port = kubernetes_master.STANDARD_API_PORT
+        req.port_mapping = {api_port: api_port}
+        req.public = lb_type == "external"
+        if not req.health_checks:
+            req.add_health_check(
+                protocol=req.protocols.http,
+                port=api_port,
+                path="/livez",
+            )
+        lb_provider.send_request(req)
 
 
 @when("kube-control.connected")
-def send_api_endpoints():
+def send_api_urls():
     kube_control = endpoint_from_name("kube-control")
     if not hasattr(kube_control, "set_api_endpoints"):
         # built with an old version of the kube-control interface
         # the old kube-api-endpoint relation must be used instead
         return
-    lb_provider = endpoint_from_name("lb-provider")
-    if lb_provider.is_available and not lb_provider.has_response:
-        # waiting for lb-provider
-        return
-    endpoints = kubernetes_master.get_lb_endpoints()
+    endpoints = kubernetes_master.get_internal_api_endpoints()
     if not endpoints:
-        for relation in kube_control.relations:
-            endpoints.append(kubernetes_master.get_api_endpoint(relation))
-    kube_control.set_api_endpoints(
-        ["https://{}:{}".format(address, port) for address, port in endpoints]
-    )
+        return
+    kube_control.set_api_endpoints(kubernetes_master.get_api_urls(endpoints))
 
 
 @when("certificates.available", "cni.available")
@@ -1508,8 +1501,8 @@ def send_data():
         + bind_ips
     )
 
-    lb_addrs = [e[0] for e in kubernetes_master.get_lb_endpoints()]
-    sans.extend(lb_addrs)
+    sans.extend(e[0] for e in kubernetes_master.get_internal_api_endpoints())
+    sans.extend(e[0] for e in kubernetes_master.get_external_api_endpoints())
 
     # maybe they have extra names they want as SANs
     extra_sans = hookenv.config("extra_sans")
@@ -2098,10 +2091,10 @@ def shutdown():
 def build_kubeconfig():
     """Gather the relevant data for Kubernetes configuration objects and create
     a config object with that information."""
-    local_address = get_ingress_address("kube-api-endpoint")
-    local_server = "https://{0}:{1}".format(local_address, 6443)
-    public_address, public_port = kubernetes_master.get_api_endpoint()
-    public_server = "https://{0}:{1}".format(public_address, public_port)
+    internal_endpoints = kubernetes_master.get_internal_api_endpoints()
+    internal_url = kubernetes_master.get_api_url(internal_endpoints)
+    external_endpoints = kubernetes_master.get_external_api_endpoints()
+    external_url = kubernetes_master.get_api_url(external_endpoints)
 
     # Do we have everything we need?
     if ca_crt_path.exists():
@@ -2148,7 +2141,7 @@ def build_kubeconfig():
         if ks:
             create_kubeconfig(
                 kubeconfig_path,
-                public_server,
+                external_url,
                 ca_crt_path,
                 user="admin",
                 token=client_pass,
@@ -2158,7 +2151,7 @@ def build_kubeconfig():
         else:
             create_kubeconfig(
                 kubeconfig_path,
-                public_server,
+                external_url,
                 ca_crt_path,
                 user="admin",
                 token=client_pass,
@@ -2172,7 +2165,7 @@ def build_kubeconfig():
         # make a kubeconfig for root (same location on k8s-masters and workers)
         create_kubeconfig(
             kubeclientconfig_path,
-            local_server,
+            internal_url,
             ca_crt_path,
             user="admin",
             token=client_pass,
@@ -2181,7 +2174,7 @@ def build_kubeconfig():
         # make a kubeconfig for cdk-addons
         create_kubeconfig(
             cdk_addons_kubectl_config_path,
-            local_server,
+            internal_url,
             ca_crt_path,
             user="admin",
             token=client_pass,
@@ -2192,7 +2185,7 @@ def build_kubeconfig():
         if proxy_token:
             create_kubeconfig(
                 kubeproxyconfig_path,
-                local_server,
+                internal_url,
                 ca_crt_path,
                 token=proxy_token,
                 user="kube-proxy",
@@ -2201,7 +2194,7 @@ def build_kubeconfig():
         if controller_manager_token:
             create_kubeconfig(
                 kubecontrollermanagerconfig_path,
-                local_server,
+                internal_url,
                 ca_crt_path,
                 token=controller_manager_token,
                 user="kube-controller-manager",
@@ -2210,7 +2203,7 @@ def build_kubeconfig():
         if scheduler_token:
             create_kubeconfig(
                 kubeschedulerconfig_path,
-                local_server,
+                internal_url,
                 ca_crt_path,
                 token=scheduler_token,
                 user="kube-scheduler",
@@ -2733,10 +2726,8 @@ def poke_network_unavailable():
     discussion about refactoring the affected code but nothing has happened
     in a while.
     """
-    local_address = get_ingress_address("kube-control")
-    local_server = "https://{0}:{1}".format(
-        local_address, kubernetes_master.STANDARD_API_PORT
-    )
+    internal_endpoints = kubernetes_master.get_internal_api_endpoints()
+    internal_url = kubernetes_master.get_api_url(internal_endpoints)
 
     client_token = get_token("admin")
     http_header = ("Authorization", "Bearer {}".format(client_token))
@@ -2756,7 +2747,7 @@ def poke_network_unavailable():
 
     for node in nodes:
         node_name = node["metadata"]["name"]
-        url = "{}/api/v1/nodes/{}/status".format(local_server, node_name)
+        url = "{}/api/v1/nodes/{}/status".format(internal_url, node_name)
         req = Request(url)
         req.add_header(*http_header)
         with urlopen(req) as response:
@@ -3222,7 +3213,9 @@ def configure_hacluster():
         send_data()
 
     # update workers
-    if is_state("kube-control.connected"):
+    if is_flag_set("kube-control.connected"):
+        send_api_urls()
+    if is_flag_set("kube-api-endpoint.available"):
         push_service_data()
 
     set_flag("hacluster-configured")
@@ -3239,9 +3232,9 @@ def remove_hacluster():
     if is_flag_set("certificates.available"):
         send_data()
     # update workers
-    if is_flag_set("kube-api-endpoint.available"):
-        push_service_data()
     if is_flag_set("kube-control.connected"):
+        send_api_urls()
+    if is_flag_set("kube-api-endpoint.available"):
         push_service_data()
 
     clear_flag("hacluster-configured")

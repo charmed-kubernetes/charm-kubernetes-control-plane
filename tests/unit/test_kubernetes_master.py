@@ -134,7 +134,7 @@ def test_status_set_on_missing_ca():
     )
 
 
-def test_stauts_set_on_incomplete_lb():
+def test_status_set_on_incomplete_lb():
     """Test that set_final_status() will set waiting if LB is pending."""
     set_flag("certificates.available")
     clear_flag("kubernetes-master.secure-storage.failed")
@@ -162,12 +162,25 @@ def test_stauts_set_on_incomplete_lb():
     kubernetes_master.set_final_status()
     hookenv.status_set.assert_called_with("active", mock.ANY)
 
-    # test new lb-provider relation
+    # test loadbalancer-internal relation
     clear_flag("kube-api-endpoint.available")
-    hookenv.goal_state.return_value = {"relations": {"lb-provider": None}}
+    hookenv.goal_state.return_value = {"relations": {"loadbalancer-internal": None}}
     endpoint_from_name.return_value.has_response = False
     kubernetes_master.set_final_status()
-    hookenv.status_set.assert_called_with("waiting", "Waiting for lb-provider")
+    hookenv.status_set.assert_called_with(
+        "waiting", "Waiting for loadbalancer-internal"
+    )
+    endpoint_from_name.return_value.has_response = True
+    kubernetes_master.set_final_status()
+    hookenv.status_set.assert_called_with("active", mock.ANY)
+
+    # test loadbalancer-external relation
+    hookenv.goal_state.return_value = {"relations": {"loadbalancer-external": None}}
+    endpoint_from_name.return_value.has_response = False
+    kubernetes_master.set_final_status()
+    hookenv.status_set.assert_called_with(
+        "waiting", "Waiting for loadbalancer-external"
+    )
     endpoint_from_name.return_value.has_response = True
     kubernetes_master.set_final_status()
     hookenv.status_set.assert_called_with("active", mock.ANY)
