@@ -10,12 +10,9 @@ machines:
 services:
   containerd:
     charm: cs:~containers/containerd
-    resources: {}
   easyrsa:
     charm: cs:~containers/easyrsa
     num_units: 1
-    resources:
-      easyrsa: 5
     to:
     - '1'
   etcd:
@@ -23,33 +20,17 @@ services:
     num_units: 1
     options:
       channel: 3.4/stable
-    resources:
-      core: 0
-      etcd: 3
-      snapshot: 0
     to:
     - '0'
   flannel:
     charm: cs:~containers/flannel
-    resources:
-      flannel-amd64: 707
-      flannel-arm64: 704
-      flannel-s390x: 691
   kubernetes-master:
-    charm: {{master_charm}}
+    charm: cs:~containers/kubernetes-master
     constraints: cores=2 mem=4G root-disk=16G
     expose: true
     num_units: 1
     options:
-      channel: 1.21/stable
-    resources:
-      cdk-addons: 0
-      core: 0
-      kube-apiserver: 0
-      kube-controller-manager: 0
-      kube-proxy: 0
-      kube-scheduler: 0
-      kubectl: 0
+      channel: 1.22/edge
     to:
     - '0'
   kubernetes-worker:
@@ -58,15 +39,7 @@ services:
     expose: true
     num_units: 1
     options:
-      channel: 1.21/stable
-    resources:
-      cni-amd64: 747
-      cni-arm64: 738
-      cni-s390x: 750
-      core: 0
-      kube-proxy: 0
-      kubectl: 0
-      kubelet: 0
+      channel: 1.22/edge
     to:
     - '1'
 relations:
@@ -92,3 +65,4 @@ relations:
   - kubernetes-worker:container-runtime
 - - containerd:containerd
   - kubernetes-master:container-runtime
+
