@@ -1432,6 +1432,8 @@ def request_load_balancers():
     """Request LBs from the related provider(s)."""
     for lb_type in ("internal", "external"):
         lb_provider = endpoint_from_name("loadbalancer-" + lb_type)
+        if not lb_provider.is_available:
+            continue
         req = lb_provider.get_request("api-server-" + lb_type)
         req.protocol = req.protocols.tcp
         api_port = kubernetes_master.STANDARD_API_PORT
@@ -2092,12 +2094,12 @@ def build_kubeconfig():
     """Gather the relevant data for Kubernetes configuration objects and create
     a config object with that information."""
     internal_endpoints = kubernetes_master.get_internal_api_endpoints()
-    internal_url = kubernetes_master.get_api_url(internal_endpoints)
     external_endpoints = kubernetes_master.get_external_api_endpoints()
-    external_url = kubernetes_master.get_api_url(external_endpoints)
 
     # Do we have everything we need?
-    if ca_crt_path.exists():
+    if ca_crt_path.exists() and internal_endpoints and external_endpoints:
+        internal_url = kubernetes_master.get_api_url(internal_endpoints)
+        external_url = kubernetes_master.get_api_url(external_endpoints)
         client_pass = get_token("admin")
         if not client_pass:
             # If we made it this far without a password, we're bootstrapping a new

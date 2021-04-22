@@ -74,10 +74,12 @@ def get_internal_api_endpoints(relation=None):
 
     # If the internal LB relation is attached, use that or nothing. If it's
     # not attached but the external LB relation is, use that or nothing.
-    for lb_endpoint in ("loadbalancer-internal", "loadbalancer-external"):
+    for lb_type in ("internal", "external"):
+        lb_endpoint = "loadbalancer-" + lb_type
+        request_name = "api-server-" + lb_type
         if lb_endpoint in goal_state["relations"]:
             lb_provider = endpoint_from_name(lb_endpoint)
-            lb_response = lb_provider.get_response("kube-api")
+            lb_response = lb_provider.get_response(request_name)
             if not lb_response or lb_response.error:
                 return []
             return [(lb_response.address, STANDARD_API_PORT)]
@@ -150,6 +152,8 @@ def get_api_url(endpoints):
     """
     Choose an API endpoint from the list and build a URL from it.
     """
+    if not endpoints:
+        return None
     urls = get_api_urls(endpoints)
     return urls[kubernetes_common.get_unit_number() % len(urls)]
 
