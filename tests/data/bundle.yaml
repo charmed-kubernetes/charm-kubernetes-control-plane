@@ -10,13 +10,16 @@ machines:
 services:
   containerd:
     charm: cs:~containers/containerd
+    channel: edge
   easyrsa:
     charm: cs:~containers/easyrsa
+    channel: edge
     num_units: 1
     to:
     - '1'
   etcd:
     charm: cs:~containers/etcd
+    channel: edge
     num_units: 1
     options:
       channel: 3.4/stable
@@ -24,6 +27,7 @@ services:
     - '0'
   flannel:
     charm: cs:~containers/flannel
+    channel: edge
   kubernetes-master:
     charm: {{master_charm}}
     constraints: cores=2 mem=4G root-disk=16G
@@ -35,6 +39,7 @@ services:
     - '0'
   kubernetes-worker:
     charm: cs:~containers/kubernetes-worker
+    channel: edge
     constraints: cores=4 mem=4G root-disk=16G
     expose: true
     num_units: 1
@@ -43,8 +48,6 @@ services:
     to:
     - '1'
 relations:
-- - kubernetes-master:kube-api-endpoint
-  - kubernetes-worker:kube-api-endpoint
 - - kubernetes-master:kube-control
   - kubernetes-worker:kube-control
 - - kubernetes-master:certificates
