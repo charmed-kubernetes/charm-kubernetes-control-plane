@@ -212,7 +212,7 @@ async def forward_request(json_req, url):
                 app.logger.debug('SSLError with server; skipping cert validation')
                 async with session.post(url,
                                         json=json_req,
-                                        verify_ssl=True,
+                                        verify_ssl=False,
                                         timeout=timeout) as resp:
                     resp_text = await resp.text()
     except Exception as e:
