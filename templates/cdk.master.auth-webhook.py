@@ -11,9 +11,9 @@ from subprocess import check_call, check_output, CalledProcessError, TimeoutExpi
 from yaml import safe_load
 
 
-AWS_IAM_ENDPOINT = '{{ aws_iam_endpoint }}'
-KEYSTONE_ENDPOINT = '{{ keystone_endpoint }}'
-CUSTOM_AUTHN_ENDPOINT = '{{ custom_authn_endpoint }}'
+AWS_IAM_ENDPOINT = '{{ aws_iam_endpoint if aws_iam_endpoint }}'
+KEYSTONE_ENDPOINT = '{{ keystone_endpoint if keystone_endpoint }}'
+CUSTOM_AUTHN_ENDPOINT = '{{ custom_authn_endpoint if custom_authn_endpoint }}'
 
 app = aiohttp.web.Application()
 routes = aiohttp.web.RouteTableDef()
