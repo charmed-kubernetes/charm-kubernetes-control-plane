@@ -90,7 +90,10 @@ options:
   service-cidr:
     type: string
     default: 10.152.183.0/24
-    description: CIDR to user for Kubernetes services. Cannot be changed after deployment.
+    description: |
+      CIDR to use for Kubernetes services. After deployment it is
+      only possible to increase the size of the IP range. It is not possible to
+      change or shrink the address range after deployment.
   allow-privileged:
     type: string
     default: "auto"
