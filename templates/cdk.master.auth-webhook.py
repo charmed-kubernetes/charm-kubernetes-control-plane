@@ -249,7 +249,7 @@ def nak(req, **kwargs):
     return aiohttp.web.json_response(req, **kwargs)
 
 
-@routes.post('/{api_ver}')
+@routes.post('/{{ api_ver }}')
 async def webhook(request):
     '''Listen on /$api_version for POST requests.
 
