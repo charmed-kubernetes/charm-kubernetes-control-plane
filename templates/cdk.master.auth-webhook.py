@@ -3,14 +3,20 @@
 import csv
 import json
 import logging
-import requests
+import aiohttp
 from base64 import b64decode
 from copy import deepcopy
-from flask import Flask, request, jsonify
 from pathlib import Path
 from subprocess import check_call, check_output, CalledProcessError, TimeoutExpired
 from yaml import safe_load
-app = Flask(__name__)
+
+
+AWS_IAM_ENDPOINT = '{{ aws_iam_endpoint }}'
+KEYSTONE_ENDPOINT = '{{ keystone_endpoint }}'
+CUSTOM_AUTHN_ENDPOINT = '{{ custom_authn_endpoint }}'
+
+app = aiohttp.web.Application()
+routes = aiohttp.web.RouteTableDef()
 
 
 def kubectl(*args):
@@ -46,7 +52,7 @@ def log_secret(text, obj, hide=True):
     app.logger.debug('{}: {}'.format(text, log_obj))
 
 
-def check_token(token_review):
+async def check_token(token_review):
     '''Populate user info if token is found in auth-related files.'''
     app.logger.info('Checking token')
     token_to_check = token_review['spec']['token']
@@ -102,7 +108,7 @@ def check_token(token_review):
     return False
 
 
-def check_secrets(token_review):
+async def check_secrets(token_review):
     '''Populate user info if token is found in k8s secrets.'''
     # Only check secrets if kube-apiserver is up
     try:
@@ -159,62 +165,66 @@ def check_secrets(token_review):
     return False
 
 
-def check_aws_iam(token_review):
+async def check_aws_iam(token_review):
     '''Check the request with an AWS IAM authn server.'''
     app.logger.info('Checking AWS IAM')
 
     # URL comes from /root/cdk/aws-iam-webhook.yaml
-    url = '{{ aws_iam_endpoint }}'
-    app.logger.debug('Forwarding to: {}'.format(url))
+    app.logger.debug('Forwarding to: {}'.format(AWS_IAM_ENDPOINT))
 
-    return forward_request(token_review, url)
+    return await forward_request(token_review, AWS_IAM_ENDPOINT)
 
 
-def check_keystone(token_review):
+async def check_keystone(token_review):
     '''Check the request with a Keystone authn server.'''
     app.logger.info('Checking Keystone')
 
     # URL comes from /root/cdk/keystone/webhook.yaml
-    url = '{{ keystone_endpoint }}'
-    app.logger.debug('Forwarding to: {}'.format(url))
+    app.logger.debug('Forwarding to: {}'.format(KEYSTONE_ENDPOINT))
 
-    return forward_request(token_review, url)
+    return await forward_request(token_review, KEYSTONE_ENDPOINT)
 
 
-def check_custom(token_review):
+async def check_custom(token_review):
     '''Check the request with a user-specified authn server.'''
     app.logger.info('Checking Custom Endpoint')
 
     # User will set the URL in k8s-master config
-    url = '{{ custom_authn_endpoint }}'
-    app.logger.debug('Forwarding to: {}'.format(url))
+    app.logger.debug('Forwarding to: {}'.format(CUSTOM_AUTHN_ENDPOINT))
 
-    return forward_request(token_review, url)
+    return await forward_request(token_review, CUSTOM_AUTHN_ENDPOINT)
 
 
-def forward_request(json_req, url):
+async def forward_request(json_req, url):
     '''Forward a JSON TokenReview request to a url.
 
     Returns True if the request is authenticated; False if the response is
     either invalid or authn has been denied.
     '''
     timeout = 10
+    resp_text = ''
     try:
-        try:
-            r = requests.post(url, json=json_req, timeout=timeout)
-        except requests.exceptions.SSLError:
-            app.logger.debug('SSLError with server; skipping cert validation')
-            r = requests.post(url, json=json_req, verify=False, timeout=timeout)
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(url, json=json_req, timeout=timeout) as resp:
+                    resp_text = await resp.text()
+            except aiohttp.ClientSSLError:
+                app.logger.debug('SSLError with server; skipping cert validation')
+                async with session.post(url,
+                                        json=json_req,
+                                        verify_ssl=True,
+                                        timeout=timeout) as resp:
+                    resp_text = await resp.text()
     except Exception as e:
         app.logger.debug('Failed to contact server: {}'.format(e))
         return False
 
     # Check if the response is valid
     try:
-        resp = json.loads(r.text)
+        resp = json.loads(resp_text)
         'authenticated' in resp['status']
     except (KeyError, TypeError, ValueError):
-        log_secret(text='Invalid response from server', obj=r.text)
+        log_secret(text='Invalid response from server', obj=resp_text)
         return False
 
     # NB: When a forwarded request is authenticated, set the 'status' field to
@@ -226,8 +236,21 @@ def forward_request(json_req, url):
     return False
 
 
-@app.route('/{{ api_ver }}', methods=['POST'])
-def webhook():
+def ack(req, **kwargs):
+    # Successful checks will set auth and user data in the 'req' dict
+    log_secret(text='ACK', obj=req)
+    return aiohttp.web.json_response(req, **kwargs)
+
+
+def nak(req, **kwargs):
+    # Force unauthenticated, just in case
+    req.setdefault('status', {})['authenticated'] = False
+    log_secret(text='NAK', obj=req)
+    return aiohttp.web.json_response(req, **kwargs)
+
+
+@routes.post('/{api_ver}')
+async def webhook(request):
     '''Listen on /$api_version for POST requests.
 
     For a POSTed TokenReview object, check every known authentication mechanism
@@ -245,7 +268,10 @@ def webhook():
     app.logger.handlers = glogger.handlers
     app.logger.setLevel(glogger.level)
 
-    req = request.json
+    req = await request.json()
+    # Make the request unauthenticated by deafult
+    req['status'] = {'authenticated': False}
+
     try:
         valid = True if (req['kind'] == 'TokenReview' and
                          req['spec']['token']) else False
@@ -256,30 +282,30 @@ def webhook():
         log_secret(text='REQ', obj=req)
     else:
         log_secret(text='Invalid request', obj=req)
-        return ''  # flask needs to return something that isn't None
+        return nak({}, status=400)
 
-    # Make the request unauthenticated by deafult
-    req['status'] = {'authenticated': False}
+    if await check_token(req):
+        return ack(req)
+    try:
+        if await check_secrets(req):
+            return ack(req)
+    except Exception:
+        app.logger.exception('Failed to get secrets')
+        return nak(req)
 
-    if (
-        check_token(req)
-        or check_secrets(req)
-        {%- if aws_iam_endpoint %}
-        or check_aws_iam(req)
-        {%- endif %}
-        {%- if keystone_endpoint %}
-        or check_keystone(req)
-        {%- endif %}
-        {%- if custom_authn_endpoint %}
-        or check_custom(req)
-        {%- endif %}
-       ):
-        # Successful checks will set auth and user data in the 'req' dict
-        log_secret(text='ACK', obj=req)
-    else:
-        log_secret(text='NAK', obj=req)
+    if AWS_IAM_ENDPOINT and await check_aws_iam(req):
+        return ack(req)
 
-    return jsonify(req)
+    if KEYSTONE_ENDPOINT and await check_keystone(req):
+        return ack(req)
+
+    if CUSTOM_AUTHN_ENDPOINT and await check_custom(req):
+        return ack(req)
+
+    return nak(req)
+
+
+app.add_routes(routes)
 
 
 if __name__ == '__main__':
