@@ -2230,7 +2230,6 @@ def configure_apiserver():
     api_opts["kubelet-certificate-authority"] = str(ca_crt_path)
     api_opts["kubelet-client-certificate"] = str(client_crt_path)
     api_opts["kubelet-client-key"] = str(client_key_path)
-    api_opts["kubelet-https"] = "true"
     api_opts["logtostderr"] = "true"
     api_opts["storage-backend"] = getStorageBackend()
     api_opts["insecure-port"] = "0"
