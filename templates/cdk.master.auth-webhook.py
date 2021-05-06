@@ -4,10 +4,10 @@ import csv
 import json
 import logging
 import aiohttp
+import asyncio
 from base64 import b64decode
 from copy import deepcopy
 from pathlib import Path
-from subprocess import check_call, check_output, CalledProcessError, TimeoutExpired
 from yaml import safe_load
 
 
@@ -19,19 +19,51 @@ app = aiohttp.web.Application()
 routes = aiohttp.web.RouteTableDef()
 
 
-def kubectl(*args):
-    '''Run a kubectl cli command with a config file.
+async def run(*args, timeout=10, **kwargs):
+    '''Run a CLI command.
 
-    Returns stdout and throws an error if the command fails.
+    Returns retcode, stdout, and stderr (already decoded).
+
+    If the process times out, the exit code will be 124 and stdout and stderr
+    will be empty.
+
+    NOTE:
+    In Python 3.8+, the default process child watcher, ThreadedChildWatcher,
+    appears to have a race condition where it frequently attempts to wait for
+    the child process PID before it's visible, leading to a spurious warning
+    in the log about "Unknown child process", and a 255 exit code regardless
+    of what the child process actually exits with. The stdout and stderr will
+    still be available, however.
+    '''
+    args = [str(arg) for arg in args]
+    kwargs.update(
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    async def _run():
+        proc = await asyncio.create_subprocess_exec(*args, **kwargs)
+        stdout, stderr = await proc.communicate()
+        return proc.returncode, stdout.decode('utf8'), stderr.decode('utf8')
+
+    try:
+        return await asyncio.wait_for(_run(), timeout=timeout)
+    except asyncio.TimeoutError:
+        app.logger.exception('Command timed out: {}'.format(' '.join(args)))
+        return 124, '', ''
+
+
+async def kubectl(*args):
+    '''Run a kubectl CLI command with a config file.
+
+    Returns retcode, stdout, and stderr.
     '''
     # Try to use our service account kubeconfig; fall back to root if needed
     kubectl_cmd = Path('/snap/bin/kubectl')
     if not kubectl_cmd.is_file():
         # Fall back to anywhere on the path if the snap isn't available
         kubectl_cmd = 'kubectl'
-    kubeconfig = '/root/.kube/config'
-    command = [str(kubectl_cmd), '--kubeconfig={}'.format(kubeconfig)] + list(args)
-    return check_output(command, timeout=10)
+    return await run(kubectl_cmd, '--kubeconfig=/root/.kube/config', *args)
 
 
 def log_secret(text, obj, hide=True):
@@ -111,58 +143,17 @@ async def check_token(token_review):
 async def check_secrets(token_review):
     '''Populate user info if token is found in k8s secrets.'''
     # Only check secrets if kube-apiserver is up
-    try:
-        output = check_call(['systemctl', 'is-active', 'snap.kube-apiserver.daemon'])
-    except CalledProcessError:
-        app.logger.info('Skipping secret check: kube-apiserver is not ready')
-        return False
+    app.logger.info('Checking secret')
+    token = token_review['spec']['token']
+
+    if token in app['secrets']:
+        token_review['status'] = {
+            'authenticated': True,
+            'user': app['secrets'][token],
+        }
+        return True
     else:
-        app.logger.info('Checking secret')
-
-    token_to_check = token_review['spec']['token']
-    try:
-        output = kubectl(
-            'get', 'secrets', '-n', 'kube-system', '-o', 'json').decode('UTF-8')
-    except (CalledProcessError, TimeoutExpired) as e:
-        app.logger.info('Unable to load secrets: {}.'.format(e))
         return False
-
-    secrets = json.loads(output)
-    if 'items' in secrets:
-        for secret in secrets['items']:
-            try:
-                data_b64 = secret['data']
-                password_b64 = data_b64['password'].encode('UTF-8')
-                username_b64 = data_b64['username'].encode('UTF-8')
-            except (KeyError, TypeError):
-                # CK secrets will have populated 'data', but not all secrets do
-                continue
-
-            password = b64decode(password_b64).decode('UTF-8')
-            if token_to_check == password:
-                groups_b64 = data_b64['groups'].encode('UTF-8') \
-                    if 'groups' in data_b64 else b''
-
-                # NB: CK creates k8s secrets with the 'password' field set as
-                # uid::token. Split the decoded password so we can send a 'uid' back.
-                # If there is no delimiter, set uid == username.
-                # TODO: make the delimeter less magical so it doesn't get out of
-                # sync with the function that creates secrets in k8s-master.py.
-                username = uid = b64decode(username_b64).decode('UTF-8')
-                pw_delim = '::'
-                if pw_delim in password:
-                    uid = password.rsplit(pw_delim, 1)[0]
-                groups = b64decode(groups_b64).decode('UTF-8').split(',')
-                token_review['status'] = {
-                    'authenticated': True,
-                    'user': {
-                        'username': username,
-                        'uid': uid,
-                        'groups': groups,
-                    }
-                }
-                return True
-    return False
 
 
 async def check_aws_iam(token_review):
@@ -215,8 +206,8 @@ async def forward_request(json_req, url):
                                         verify_ssl=False,
                                         timeout=timeout) as resp:
                     resp_text = await resp.text()
-    except Exception as e:
-        app.logger.debug('Failed to contact server: {}'.format(e))
+    except Exception:
+        app.logger.exception('Failed to contact server')
         return False
 
     # Check if the response is valid
@@ -263,11 +254,6 @@ async def webhook(request):
         TokenReview object with 'authenticated: True' and user attributes if a
         token is found; otherwise, a TokenReview object with 'authenticated: False'
     '''
-    # Log to gunicorn
-    glogger = logging.getLogger('gunicorn.error')
-    app.logger.handlers = glogger.handlers
-    app.logger.setLevel(glogger.level)
-
     req = await request.json()
     # Make the request unauthenticated by deafult
     req['status'] = {'authenticated': False}
@@ -286,12 +272,17 @@ async def webhook(request):
 
     if await check_token(req):
         return ack(req)
-    try:
-        if await check_secrets(req):
-            return ack(req)
-    except Exception:
-        app.logger.exception('Failed to get secrets')
+
+    if not app['secrets']:
+        # If secrets aren't yet available, none of the system accounts will be
+        # functional and thus neither will the cluster, so there's no point to
+        # going any further. Additionally, we don't want to accidentally leak
+        # system account tokens to external auth endpoints.
+        app.logger.warning('Secrets not yet available; aborting')
         return nak(req)
+
+    if await check_secrets(req):
+        return ack(req)
 
     if AWS_IAM_ENDPOINT and await check_aws_iam(req):
         return ack(req)
@@ -305,8 +296,92 @@ async def webhook(request):
     return nak(req)
 
 
+async def refresh_secrets(app):
+    app.logger.info('Refreshing secrets')
+    retcode, stdout, stderr = await run(
+        'systemctl', 'is-active', 'snap.kube-apiserver.daemon'
+    )
+    # See note in run() docstring above about exit 255.
+    if retcode not in (0, 255) or stdout.strip() != 'active':
+        app.logger.info('Skipping secret refresh: kube-apiserver is not ready '
+                        '({}, {})'.format(retcode, stdout.strip()))
+        return
+
+    retcode, stdout, stderr = await kubectl(
+        'get', 'secrets', '-n', 'kube-system', '-o', 'json'
+    )
+    # See note in run() docstring above about exit 255.
+    if retcode not in (0, 255) or stderr:
+        app.logger.warning('Unable to load secrets ({}): {}'.format(retcode, stderr))
+        return
+
+    try:
+        secrets = json.loads(stdout)
+    except json.JSONDecodeError:
+        app.logger.exception('Unable to parse secrets')
+        return
+
+    new_secrets = {}
+    for secret in secrets.get('items', []):
+        try:
+            data_b64 = secret['data']
+            username_b64 = data_b64['username'].encode('UTF-8')
+            password_b64 = data_b64['password'].encode('UTF-8')
+            groups_b64 = data_b64.get('groups', '').encode('UTF-8')
+        except (KeyError, TypeError):
+            # CK secrets will have populated 'data', but not all secrets do
+            continue
+
+        username = uid = b64decode(username_b64).decode('UTF-8')
+        password = b64decode(password_b64).decode('UTF-8')
+        groups = b64decode(groups_b64).decode('UTF-8').split(',')
+
+        # NB: CK creates k8s secrets with the 'password' field set as
+        # uid::token. Split the decoded password so we can send a 'uid' back.
+        # If there is no delimiter, set uid == username.
+        # TODO: make the delimeter less magical so it doesn't get out of
+        # sync with the function that creates secrets in k8s-master.py.
+        pw_delim = '::'
+        if pw_delim in password:
+            uid = password.rsplit(pw_delim, 1)[0]
+        new_secrets[password] = {
+            'username': username,
+            'uid': uid,
+            'groups': groups,
+        }
+    app['secrets'] = new_secrets
+
+
+async def startup(app):
+    # Log to gunicorn
+    glogger = logging.getLogger('gunicorn.error')
+    app.logger.handlers = glogger.handlers
+    app.logger.setLevel(glogger.level)
+
+    async def _task():
+        while True:
+            try:
+                await refresh_secrets(app)
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                app.logger.exception('Failed to get secrets')
+
+    app['secrets'] = {}
+    app['secrets_task'] = asyncio.create_task(_task())
+
+
+async def cleanup(app):
+    task = app.get('secrets_task')
+    task.cancel()
+    await task
+
+
 app.add_routes(routes)
+app.on_startup.append(startup)
+app.on_cleanup.append(cleanup)
 
 
 if __name__ == '__main__':
-    app.run()
+    aiohttp.web.run_app(app)
