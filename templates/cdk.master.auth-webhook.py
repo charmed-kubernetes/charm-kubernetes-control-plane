@@ -211,6 +211,9 @@ async def forward_request(json_req, url):
                                         verify_ssl=False,
                                         timeout=timeout) as resp:
                     resp_text = await resp.text()
+    except asyncio.TimeoutError:
+        app.logger.error('Timed out contacting server')
+        return False
     except Exception:
         app.logger.exception('Failed to contact server')
         return False
@@ -304,6 +307,14 @@ async def webhook(request):
         return ack(req)
 
     return nak(req)
+
+
+@routes.post('/slow-test')
+async def slow_test(request):
+    app.logger.debug('Slow request started')
+    await asyncio.sleep(5)
+    app.logger.debug('Slow request finished')
+    return aiohttp.web.json_response({'status': {'authenticated': False}})
 
 
 async def refresh_secrets(app):
