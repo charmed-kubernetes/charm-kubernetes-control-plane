@@ -8,7 +8,7 @@ import asyncio
 from base64 import b64decode
 from copy import deepcopy
 from pathlib import Path
-from yaml import safe_load
+from yaml import safe_load, YAMLError
 
 
 AWS_IAM_ENDPOINT = '{{ aws_iam_endpoint if aws_iam_endpoint }}'
@@ -94,14 +94,19 @@ async def check_token(token_review):
     admin_kubeconfig = Path('/root/.kube/config')
     if admin_kubeconfig.exists():
         with admin_kubeconfig.open('r') as f:
-            data = safe_load(f)
+            data = None
             try:
+                data = safe_load(f)
                 admin_token = data['users'][0]['user']['token']
-            except (KeyError, ValueError):
-                # No admin kubeconfig; this is weird since we should always have an
-                # admin kubeconfig, but we shouldn't fail here in case there's
-                # something in known_tokens that should be validated.
-                pass
+            except YAMLError as e:
+                # we don't want to use logger.exception() or str(e) because it
+                # can leak tokens into the log
+                app.logger.error('Invalid kube config file: %s', type(e).__name__)
+            except Exception:
+                if data is None:
+                    app.logger.error('Empty kube config file')
+                else:
+                    app.logger.exception('Invalid kube config file')
             else:
                 if token_to_check == admin_token:
                     # We have a valid admin
@@ -254,7 +259,12 @@ async def webhook(request):
         TokenReview object with 'authenticated: True' and user attributes if a
         token is found; otherwise, a TokenReview object with 'authenticated: False'
     '''
-    req = await request.json()
+    try:
+        req = await request.json()
+    except json.JSONDecodeError:
+        app.logger.debug('Unable to parse request')
+        return nak({}, status=400)
+
     # Make the request unauthenticated by deafult
     req['status'] = {'authenticated': False}
 
