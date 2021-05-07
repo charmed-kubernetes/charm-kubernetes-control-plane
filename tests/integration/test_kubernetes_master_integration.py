@@ -19,7 +19,7 @@ async def test_build_and_deploy(ops_test):
 
 
 async def test_status_messages(ops_test):
-    """ Validate that the status messages are correct. """
+    """Validate that the status messages are correct."""
     expected_messages = {
         "kubernetes-master": "Kubernetes master running.",
         "kubernetes-worker": "Kubernetes worker running.",
@@ -36,7 +36,7 @@ async def juju_run(unit, cmd):
 
 
 async def test_auth_load(ops_test):
-    """ Verify that the auth server can handle heavy load and / or dead endpoints. """
+    """Verify that the auth server can handle heavy load and / or dead endpoints."""
     app = ops_test.model.applications["kubernetes-master"]
     unit = app.units[0]
 

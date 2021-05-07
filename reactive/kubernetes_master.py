@@ -733,7 +733,7 @@ def get_keys_from_leader(keys, overwrite_local=False):
 
 @when("kubernetes-master.snaps.installed")
 def set_app_version():
-    """ Declare the application version to juju """
+    """Declare the application version to juju"""
     version = check_output(["kube-apiserver", "--version"])
     hookenv.application_version_set(version.split(b" v")[-1].rstrip())
 
@@ -756,7 +756,7 @@ def check_vault_pending():
 
 @hookenv.atexit
 def set_final_status():
-    """ Set the final status of the charm as we leave hook execution """
+    """Set the final status of the charm as we leave hook execution"""
     try:
         goal_state = hookenv.goal_state()
     except NotImplementedError:
@@ -1307,7 +1307,7 @@ def etcd_data_change(etcd):
 @when("kube-control.connected")
 @when("cdk-addons.configured")
 def send_cluster_dns_detail(kube_control):
-    """ Send cluster DNS info """
+    """Send cluster DNS info"""
     dns_provider = endpoint_from_flag("dns-provider.available")
     if dns_provider:
         details = dns_provider.details()
@@ -1522,7 +1522,7 @@ def reconfigure_cdk_addons():
 )
 @when_not("upgrade.series.in-progress")
 def configure_cdk_addons():
-    """ Configure CDK addons """
+    """Configure CDK addons"""
     remove_state("cdk-addons.reconfigure")
     remove_state("cdk-addons.configured")
     remove_state("kubernetes-master.aws.changed")
