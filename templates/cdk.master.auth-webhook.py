@@ -92,33 +92,41 @@ async def check_token(token_review):
     # If we have an admin token, short-circuit all other checks. This prevents us
     # from leaking our admin token to other authn services.
     admin_kubeconfig = Path('/root/.kube/config')
-    if admin_kubeconfig.exists():
-        with admin_kubeconfig.open('r') as f:
-            data = None
-            try:
-                data = safe_load(f)
-                admin_token = data['users'][0]['user']['token']
-            except YAMLError as e:
-                # we don't want to use logger.exception() or str(e) because it
-                # can leak tokens into the log
-                app.logger.error('Invalid kube config file: %s', type(e).__name__)
-            except Exception:
-                if data is None:
-                    app.logger.error('Empty kube config file')
-                else:
-                    app.logger.exception('Invalid kube config file')
-            else:
-                if token_to_check == admin_token:
-                    # We have a valid admin
-                    token_review['status'] = {
-                        'authenticated': True,
-                        'user': {
-                            'username': 'admin',
-                            'uid': 'admin',
-                            'groups': ['system:masters']
-                        }
-                    }
-                    return True
+    data = None
+    try:
+        try:
+            data = safe_load(admin_kubeconfig.read_text())
+        except Exception:
+            # Retry loading the file once, in case the charm was in the
+            # middle of rewriting it. See lp:1837930 for more info, but
+            # even without it being rewritten on every hook, there will
+            # always be a race condition to consider.
+            await asyncio.sleep(0.5)
+            data = safe_load(admin_kubeconfig.read_text())
+    except YAMLError as e:
+        # we don't want to use logger.exception() or str(e) because it
+        # can leak tokens into the log
+        app.logger.error('Invalid kube config file: %s', type(e).__name__)
+    except Exception:
+        if not admin_kubeconfig.exists():
+            app.logger.error('Missing kube config file')
+        elif data is None:
+            app.logger.error('Empty kube config file')
+        else:
+            app.logger.exception('Invalid kube config file')
+    else:
+        admin_token = data['users'][0]['user']['token']
+        if token_to_check == admin_token:
+            # We have a valid admin
+            token_review['status'] = {
+                'authenticated': True,
+                'user': {
+                    'username': 'admin',
+                    'uid': 'admin',
+                    'groups': ['system:masters']
+                }
+            }
+            return True
 
     # No admin? We're probably in an upgrade. Check an existing known_tokens.csv.
     csv_fields = ['token', 'username', 'user', 'groups']
