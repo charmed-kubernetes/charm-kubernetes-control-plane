@@ -16,7 +16,7 @@ async def test_build_and_deploy(ops_test):
 
 
 async def test_status_messages(ops_test):
-    """ Validate that the status messages are correct. """
+    """Validate that the status messages are correct."""
     expected_messages = {
         "kubernetes-master": "Kubernetes master running.",
         "kubernetes-worker": "Kubernetes worker running.",
