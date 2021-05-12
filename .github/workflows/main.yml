@@ -2,8 +2,8 @@ name: Test Suite
 on: [pull_request]
 
 jobs:
-  lint:
-    name: Lint
+  lint-unit-wheelhouse:
+    name: Lint, Unit, Wheelhouse
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -18,45 +18,14 @@ jobs:
     - name: Install Dependencies
       run: |
         pip install tox
-    - name: Run lint
+        sudo snap install charm --classic
+    - name: Lint
       run: tox -vve lint
-  unit-test:
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python: [3.6, 3.7, 3.8, 3.9]
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v2
-      - name: Setup Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python }}
-      - name: Install Dependencies
-        run: |
+    - name: Unit Tests
+      run: tox -vve unit
           pip install tox
-      - name: Run test
-        run: tox -vve unit
-  wheelhouse-test:
-    name: Validate Wheelhouse
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python: [3.6, 3.7, 3.8, 3.9]
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v2
-      - name: Setup Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python }}
-      - name: Install Dependencies
-        run: |
-          snap install charm --classic
-          pip install tox
-      - name: Run test
-        run: tox -e validate-wheelhouse
+    - name: Validate Wheelhouse
+      run: tox -vve validate-wheelhouse
   integration-test:
     name: Integration test with VMWare
     runs-on: self-hosted
