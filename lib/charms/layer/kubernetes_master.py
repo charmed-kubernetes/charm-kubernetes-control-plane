@@ -443,7 +443,7 @@ def is_service_cidr_expansion():
 
 
 def service_cidr():
-    """ Return the charm's service-cidr config"""
+    """Return the charm's service-cidr config"""
     frozen_cidr = db.get("kubernetes-master.service-cidr")
     return frozen_cidr or hookenv.config("service-cidr")
 
