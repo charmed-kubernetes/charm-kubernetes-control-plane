@@ -2174,6 +2174,17 @@ def build_kubeconfig():
             token=client_pass,
         )
 
+        # Create kubernetes configuration in the default location for ubuntu.
+        create_kubeconfig(
+            "/home/ubuntu/.kube/config",
+            internal_url,
+            ca_crt_path,
+            user="admin",
+            token=client_pass,
+        )
+        # Make the config dir readable by the ubuntu user
+        check_call(["chown", "-R", "ubuntu:ubuntu", "/home/ubuntu/.kube"])
+
         # make a kubeconfig for cdk-addons
         create_kubeconfig(
             cdk_addons_kubectl_config_path,
