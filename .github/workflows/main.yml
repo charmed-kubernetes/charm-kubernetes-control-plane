@@ -23,7 +23,6 @@ jobs:
       run: tox -vve lint
     - name: Unit Tests
       run: tox -vve unit
-          pip install tox
     - name: Validate Wheelhouse
       run: tox -vve validate-wheelhouse
   integration-test:
