@@ -851,6 +851,14 @@ def set_final_status():
         )
         return
 
+    if not is_flag_set("kubernetes-master.auth-webhook-service.started"):
+        hookenv.status_set("waiting", "Waiting for auth-webhook service to start")
+        return
+
+    if not is_flag_set("kubernetes-master.apiserver.configured"):
+        hookenv.status_set("waiting", "Waiting for API server to be configured")
+        return
+
     auth_setup = is_flag_set("authentication.setup")
     webhook_tokens_setup = is_flag_set("kubernetes-master.auth-webhook-tokens.setup")
     if auth_setup and not webhook_tokens_setup:

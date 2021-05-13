@@ -15,6 +15,7 @@ ExecStart={{ charm_dir }}/../.venv/bin/gunicorn \
     --log-level debug \
     --pid {{ pidfile }} \
     --workers {{ num_workers }} \
+    --worker-class aiohttp.worker.GunicornWebWorker \
     auth-webhook:app
 Restart=always
 
