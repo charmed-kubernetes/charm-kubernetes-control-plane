@@ -40,7 +40,7 @@ jobs:
         run: |
           pip install tox
       - name: Setup operator environment
-        uses: charmed-kubernetes/actions-operator@master
+        uses: charmed-kubernetes/actions-operator@runners
         with:
             provider: lxd
       - name: Run test
