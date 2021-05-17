@@ -40,6 +40,7 @@ services:
     num_units: 1
     options:
       channel: 1.22/edge
+      kubelet-extra-config: '{protectKernelDefaults: false}'
     to:
     - '1'
 relations:
