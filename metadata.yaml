@@ -29,6 +29,13 @@ peers:
     interface: kube-masters
 provides:
   kube-api-endpoint:
+    # Use of this relation is strongly discouraged as the API endpoints will be
+    # provided via the kube-control relation. However, it can be used to
+    # override those endpoints if you need to inject a reverse proxy between
+    # the master and workers using a charm which only supports the old MITM
+    # style relations. Note, though, that since this reverse proxy will not be
+    # visible to the master, it will not be used in any of the client or
+    # component kube config files.
     interface: http
   cluster-dns:
     # kube-dns is deprecated. Its functionality has been rolled into the
@@ -51,6 +58,8 @@ requires:
   etcd:
     interface: etcd
   loadbalancer:
+    # Use of this relation is strongly discouraged in favor of the more
+    # explicit loadbalancer-internal / loadbalancer-external relations.
     interface: public-address
   ceph-storage:
     interface: ceph-admin
@@ -70,6 +79,14 @@ requires:
     interface: keystone-credentials
   dns-provider:
     interface: kube-dns
+  loadbalancer-internal:
+    # Indicates that the LB should not be public and should use internal
+    # networks if available. Intended for control plane and other internal use.
+    interface: loadbalancer
+  loadbalancer-external:
+    # Indicates that the LB should be public facing. Intended for clients which
+    # must reach the API server via external networks.
+    interface: loadbalancer
 resources:
   core:
     type: file
