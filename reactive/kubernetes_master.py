@@ -863,10 +863,10 @@ def set_final_status():
         hookenv.status_set("waiting", "Waiting for API server to be configured")
         return
 
-    is_leader = is_state("leadership.is_leader")
-    authentication_setup = is_state("authentication.setup")
-    if not is_leader and not authentication_setup:
-        hookenv.status_set("waiting", "Waiting on leader's crypto keys.")
+    auth_setup = is_flag_set("authentication.setup")
+    webhook_tokens_setup = is_flag_set("kubernetes-master.auth-webhook-tokens.setup")
+    if auth_setup and not webhook_tokens_setup:
+        hookenv.status_set("waiting", "Failed to setup auth-webhook tokens; will retry")
         return
 
     if is_state("kubernetes-master.components.started"):
@@ -887,10 +887,10 @@ def set_final_status():
 
     # Note that after this point, kubernetes-master.components.started is
     # always True.
-
-    webhook_tokens_setup = is_flag_set("kubernetes-master.auth-webhook-tokens.setup")
-    if not webhook_tokens_setup:
-        hookenv.status_set("waiting", "Failed to setup auth-webhook tokens; will retry")
+    is_leader = is_state("leadership.is_leader")
+    authentication_setup = is_state("authentication.setup")
+    if not is_leader and not authentication_setup:
+        hookenv.status_set("waiting", "Waiting on leader's crypto keys.")
         return
 
     addons_configured = is_state("cdk-addons.configured")
@@ -1156,7 +1156,6 @@ def register_auth_webhook():
 
 @when(
     "kubernetes-master.apiserver.configured",
-    "kubernetes-master.components.started",
     "kubernetes-master.auth-webhook-service.started",
     "authentication.setup",
 )
