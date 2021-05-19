@@ -9,8 +9,10 @@ from base64 import b64decode, b64encode
 from pathlib import Path
 import ipaddress
 from subprocess import check_output, CalledProcessError, TimeoutExpired
+from time import sleep
 from yaml import safe_load
 
+from charmhelpers.core import host
 from charmhelpers.core import hookenv
 from charmhelpers.core.templating import render
 from charmhelpers.core import unitdata
@@ -573,3 +575,31 @@ def get_snap_revs(snaps):
                 )
         rev_info[s] = snap_rev
     return rev_info
+
+
+def check_service(service, attempts=6, delay=10):
+    """Check if a given service is up, giving it a bit of time to come up if needed.
+
+    Returns True if the service is running, False if not, or raises a ValueError if
+    the service is unknown. Will automatically handle translating master component
+    names (e.g., kube-apiserver) to service names (snap.kube-apiserver.daemon).
+    """
+    for pattern in ("{}", "snap.{}", "snap.{}.daemon", "snap.kube-{}.daemon"):
+        if host.service("is-enabled", pattern.format(service)):
+            service = pattern.format(service)
+            break
+    else:
+        raise ValueError("Unknown service: {}".format(service))
+    # Give each service up to a minute to become active; this is especially
+    # needed now that controller-mgr/scheduler/proxy need the apiserver
+    # to validate their token against a k8s secret.
+    attempt = 0
+    while attempt < attempts:
+        hookenv.log(
+            "Checking if {} is active ({} / {})".format(service, attempt, attempts)
+        )
+        if host.service_running(service):
+            return True
+        sleep(delay)
+        attempt += 1
+    return False
