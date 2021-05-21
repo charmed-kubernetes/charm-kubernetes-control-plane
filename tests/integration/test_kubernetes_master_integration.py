@@ -25,12 +25,17 @@ async def test_build_and_deploy(ops_test):
     bundle = ops_test.render_bundle(
         "tests/data/bundle.yaml", master_charm=await ops_test.build_charm(".")
     )
+
     # Use CLI to deploy bundle until https://github.com/juju/python-libjuju/pull/497
     # is released.
     # await ops_test.model.deploy(bundle)
     retcode, stdout, stderr = await ops_test._run("juju", "deploy", bundle)
     assert retcode == 0, f"Bundle deploy failed: {(stderr or stdout).strip()}"
     log.info(stdout)
+    await ops_test.model.block_until(
+        lambda: "kubernetes-master" in ops_test.model.applications, timeout=60
+    )
+
     try:
         await ops_test.model.wait_for_idle(wait_for_active=True, timeout=60 * 60)
     except asyncio.TimeoutError:
