@@ -29,7 +29,9 @@ async def test_build_and_deploy(ops_test):
     # Use CLI to deploy bundle until https://github.com/juju/python-libjuju/pull/497
     # is released.
     # await ops_test.model.deploy(bundle)
-    retcode, stdout, stderr = await ops_test._run("juju", "deploy", bundle)
+    retcode, stdout, stderr = await ops_test._run(
+        "juju", "deploy", "-m", ops_test.model_full_name, bundle
+    )
     assert retcode == 0, f"Bundle deploy failed: {(stderr or stdout).strip()}"
     log.info(stdout)
     await ops_test.model.block_until(
