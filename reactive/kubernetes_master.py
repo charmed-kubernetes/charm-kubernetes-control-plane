@@ -23,12 +23,12 @@ import json
 import traceback
 import yaml
 
+from itertools import filterfalse
 from shutil import move, copyfile
 from pathlib import Path
 from subprocess import check_call
 from subprocess import check_output
 from subprocess import CalledProcessError
-from time import sleep
 from urllib.request import Request, urlopen
 
 import charms.coordinator
@@ -183,6 +183,10 @@ register_trigger(
 )
 register_trigger(
     when="kube-control.requests.changed", clear_flag="authentication.setup"
+)
+register_trigger(
+    when_not="kubernetes-master.apiserver.configured",
+    clear_flag="kubernetes-master.apiserver.running",
 )
 
 
@@ -767,7 +771,10 @@ def set_final_status():
         return
 
     if not is_flag_set("certificates.available"):
-        hookenv.status_set("blocked", "Missing relation to certificate authority.")
+        if "certificates" in goal_state.get("relations", {}):
+            hookenv.status_set("waiting", "Waiting for certificates authority.")
+        else:
+            hookenv.status_set("blocked", "Missing relation to certificate authority.")
         return
 
     if is_flag_set("kubernetes-master.secure-storage.failed"):
@@ -780,7 +787,7 @@ def set_final_status():
     elif is_flag_set("kubernetes-master.secure-storage.created"):
         if not encryption_config_path().exists():
             hookenv.status_set(
-                "blocked", "VaultLocker containing encryption config " "unavailable"
+                "blocked", "VaultLocker containing encryption config unavailable"
             )
             return
 
@@ -845,7 +852,7 @@ def set_final_status():
 
     if is_state("kubernetes-master.vault-kv.pending"):
         hookenv.status_set(
-            "waiting", "Waiting for encryption info from Vault " "to secure secrets"
+            "waiting", "Waiting for encryption info from Vault to secure secrets"
         )
         return
 
@@ -853,6 +860,26 @@ def set_final_status():
         hookenv.status_set(
             "waiting", "Waiting to retry updates for service-cidr expansion"
         )
+        return
+
+    if not is_state("etcd.available"):
+        if "etcd" in goal_state.get("relations", {}):
+            status = "waiting"
+        else:
+            status = "blocked"
+        hookenv.status_set(status, "Waiting for etcd")
+        return
+
+    if not is_state("cni.available"):
+        if "cni" in goal_state.get("relations", {}):
+            status = "waiting"
+        else:
+            status = "blocked"
+        hookenv.status_set(status, "Waiting for CNI plugins to become available")
+        return
+
+    if not is_state("tls_client.certs.saved"):
+        hookenv.status_set("waiting", "Waiting for certificates")
         return
 
     if not is_flag_set("kubernetes-master.auth-webhook-service.started"):
@@ -863,10 +890,17 @@ def set_final_status():
         hookenv.status_set("waiting", "Waiting for API server to be configured")
         return
 
-    auth_setup = is_flag_set("authentication.setup")
-    webhook_tokens_setup = is_flag_set("kubernetes-master.auth-webhook-tokens.setup")
-    if auth_setup and not webhook_tokens_setup:
-        hookenv.status_set("waiting", "Failed to setup auth-webhook tokens; will retry")
+    if not is_flag_set("kubernetes-master.apiserver.running"):
+        hookenv.status_set("waiting", "Waiting for API server to start")
+        return
+
+    authentication_setup = is_state("authentication.setup")
+    if not authentication_setup:
+        hookenv.status_set("waiting", "Waiting on crypto keys.")
+        return
+
+    if not is_flag_set("kubernetes-master.auth-webhook-tokens.setup"):
+        hookenv.status_set("waiting", "Waiting for auth-webhook tokens")
         return
 
     if is_state("kubernetes-master.components.started"):
@@ -879,20 +913,13 @@ def set_final_status():
     else:
         # if we don't have components starting, we're waiting for that and
         # shouldn't fall through to Kubernetes master running.
-        if is_state("cni.available"):
-            hookenv.status_set("maintenance", "Waiting for master components to start")
-        else:
-            hookenv.status_set("waiting", "Waiting for CNI plugins to become available")
+        hookenv.status_set("maintenance", "Waiting for master components to start")
         return
 
     # Note that after this point, kubernetes-master.components.started is
     # always True.
-    is_leader = is_state("leadership.is_leader")
-    authentication_setup = is_state("authentication.setup")
-    if not is_leader and not authentication_setup:
-        hookenv.status_set("waiting", "Waiting on leader's crypto keys.")
-        return
 
+    is_leader = is_state("leadership.is_leader")
     addons_configured = is_state("cdk-addons.configured")
     if is_leader and not addons_configured:
         hookenv.status_set("waiting", "Waiting to retry addon deployment")
@@ -963,27 +990,7 @@ def master_services_down():
     """Ensure master services are up and running.
 
     Return: list of failing services"""
-    failing_services = []
-    for service in master_services:
-        daemon = "snap.{}.daemon".format(service)
-
-        # Give each service up to a minute to become active; this is especially
-        # needed now that controller-mgr/scheduler/proxy need the apiserver
-        # to validate their token against a k8s secret.
-        attempt = 0
-        delay = 10
-        times = 6
-        while attempt < times:
-            hookenv.log(
-                "Checking if {} is active ({} / {})".format(daemon, attempt, times)
-            )
-            if host.service_running(daemon):
-                break
-            sleep(delay)
-            attempt += 1
-        else:
-            failing_services.append(service)
-    return failing_services
+    return list(filterfalse(kubernetes_master.check_service, master_services))
 
 
 def add_systemd_file_limit():
@@ -1155,7 +1162,7 @@ def register_auth_webhook():
 
 
 @when(
-    "kubernetes-master.apiserver.configured",
+    "kubernetes-master.apiserver.running",
     "kubernetes-master.auth-webhook-service.started",
     "authentication.setup",
 )
@@ -2448,6 +2455,15 @@ def configure_apiserver():
         set_flag("kubernetes-master.had-service-cidr-expanded")
 
     set_flag("kubernetes-master.apiserver.configured")
+    if kubernetes_master.check_service("kube-apiserver"):
+        set_flag("kubernetes-master.apiserver.running")
+
+
+@when("kubernetes-master.apiserver.configured")
+@when_not("kubernetes-master.apiserver.running")
+def check_apiserver():
+    if kubernetes_master.check_service("kube-apiserver"):
+        set_flag("kubernetes-master.apiserver.running")
 
 
 @when(

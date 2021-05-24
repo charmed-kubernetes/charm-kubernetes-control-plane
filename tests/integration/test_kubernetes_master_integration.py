@@ -25,8 +25,35 @@ async def test_build_and_deploy(ops_test):
     bundle = ops_test.render_bundle(
         "tests/data/bundle.yaml", master_charm=await ops_test.build_charm(".")
     )
-    await ops_test.model.deploy(bundle)
-    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=60 * 60)
+
+    # Use CLI to deploy bundle until https://github.com/juju/python-libjuju/pull/497
+    # is released.
+    # await ops_test.model.deploy(bundle)
+    retcode, stdout, stderr = await ops_test._run(
+        "juju", "deploy", "-m", ops_test.model_full_name, bundle
+    )
+    assert retcode == 0, f"Bundle deploy failed: {(stderr or stdout).strip()}"
+    log.info(stdout)
+    await ops_test.model.block_until(
+        lambda: "kubernetes-master" in ops_test.model.applications, timeout=60
+    )
+
+    try:
+        await ops_test.model.wait_for_idle(wait_for_active=True, timeout=60 * 60)
+    except asyncio.TimeoutError:
+        if "kubernetes-master" not in ops_test.model.applications:
+            raise
+        app = ops_test.model.applications["kubernetes-master"]
+        if not app.units:
+            raise
+        unit = app.units[0]
+        if "kube-system pod" in unit.workload_status_message:
+            log.debug(
+                await juju_run(
+                    unit, "kubectl --kubeconfig /root/.kube/config get all -A"
+                )
+            )
+        raise
     _check_status_messages(ops_test)
 
 
@@ -41,8 +68,11 @@ async def test_kube_api_endpoint(ops_test):
 
 async def juju_run(unit, cmd):
     result = await unit.run(cmd)
-    assert result.results["Code"] == "0"
-    return result.results.get("Stdout")
+    code = result.results["Code"]
+    stdout = result.results.get("Stdout")
+    stderr = result.results.get("Stderr")
+    assert code == "0", f"{cmd} failed ({code}): {stderr or stdout}"
+    return stdout
 
 
 async def test_auth_load(ops_test):
