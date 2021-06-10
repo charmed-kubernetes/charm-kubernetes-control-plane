@@ -172,6 +172,11 @@ options:
     default: true
     description: |
       If true the metrics server for Kubernetes will be deployed onto the cluster.
+  enable-csi-snapshots:
+    type: boolean
+    default: true
+    description: |
+      If true CSI snapshot support will be deployed onto the cluster.
   snapd_refresh:
     default: "max"
     type: string

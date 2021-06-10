@@ -588,6 +588,18 @@ def enable_metric_changed():
         configure_cdk_addons()
 
 
+@when("etcd.available")
+@when("config.changed.enable-csi-snapshots")
+def enable_csi_snapshots_changed():
+    """
+    Trigger CDK addon configuration if enable-csi-snapshots is updated.
+
+    :return: None
+    """
+    if is_state("leadership.is_leader"):
+        configure_cdk_addons()
+
+
 @when("config.changed.client_password", "leadership.is_leader")
 def password_changed():
     """Handle password change by reconfiguring authentication."""
@@ -1599,6 +1611,7 @@ def configure_cdk_addons():
         hookenv.log(traceback.format_exc())
         return
     metricsEnabled = str(hookenv.config("enable-metrics")).lower()
+    csiSnapshotsEnabled = str(hookenv.config("enable-csi-snapshots")).lower()
     default_storage = ""
     ceph = {}
     ceph_ep = endpoint_from_flag("ceph-storage.available")
@@ -1663,6 +1676,7 @@ def configure_cdk_addons():
         "registry=" + registry,
         "enable-dashboard=" + dbEnabled,
         "enable-metrics=" + metricsEnabled,
+        "enable-csi-snapshots=" + csiSnapshotsEnabled,
         "enable-gpu=" + str(gpuEnable).lower(),
         "enable-ceph=" + cephEnabled,
         "enable-cephfs=" + cephFsEnabled,
