@@ -604,7 +604,7 @@ def storage_backend_changed():
 def configure_cni(cni):
     """Set master configuration on the CNI relation. This lets the CNI
     subordinate know that we're the master so it can respond accordingly."""
-    cni.set_config(is_master=True, kubeconfig_path="")
+    cni.set_config(is_master=True)
 
 
 @when("leadership.is_leader")
@@ -2229,6 +2229,10 @@ def build_kubeconfig():
                 user="kube-scheduler",
             )
 
+        cni = endpoint_from_name('cni')
+        if cni:
+            cni.notify_kubeconfig_changed()
+
 
 def handle_etcd_relation(reldata):
     """Save the client credentials and set appropriate daemon flags when
@@ -2662,7 +2666,7 @@ def get_token(username):
     migrated. Otherwise, fetch it from the 'known_tokens.csv' file.
     """
     if is_flag_set("kubernetes-master.token-auth.migrated"):
-        return kubernetes_master.get_secret_password(username)
+        return kubernetes_common.get_secret_password(username)
     else:
         return kubernetes_master.get_csv_password("known_tokens.csv", username)
 
