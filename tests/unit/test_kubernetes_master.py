@@ -43,7 +43,7 @@ def test_series_upgrade():
 def configure_apiserver(service_cidr_from_db, service_cidr_from_config):
     set_flag("leadership.is_leader")
     db = unitdata.kv()
-    db.get.return_value = service_cidr_from_db
+    db.set("kubernetes-master.service-cidr", service_cidr_from_db)
     hookenv.config.return_value = service_cidr_from_config
     get_version.return_value = (1, 18)
     kubernetes_master.configure_apiserver()
@@ -99,7 +99,8 @@ def test_service_cidr_expansion():
     clear_flag("kubernetes-master.had-service-cidr-expanded")
     configure_apiserver("10.152.183.0/24,fe80::/120", "10.152.183.0/24,fe80::/112")
     assert is_flag_set("kubernetes-master.had-service-cidr-expanded")
-    unitdata.kv().get.return_value = "10.152.0.0/16"
+    db = unitdata.kv()
+    db.set("kubernetes-master.service-cidr", "10.152.0.0/16")
     update_for_service_cidr_expansion()
     assert kubectl.call_count == 4
 

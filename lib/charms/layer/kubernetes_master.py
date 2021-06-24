@@ -135,7 +135,7 @@ def get_external_api_endpoints():
 
     # Support the older loadbalancer relation (public-address interface).
     if "loadbalancer" in goal_state["relations"]:
-        loadbalancer = endpoint_from_flag("loadbalancer.available")
+        loadbalancer = endpoint_from_name("loadbalancer")
         lb_addresses = loadbalancer.get_addresses_ports()
         return [(host.get("public-address"), host.get("port")) for host in lb_addresses]
 
