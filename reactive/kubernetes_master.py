@@ -3433,7 +3433,10 @@ def register_prometheus_jobs():
     monitoring_token = get_token("system:monitoring")
 
     for relation in prometheus.relations:
-        address, port = kubernetes_master.get_api_endpoint(relation)
+        endpoints = kubernetes_master.get_internal_api_endpoints(relation)
+        if not endpoints:
+            continue
+        address, port = endpoints[0]
 
         templates_dir = Path("templates")
         for job_file in Path("templates/prometheus").glob("*.yaml.j2"):
