@@ -32,7 +32,7 @@ def protect_resources(name):
 
 def user_list():
     """Return a dict of 'username: secret_id' for Charmed Kubernetes users."""
-    secrets = layer.kubernetes_master.get_secret_names()
+    secrets = layer.kubernetes_common.get_secret_names()
     action_set({"users": ", ".join(list(secrets))})
     return secrets
 
