@@ -1,11 +1,8 @@
 import csv
 import json
 import random
-import re
 import socket
 import string
-import tempfile
-from base64 import b64decode, b64encode
 from pathlib import Path
 import ipaddress
 from subprocess import check_output, CalledProcessError, TimeoutExpired

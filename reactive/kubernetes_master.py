@@ -2229,7 +2229,7 @@ def build_kubeconfig():
                 user="kube-scheduler",
             )
 
-        cni = endpoint_from_name('cni')
+        cni = endpoint_from_name("cni")
         if cni:
             cni.notify_kubeconfig_changed()
 
