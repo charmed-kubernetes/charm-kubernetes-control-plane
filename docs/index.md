@@ -87,7 +87,6 @@ section on [configuring K8s services](#k8s-services).
 
 | name | type   | Default      | Description                               |
 |------|--------|--------------|-------------------------------------------|
-| <a id="table-addons-registry"> </a> addons-registry | string |  | [See notes](#addons-registry-description)  |
 | <a id="table-allow-privileged"> </a> allow-privileged | string | auto | [See notes](#allow-privileged-description)  |
 | <a id="table-api-extra-args"> </a> api-extra-args | string |  | [See notes](#api-extra-args-description)  |
 | <a id="table-audit-policy"> </a> audit-policy | string | [See notes](#audit-policy-default) | Audit policy passed to kube-apiserver via --audit-policy-file. For more info, please refer to the upstream documentation at https://kubernetes.io/docs/tasks/debug-application-cluster/audit/  |
@@ -129,21 +128,6 @@ section on [configuring K8s services](#k8s-services).
 | <a id="table-sysctl"> </a> sysctl | string | [See notes](#sysctl-default) | [See notes](#sysctl-description)  |
 
 ---
-
-### addons-registry
-
-
-<a id="addons-registry-description"> </a>
-**Description:**
-
-Specify the docker registry to use when applying addons.
-
-DEPRECATED in 1.15: Use the broader 'image-registry' config option instead. If both
-options are set, 'addons-registry' will be used to configure the cdk-addons snap until
-v1.17 is released. After that, the 'addons-registry' option will have no effect.
-
-[Back to table](#table-addons-registry)
-
 
 ### allow-privileged
 

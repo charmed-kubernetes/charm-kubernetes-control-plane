@@ -43,15 +43,6 @@ options:
       Audit webhook config passed to kube-apiserver via --audit-webhook-config-file.
       For more info, please refer to the upstream documentation at
       https://kubernetes.io/docs/tasks/debug-application-cluster/audit/
-  addons-registry:
-    type: string
-    default: ""
-    description: |
-      Specify the docker registry to use when applying addons.
-
-      DEPRECATED in 1.15: Use the broader 'image-registry' config option instead. If both
-      options are set, 'addons-registry' will be used to configure the cdk-addons snap until
-      v1.17 is released. After that, the 'addons-registry' option will have no effect.
   image-registry:
     type: string
     default: "rocks.canonical.com:443/cdk"
