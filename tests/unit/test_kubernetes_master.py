@@ -253,3 +253,14 @@ def test_setup_auth_webhook_tokens(kcs, ctsar):
     set_flag("authentication.setup")
     kubernetes_master.setup_auth_webhook_tokens()
     assert not is_flag_set("authentication.setup")
+
+
+@mock.patch.object(kubernetes_master, "render", autospec=True)
+@mock.patch.object(kubernetes_master, "get_ingress_address", autospec=True)
+def test_ignore_vip(get_ingress_address, render):
+    get_ingress_address.return_value = "5.6.7.8"
+    hookenv.config.return_value = "1.2.3.4"
+    kubernetes_master.register_auth_webhook()
+    get_ingress_address.assert_called_with(
+        "kube-api-endpoint", ignore_addresses=["1.2.3.4"]
+    )

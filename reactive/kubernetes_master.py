@@ -1033,7 +1033,9 @@ def register_auth_webhook():
     context = {
         "api_ver": "v1beta1",
         "charm_dir": hookenv.charm_dir(),
-        "host": get_ingress_address("kube-api-endpoint"),
+        "host": get_ingress_address(
+            "kube-api-endpoint", ignore_addresses=[hookenv.config("ha-cluster-vip")]
+        ),
         "pidfile": "auth-webhook.pid",
         "port": 5000,
         "root_dir": auth_webhook_root,
