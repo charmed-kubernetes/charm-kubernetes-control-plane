@@ -113,7 +113,6 @@ section on [configuring K8s services](#k8s-services).
 | <a id="table-keystone-policy"> </a> keystone-policy | string | [See notes](#keystone-policy-default) | Policy for Keystone authorization. This is used when a Keystone charm is related to kubernetes-master in order to provide authorization for Keystone users on the Kubernetes cluster.  |
 | <a id="table-keystone-ssl-ca"> </a> keystone-ssl-ca | string |  | Keystone certificate authority encoded in base64 for securing communications to Keystone. For example: `juju config kubernetes-master keystone-ssl-ca=$(base64 /path/to/ca.crt)`  |
 | <a id="table-loadbalancer-ips"> </a> loadbalancer-ips | string |  | [See notes](#loadbalancer-ips-description)  |
-| <a id="table-monitoring-storage"> </a> monitoring-storage | string | [See notes](#monitoring-storage-default) | [See notes](#monitoring-storage-description)  |
 | <a id="table-nagios_context"> </a> nagios_context | string | juju | [See notes](#nagios_context-description)  |
 | <a id="table-nagios_servicegroups"> </a> nagios_servicegroups | string |  | A comma-separated list of nagios servicegroups. If left empty, the nagios_context will be used as the servicegroup  |
 | <a id="table-package_status"> </a> package_status | string | install | The status of service-affecting packages will be set to this value in the dpkg database. Valid values are "install" and "hold".  |
@@ -391,49 +390,6 @@ kubernetes-worker:kube-api-endpoint. If using the kubeapi-load-balancer, see the
 loadbalancer-ips configuration variable on the kubeapi-load-balancer charm.
 
 [Back to table](#table-loadbalancer-ips)
-
-
-### monitoring-storage
-
-
-<a id="monitoring-storage-default"> </a>
-**Default:**
-
-```
-influxdb:
-  emptyDir: {}
-grafana:
-  emptyDir: {}
-
-```
-
-
-[Back to table](#table-monitoring-storage)
-
-
-<a id="monitoring-storage-description"> </a>
-**Description:**
-
-Configuration to set up volume for influxdb/grafana.
-e.g
-influxdb:
-
-```
-  hostPath:
-    path: /influxdb
-    type: Directory
-```
-
-grafana:
-
-```
-  hostPath:
-    path: /grafana
-```
-
-    type: Directory
-
-[Back to table](#table-monitoring-storage)
 
 
 ### nagios_context

@@ -292,26 +292,6 @@ options:
       kubernetes-worker:kube-api-endpoint. If using the kubeapi-load-balancer, see the
       loadbalancer-ips configuration variable on the kubeapi-load-balancer charm.
     default: ""
-  monitoring-storage:
-    type: string
-    description: |
-      Configuration to set up volume for influxdb/grafana.
-      e.g
-      influxdb:
-        hostPath:
-          path: /influxdb
-          type: Directory
-      grafana:
-        hostPath:
-          path: /grafana
-          type: Directory
-
-      DEPRECATED: this option has no effect on Kubernetes 1.18 and above.
-    default: |
-      influxdb:
-        emptyDir: {}
-      grafana:
-        emptyDir: {}
   default-cni:
     type: string
     description: |

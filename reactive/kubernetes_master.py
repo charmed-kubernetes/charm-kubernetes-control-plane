@@ -1677,7 +1677,6 @@ def configure_cdk_addons():
         "enable-azure=" + enable_azure,
         "enable-gcp=" + enable_gcp,
         "enable-openstack=" + enable_openstack,
-        "monitorstorage=" + hookenv.config("monitoring-storage"),
         "cluster-tag=" + cluster_tag,
     ]
     if openstack:
