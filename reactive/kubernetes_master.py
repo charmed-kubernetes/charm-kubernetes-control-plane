@@ -17,7 +17,6 @@
 import base64
 import os
 import re
-import shutil
 import socket
 import json
 import traceback
@@ -242,7 +241,6 @@ def check_for_upgrade_needed():
     # to old ceph on Kubernetes 1.10 or 1.11
     remove_state("kubernetes-master.ceph.configured")
 
-    migrate_from_pre_snaps()
     maybe_install_kube_proxy()
     update_certificates()
     switch_auth_mode(forced=True)
@@ -373,58 +371,6 @@ def add_rbac_roles():
                     continue
                 else:
                     ftokens.write("{}".format(line))
-
-
-def rename_file_idempotent(source, destination):
-    if os.path.isfile(source):
-        os.rename(source, destination)
-
-
-def migrate_from_pre_snaps():
-    # remove old states
-    remove_state("kubernetes.components.installed")
-    remove_state("kubernetes.dashboard.available")
-    remove_state("kube-dns.available")
-    remove_state("kubernetes-master.app_version.set")
-
-    # disable old services
-    pre_snap_services = ["kube-apiserver", "kube-controller-manager", "kube-scheduler"]
-    for service in pre_snap_services:
-        service_stop(service)
-
-    # rename auth files
-    os.makedirs("/root/cdk", exist_ok=True)
-    rename_file_idempotent(
-        "/etc/kubernetes/serviceaccount.key", "/root/cdk/serviceaccount.key"
-    )
-    rename_file_idempotent("/srv/kubernetes/basic_auth.csv", "/root/cdk/basic_auth.csv")
-    rename_file_idempotent(
-        "/srv/kubernetes/known_tokens.csv", "/root/cdk/known_tokens.csv"
-    )
-
-    # cleanup old files
-    files = [
-        "/lib/systemd/system/kube-apiserver.service",
-        "/lib/systemd/system/kube-controller-manager.service",
-        "/lib/systemd/system/kube-scheduler.service",
-        "/etc/default/kube-defaults",
-        "/etc/default/kube-apiserver.defaults",
-        "/etc/default/kube-controller-manager.defaults",
-        "/etc/default/kube-scheduler.defaults",
-        "/home/ubuntu/kubectl",
-        "/usr/local/bin/kubectl",
-        "/usr/local/bin/kube-apiserver",
-        "/usr/local/bin/kube-controller-manager",
-        "/usr/local/bin/kube-scheduler",
-        "/etc/kubernetes",
-    ]
-    for file in files:
-        if os.path.isdir(file):
-            hookenv.log("Removing directory: " + file)
-            shutil.rmtree(file)
-        elif os.path.isfile(file):
-            hookenv.log("Removing file: " + file)
-            os.remove(file)
 
 
 @when("kubernetes-master.upgrade-specified")
