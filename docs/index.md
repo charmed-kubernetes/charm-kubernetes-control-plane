@@ -720,63 +720,6 @@ juju run-action kubernetes-master ACTION [parameters] [--wait]
 <div class="row">
   <div class="col-2">
     <h5>
-      create-rbd-pv
-    </h5>
-  </div>
-  <div class="col-5">
-    <p>
-      Create RADOS Block Device (RDB) volume in Ceph and creates PersistentVolume. Note this is deprecated on Kubernetes &gt;= 1.10 in favor of CSI, where PersistentVolumes are created dynamically to back PersistentVolumeClaims.
-    </p>
-  </div>
-</div>
-<div class="row">
-  <div class="col-2"></div>
-  <div class="col-5">
-    <p>
-      This action has the following parameters:
-    </p>
-    <hr>
-    <pre>filesystem</pre>
-    <p>
-      File system type to format the volume.
-    </p>
-    <p>
-      <strong>Default:</strong> xfs
-    </p><br>
-    <pre>mode</pre>
-    <p>
-      Access mode for the persistent volume.
-    </p>
-    <p>
-      <strong>Default:</strong> ReadWriteOnce
-    </p><br>
-    <pre>name</pre>
-    <p>
-      Name the persistent volume.
-    </p>
-    <p>
-      <strong>Default:</strong>
-    </p><br>
-    <pre>size</pre>
-    <p>
-      Size in MB of the RBD volume.
-    </p>
-    <p>
-      <strong>Default:</strong>
-    </p><br>
-    <pre>skip-size-check</pre>
-    <p>
-      Allow creation of overprovisioned RBD.
-    </p>
-    <p>
-      <strong>Default:</strong> False
-    </p><br>
-  </div>
-</div>
-<hr>
-<div class="row">
-  <div class="col-2">
-    <h5>
       debug
     </h5>
   </div>
