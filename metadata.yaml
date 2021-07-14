@@ -37,11 +37,6 @@ provides:
     # visible to the master, it will not be used in any of the client or
     # component kube config files.
     interface: http
-  cluster-dns:
-    # kube-dns is deprecated. Its functionality has been rolled into the
-    # kube-control interface. The cluster-dns relation will be removed in
-    # a future release.
-    interface: kube-dns
   kube-control:
     interface: kube-control
   cni:

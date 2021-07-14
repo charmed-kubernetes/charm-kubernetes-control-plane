@@ -43,15 +43,6 @@ options:
       Audit webhook config passed to kube-apiserver via --audit-webhook-config-file.
       For more info, please refer to the upstream documentation at
       https://kubernetes.io/docs/tasks/debug-application-cluster/audit/
-  addons-registry:
-    type: string
-    default: ""
-    description: |
-      Specify the docker registry to use when applying addons.
-
-      DEPRECATED in 1.15: Use the broader 'image-registry' config option instead. If both
-      options are set, 'addons-registry' will be used to configure the cdk-addons snap until
-      v1.17 is released. After that, the 'addons-registry' option will have no effect.
   image-registry:
     type: string
     default: "rocks.canonical.com:443/cdk"
@@ -301,26 +292,6 @@ options:
       kubernetes-worker:kube-api-endpoint. If using the kubeapi-load-balancer, see the
       loadbalancer-ips configuration variable on the kubeapi-load-balancer charm.
     default: ""
-  monitoring-storage:
-    type: string
-    description: |
-      Configuration to set up volume for influxdb/grafana.
-      e.g
-      influxdb:
-        hostPath:
-          path: /influxdb
-          type: Directory
-      grafana:
-        hostPath:
-          path: /grafana
-          type: Directory
-
-      DEPRECATED: this option has no effect on Kubernetes 1.18 and above.
-    default: |
-      influxdb:
-        emptyDir: {}
-      grafana:
-        emptyDir: {}
   default-cni:
     type: string
     description: |

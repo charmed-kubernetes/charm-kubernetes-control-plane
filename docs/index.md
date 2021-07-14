@@ -87,7 +87,6 @@ section on [configuring K8s services](#k8s-services).
 
 | name | type   | Default      | Description                               |
 |------|--------|--------------|-------------------------------------------|
-| <a id="table-addons-registry"> </a> addons-registry | string |  | [See notes](#addons-registry-description)  |
 | <a id="table-allow-privileged"> </a> allow-privileged | string | auto | [See notes](#allow-privileged-description)  |
 | <a id="table-api-extra-args"> </a> api-extra-args | string |  | [See notes](#api-extra-args-description)  |
 | <a id="table-audit-policy"> </a> audit-policy | string | [See notes](#audit-policy-default) | Audit policy passed to kube-apiserver via --audit-policy-file. For more info, please refer to the upstream documentation at https://kubernetes.io/docs/tasks/debug-application-cluster/audit/  |
@@ -114,7 +113,6 @@ section on [configuring K8s services](#k8s-services).
 | <a id="table-keystone-policy"> </a> keystone-policy | string | [See notes](#keystone-policy-default) | Policy for Keystone authorization. This is used when a Keystone charm is related to kubernetes-master in order to provide authorization for Keystone users on the Kubernetes cluster.  |
 | <a id="table-keystone-ssl-ca"> </a> keystone-ssl-ca | string |  | Keystone certificate authority encoded in base64 for securing communications to Keystone. For example: `juju config kubernetes-master keystone-ssl-ca=$(base64 /path/to/ca.crt)`  |
 | <a id="table-loadbalancer-ips"> </a> loadbalancer-ips | string |  | [See notes](#loadbalancer-ips-description)  |
-| <a id="table-monitoring-storage"> </a> monitoring-storage | string | [See notes](#monitoring-storage-default) | [See notes](#monitoring-storage-description)  |
 | <a id="table-nagios_context"> </a> nagios_context | string | juju | [See notes](#nagios_context-description)  |
 | <a id="table-nagios_servicegroups"> </a> nagios_servicegroups | string |  | A comma-separated list of nagios servicegroups. If left empty, the nagios_context will be used as the servicegroup  |
 | <a id="table-package_status"> </a> package_status | string | install | The status of service-affecting packages will be set to this value in the dpkg database. Valid values are "install" and "hold".  |
@@ -129,21 +127,6 @@ section on [configuring K8s services](#k8s-services).
 | <a id="table-sysctl"> </a> sysctl | string | [See notes](#sysctl-default) | [See notes](#sysctl-description)  |
 
 ---
-
-### addons-registry
-
-
-<a id="addons-registry-description"> </a>
-**Description:**
-
-Specify the docker registry to use when applying addons.
-
-DEPRECATED in 1.15: Use the broader 'image-registry' config option instead. If both
-options are set, 'addons-registry' will be used to configure the cdk-addons snap until
-v1.17 is released. After that, the 'addons-registry' option will have no effect.
-
-[Back to table](#table-addons-registry)
-
 
 ### allow-privileged
 
@@ -407,49 +390,6 @@ kubernetes-worker:kube-api-endpoint. If using the kubeapi-load-balancer, see the
 loadbalancer-ips configuration variable on the kubeapi-load-balancer charm.
 
 [Back to table](#table-loadbalancer-ips)
-
-
-### monitoring-storage
-
-
-<a id="monitoring-storage-default"> </a>
-**Default:**
-
-```
-influxdb:
-  emptyDir: {}
-grafana:
-  emptyDir: {}
-
-```
-
-
-[Back to table](#table-monitoring-storage)
-
-
-<a id="monitoring-storage-description"> </a>
-**Description:**
-
-Configuration to set up volume for influxdb/grafana.
-e.g
-influxdb:
-
-```
-  hostPath:
-    path: /influxdb
-    type: Directory
-```
-
-grafana:
-
-```
-  hostPath:
-    path: /grafana
-```
-
-    type: Directory
-
-[Back to table](#table-monitoring-storage)
 
 
 ### nagios_context
@@ -729,63 +669,6 @@ juju run-action kubernetes-master ACTION [parameters] [--wait]
     </p>
     <p>
       <strong>Default:</strong> https://github.com/aquasecurity/kube- bench/releases/download/v0.2.3/kube-bench_0.2.3_li nux_amd64.tar.gz#sha256=429a1db271689aafec009434de d1dea07a6685fee85a1deea638097c8512d548
-    </p><br>
-  </div>
-</div>
-<hr>
-<div class="row">
-  <div class="col-2">
-    <h5>
-      create-rbd-pv
-    </h5>
-  </div>
-  <div class="col-5">
-    <p>
-      Create RADOS Block Device (RDB) volume in Ceph and creates PersistentVolume. Note this is deprecated on Kubernetes &gt;= 1.10 in favor of CSI, where PersistentVolumes are created dynamically to back PersistentVolumeClaims.
-    </p>
-  </div>
-</div>
-<div class="row">
-  <div class="col-2"></div>
-  <div class="col-5">
-    <p>
-      This action has the following parameters:
-    </p>
-    <hr>
-    <pre>filesystem</pre>
-    <p>
-      File system type to format the volume.
-    </p>
-    <p>
-      <strong>Default:</strong> xfs
-    </p><br>
-    <pre>mode</pre>
-    <p>
-      Access mode for the persistent volume.
-    </p>
-    <p>
-      <strong>Default:</strong> ReadWriteOnce
-    </p><br>
-    <pre>name</pre>
-    <p>
-      Name the persistent volume.
-    </p>
-    <p>
-      <strong>Default:</strong>
-    </p><br>
-    <pre>size</pre>
-    <p>
-      Size in MB of the RBD volume.
-    </p>
-    <p>
-      <strong>Default:</strong>
-    </p><br>
-    <pre>skip-size-check</pre>
-    <p>
-      Allow creation of overprovisioned RBD.
-    </p>
-    <p>
-      <strong>Default:</strong> False
     </p><br>
   </div>
 </div>
