@@ -270,6 +270,7 @@ async def webhook(request):
         TokenReview object with 'authenticated: True' and user attributes if a
         token is found; otherwise, a TokenReview object with 'authenticated: False'
     '''
+    await ensure_secrets_task()
     try:
         req = await request.json()
     except json.JSONDecodeError:
@@ -294,7 +295,7 @@ async def webhook(request):
     if await check_token(req):
         return ack(req)
 
-    if not app['secrets']:
+    if not await secrets_available():
         # If secrets aren't yet available, none of the system accounts will be
         # functional and thus neither will the cluster, so there's no point to
         # going any further. Additionally, we don't want to accidentally leak
@@ -381,24 +382,53 @@ async def refresh_secrets(app):
     app['secrets'] = new_secrets
 
 
+async def ensure_secrets_task():
+    """Ensure that the task to load and refresh secrets has been started."""
+    if app['secrets_task']:
+        return
+
+    async def _task():
+        while True:
+            try:
+                app['secrets_refreshing'] = True
+                await refresh_secrets(app)
+                app['secrets_refreshing'] = False
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                app.logger.exception('Failed to get secrets')
+            finally:
+                app['secrets_refreshing'] = False
+
+    app['secrets_task'] = asyncio.ensure_future(_task())
+
+
+async def secrets_available():
+    if app['secrets']:
+        # already available, no need to wait
+        return True
+    if not app['secrets_refreshing']:
+        # not available, but not pending, so no point in waiting
+        return False
+    # pending load, so wait up to 8 seconds
+    for attempt in range(8 * 2):
+        if not app['secrets_refreshing']:
+            break
+        else:
+            await asyncio.sleep(0.5)
+    return bool(app['secrets'])
+
+
 async def startup(app):
     # Log to gunicorn
     glogger = logging.getLogger('gunicorn.error')
     app.logger.handlers = glogger.handlers
     app.logger.setLevel(glogger.level)
 
-    async def _task():
-        while True:
-            try:
-                await refresh_secrets(app)
-                await asyncio.sleep(60)
-            except asyncio.CancelledError:
-                break
-            except Exception:
-                app.logger.exception('Failed to get secrets')
-
     app['secrets'] = {}
-    app['secrets_task'] = asyncio.ensure_future(_task())
+    app['secrets_refreshing'] = False
+    app['secrets_task'] = None
 
 
 async def cleanup(app):
