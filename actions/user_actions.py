@@ -32,7 +32,7 @@ def protect_resources(name):
 
 def user_list():
     """Return a dict of 'username: secret_id' for Charmed Kubernetes users."""
-    secrets = layer.kubernetes_master.get_secret_names()
+    secrets = layer.kubernetes_common.get_secret_names()
     action_set({"users": ", ".join(list(secrets))})
     return secrets
 
@@ -57,7 +57,7 @@ def user_create():
     # TODO: make the token format less magical so it doesn't get out of
     # sync with the function that creates secrets in k8s-master.py.
     token = "{}::{}".format(user, layer.kubernetes_master.token_generator())
-    if not layer.kubernetes_master.create_secret(token, user, user, groups):
+    if not layer.kubernetes_common.create_secret(token, user, user, groups):
         action_fail("Failed to create secret for: {}".format(user))
         return
 

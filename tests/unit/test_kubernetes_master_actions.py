@@ -1,5 +1,3 @@
-import base64
-import json
 import pytest
 from unittest import mock
 from actions import user_actions
@@ -16,23 +14,12 @@ def test_protect_resources():
 def test_user_list():
     """Verify user data is parsed correctly from our secrets."""
     user = secret_id = "admin"
-    test_data = {
-        "items": [
-            {
-                "metadata": {
-                    "name": secret_id,
-                },
-                "data": {
-                    "username": base64.b64encode(user.encode("utf-8")).decode("utf-8"),
-                },
-            }
-        ]
-    }
-    secrets = json.dumps(test_data).encode("utf-8")
+    test_data = {user: secret_id}
 
     # we expect a {username: secret_id} dict
     with mock.patch(
-        "actions.user_actions.layer.kubernetes_common.kubectl", return_value=secrets
+        "actions.user_actions.layer.kubernetes_common.get_secret_names",
+        return_value=test_data,
     ):
         secret_data = user_actions.user_list()
         assert user in secret_data.keys()
@@ -70,7 +57,7 @@ def test_user_create(mock_get, mock_master, mock_common, mock_chmod):
 
     with mock.patch("actions.user_actions.user_list", return_value=test_data):
         user_actions.user_create()
-    args, kwargs = mock_master.create_secret.call_args
+    args, kwargs = mock_common.create_secret.call_args
     assert token in args
     args, kwargs = mock_common.create_kubeconfig.call_args
     assert token in kwargs["token"]

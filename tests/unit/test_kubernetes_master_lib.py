@@ -1,7 +1,5 @@
-import base64
 import json
 import pytest
-import re
 import tempfile
 from pathlib import Path
 from unittest import mock
@@ -42,30 +40,7 @@ def test_migrate_auth_file(auth_file):
             assert charmlib.migrate_auth_file(auth_file)
 
 
-@mock.patch("lib.charms.layer.kubernetes_master.render")
-@mock.patch(
-    "lib.charms.layer.kubernetes_master.kubernetes_common.kubectl_manifest",
-    return_value=True,
-)
-@mock.patch("lib.charms.layer.kubernetes_master.get_secret_names", return_value={})
-def test_create_secret(mock_secrets, mock_kubectl, mock_render):
-    """Verify valid secret data is sent to kubectl during create."""
-    password = "password"
-    user_id = "replace$uid"
-    secret_name = "replace-uid"
-    secret_ns = "kube-system"
-    secret_token = base64.b64encode(
-        "{}::{}".format(user_id, password).encode("utf-8")
-    ).decode("utf-8")
-
-    charmlib.create_secret(password, "admin", user_id, "groupA,groupB")
-    assert mock_kubectl.called
-    args, kwargs = mock_render.call_args
-    assert secret_name in kwargs["context"]["secret_name"]
-    assert secret_ns in kwargs["context"]["secret_namespace"]
-    assert secret_token in kwargs["context"]["password"]
-
-
+@mock.patch("lib.charms.layer.kubernetes_master.AUTH_SECRET_NS", new="kube-system")
 @mock.patch(
     "lib.charms.layer.kubernetes_master.kubernetes_common.kubectl_success",
     return_value=True,
@@ -78,12 +53,6 @@ def test_delete_secret(mock_kubectl):
     assert charmlib.delete_secret("secret-id")
     args, kwargs = mock_kubectl.call_args
     assert secret_ns in args
-
-
-def test_generate_rfc1123():
-    """Verify genereated string is RFC 1123 compliant."""
-    id = charmlib.generate_rfc1123()
-    assert re.search("[^0-9a-z]+", id) is None
 
 
 def test_get_csv_password(auth_file):
@@ -104,67 +73,6 @@ def test_get_csv_password(auth_file):
     # Test we handle a valid file
     auth_file.write_text("{},{},uid,group\n".format(password, user))
     assert charmlib.get_csv_password(auth_file, user) == password
-
-
-def test_get_secret_names():
-    """Verify expected {username: secret_id} dict is returned."""
-    secret = "mine"
-    user = "admin"
-
-    test_data = {
-        "items": [
-            {
-                "data": {
-                    "username": base64.b64encode(user.encode("utf-8")).decode("utf-8"),
-                },
-                "metadata": {
-                    "name": secret,
-                },
-            }
-        ]
-    }
-    secrets = json.dumps(test_data).encode("utf-8")
-
-    # valid user should return a valid secret
-    with mock.patch(
-        "lib.charms.layer.kubernetes_master.kubernetes_common.kubectl",
-        return_value=secrets,
-    ):
-        assert charmlib.get_secret_names()[user] == secret
-
-
-def test_get_secret_password():
-    """Verify expected secret token is returned."""
-    password = "password"
-    user = "admin"
-
-    test_data = {
-        "items": [
-            {
-                "data": {
-                    "password": base64.b64encode(password.encode("utf-8")).decode(
-                        "utf-8"
-                    ),
-                    "username": base64.b64encode(user.encode("utf-8")).decode("utf-8"),
-                }
-            }
-        ]
-    }
-    secrets = json.dumps(test_data).encode("utf-8")
-
-    # non-existent secret should return None
-    with mock.patch(
-        "lib.charms.layer.kubernetes_master.kubernetes_common.kubectl",
-        return_value=secrets,
-    ):
-        assert charmlib.get_secret_password("missing") is None
-
-    # known user should return our test data
-    with mock.patch(
-        "lib.charms.layer.kubernetes_master.kubernetes_common.kubectl",
-        return_value=secrets,
-    ):
-        assert charmlib.get_secret_password(user) == password
 
 
 def test_get_snap_revs():
