@@ -1,6 +1,7 @@
 [Unit]
 Description=CDK master auth webhook
 After=network.target
+StartLimitIntervalSec=0
 
 [Service]
 User=root
@@ -18,6 +19,7 @@ ExecStart={{ charm_dir }}/../.venv/bin/gunicorn \
     --worker-class aiohttp.worker.GunicornWebWorker \
     auth-webhook:app
 Restart=always
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target

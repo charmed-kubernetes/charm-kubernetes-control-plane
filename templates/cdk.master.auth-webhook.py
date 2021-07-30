@@ -5,6 +5,7 @@ import json
 import logging
 import aiohttp
 import asyncio
+import signal
 from base64 import b64decode
 from copy import deepcopy
 from pathlib import Path
@@ -17,6 +18,13 @@ CUSTOM_AUTHN_ENDPOINT = '{{ custom_authn_endpoint if custom_authn_endpoint }}'
 
 app = aiohttp.web.Application()
 routes = aiohttp.web.RouteTableDef()
+
+# Disable the gunicorn arbiter's SIGCHLD handler in this worker. The handler
+# gets inherited by worker processes where it appears to serve no useful
+# function. It also makes it impossible for workers to make subprocess calls
+# safely, so, disable it.
+# https://bugs.launchpad.net/charm-kubernetes-master/+bug/1938470
+signal.signal(signal.SIGCHLD, signal.SIG_DFL)
 
 
 async def run(*args, timeout=10, **kwargs):
