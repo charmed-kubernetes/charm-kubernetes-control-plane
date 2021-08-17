@@ -22,6 +22,7 @@ from charms.layer.kubernetes_common import AUTH_SECRET_NS, create_secret
 AUTH_BACKUP_EXT = "pre-secrets"
 AUTH_BASIC_FILE = "/root/cdk/basic_auth.csv"
 AUTH_TOKENS_FILE = "/root/cdk/known_tokens.csv"
+EXTERNAL_API_PORT = 443
 STANDARD_API_PORT = 6443
 CEPH_CONF_DIR = Path("/etc/ceph")
 CEPH_CONF = CEPH_CONF_DIR / "ceph.conf"
@@ -75,12 +76,13 @@ def get_internal_api_endpoints(relation=None):
     for lb_type in ("internal", "external"):
         lb_endpoint = "loadbalancer-" + lb_type
         request_name = "api-server-" + lb_type
+        api_port = EXTERNAL_API_PORT if lb_type == "external" else STANDARD_API_PORT
         if lb_endpoint in goal_state["relations"]:
             lb_provider = endpoint_from_name(lb_endpoint)
             lb_response = lb_provider.get_response(request_name)
             if not lb_response or lb_response.error:
                 return []
-            return [(lb_response.address, STANDARD_API_PORT)]
+            return [(lb_response.address, api_port)]
 
     # Support the older loadbalancer relation (public-address interface).
     if "loadbalancer" in goal_state["relations"]:
@@ -122,12 +124,13 @@ def get_external_api_endpoints():
     for lb_type in ("external", "internal"):
         lb_endpoint = "loadbalancer-" + lb_type
         lb_name = "api-server-" + lb_type
+        api_port = EXTERNAL_API_PORT if lb_type == "external" else STANDARD_API_PORT
         if lb_endpoint in goal_state["relations"]:
             lb_provider = endpoint_from_name(lb_endpoint)
             lb_response = lb_provider.get_response(lb_name)
             if not lb_response or lb_response.error:
                 return []
-            return [(lb_response.address, STANDARD_API_PORT)]
+            return [(lb_response.address, api_port)]
 
     # Support the older loadbalancer relation (public-address interface).
     if "loadbalancer" in goal_state["relations"]:
