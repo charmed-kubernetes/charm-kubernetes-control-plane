@@ -1399,7 +1399,7 @@ def request_load_balancers():
         if not req.health_checks:
             req.add_health_check(
                 protocol=req.protocols.http,
-                port=api_port,
+                port=int_api_port,
                 path="/livez",
             )
         lb_provider.send_request(req)
