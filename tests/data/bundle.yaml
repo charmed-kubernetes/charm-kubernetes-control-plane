@@ -34,7 +34,7 @@ services:
     expose: true
     num_units: 1
     options:
-      channel: 1.22/edge
+      channel: 1.22/stable
     to:
     - '0'
   kubernetes-worker:
@@ -44,7 +44,7 @@ services:
     expose: true
     num_units: 1
     options:
-      channel: 1.22/edge
+      channel: 1.22/stable
     to:
     - '1'
   prometheus:
