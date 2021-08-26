@@ -1439,6 +1439,8 @@ def send_data():
     old_ingress_ip = get_ingress_address("kube-api-endpoint")
     new_ingress_ip = get_ingress_address("kube-control")
 
+    local_endpoint = kubernetes_master.get_local_api_endpoint()[0][0]
+
     domain = hookenv.config("dns_domain")
     # Create SANs that the tls layer will add to the server cert.
     sans = (
@@ -1446,6 +1448,7 @@ def send_data():
             # The CN field is checked as a hostname, so if it's an IP, it
             # won't match unless also included in the SANs as an IP field.
             common_name,
+            local_endpoint,
             old_ingress_ip,
             new_ingress_ip,
             socket.gethostname(),
@@ -2043,11 +2046,13 @@ def shutdown():
 def build_kubeconfig():
     """Gather the relevant data for Kubernetes configuration objects and create
     a config object with that information."""
+    local_endpoint = kubernetes_master.get_local_api_endpoint()
     internal_endpoints = kubernetes_master.get_internal_api_endpoints()
     external_endpoints = kubernetes_master.get_external_api_endpoints()
 
     # Do we have everything we need?
     if ca_crt_path.exists() and internal_endpoints and external_endpoints:
+        local_url = kubernetes_master.get_api_url(local_endpoint)
         internal_url = kubernetes_master.get_api_url(internal_endpoints)
         external_url = kubernetes_master.get_api_url(external_endpoints)
         client_pass = get_token("admin")
@@ -2114,10 +2119,10 @@ def build_kubeconfig():
         cmd = ["chown", "ubuntu:ubuntu", kubeconfig_path]
         check_call(cmd)
 
-        # make a kubeconfig for root (same location on k8s-masters and workers)
+        # make a kubeconfig for root / the charm
         create_kubeconfig(
             kubeclientconfig_path,
-            internal_url,
+            local_url,
             ca_crt_path,
             user="admin",
             token=client_pass,
