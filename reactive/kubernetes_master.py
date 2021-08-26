@@ -2142,7 +2142,7 @@ def build_kubeconfig():
         # make a kubeconfig for cdk-addons
         create_kubeconfig(
             cdk_addons_kubectl_config_path,
-            internal_url,
+            local_url,
             ca_crt_path,
             user="admin",
             token=client_pass,
@@ -2153,7 +2153,7 @@ def build_kubeconfig():
         if proxy_token:
             create_kubeconfig(
                 kubeproxyconfig_path,
-                internal_url,
+                local_url,
                 ca_crt_path,
                 token=proxy_token,
                 user="kube-proxy",
@@ -2162,7 +2162,7 @@ def build_kubeconfig():
         if controller_manager_token:
             create_kubeconfig(
                 kubecontrollermanagerconfig_path,
-                internal_url,
+                local_url,
                 ca_crt_path,
                 token=controller_manager_token,
                 user="kube-controller-manager",
@@ -2171,7 +2171,7 @@ def build_kubeconfig():
         if scheduler_token:
             create_kubeconfig(
                 kubeschedulerconfig_path,
-                internal_url,
+                local_url,
                 ca_crt_path,
                 token=scheduler_token,
                 user="kube-scheduler",
