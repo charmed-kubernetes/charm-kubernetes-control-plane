@@ -52,6 +52,15 @@ def get_endpoints_from_config():
         return []
 
 
+def get_local_api_endpoint():
+    """
+    Return the local address & port for self-access.
+
+    Returns a list with a single tuple to match the other functions below.
+    """
+    return [("127.0.0.1", STANDARD_API_PORT)]
+
+
 def get_internal_api_endpoints(relation=None):
     """
     Determine the best API endpoints for an internal client to connect to.
