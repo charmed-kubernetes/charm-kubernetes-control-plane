@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 async def kubernetes(ops_test):
     kubeconfig_path = ops_test.tmp_path / "kubeconfig"
     retcode, stdout, stderr = await ops_test.run(
-        "juju", "scp", "kubernetes-master/leader:config", kubeconfig_path
+        "juju", "scp", "--debug", "kubernetes-master/leader:config", kubeconfig_path
     )
     if retcode != 0:
         log.error(f"retcode: {retcode}")
