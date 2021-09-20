@@ -1268,7 +1268,21 @@ def etcd_data_change(etcd):
 def send_cluster_dns_detail(kube_control):
     """Send cluster DNS info"""
     dns_provider = endpoint_from_flag("dns-provider.available")
-    if dns_provider:
+    try:
+        goal_state_rels = hookenv.goal_state().get("relations", {})
+    except NotImplementedError:
+        goal_state_rels = {}
+    dns_provider_missing = not dns_provider and "dns-provider" not in goal_state_rels
+    dns_provider_pending = not dns_provider and "dns-provider" in goal_state_rels
+    try:
+        dns_disabled_cfg = get_dns_provider() == "none"
+    except InvalidDnsProvider:
+        dns_disabled_cfg = False
+    if dns_provider_missing and dns_disabled_cfg:
+        kube_control.set_dns(None, None, None, False)
+    elif dns_provider_pending:
+        pass
+    elif dns_provider:
         details = dns_provider.details()
         kube_control.set_dns(
             details["port"], details["domain"], details["sdn-ip"], True
@@ -1279,16 +1293,14 @@ def send_cluster_dns_detail(kube_control):
         except InvalidDnsProvider:
             hookenv.log(traceback.format_exc())
             return
-        dns_enabled = dns_provider != "none"
         dns_domain = hookenv.config("dns_domain")
         dns_ip = None
-        if dns_enabled:
-            try:
-                dns_ip = kubernetes_master.get_dns_ip()
-            except CalledProcessError:
-                hookenv.log("DNS addon service not ready yet")
-                return
-            kube_control.set_dns(53, dns_domain, dns_ip, dns_enabled)
+        try:
+            dns_ip = kubernetes_master.get_dns_ip()
+        except CalledProcessError:
+            hookenv.log("DNS addon service not ready yet")
+            return
+        kube_control.set_dns(53, dns_domain, dns_ip, True)
 
 
 def create_tokens_and_sign_auth_requests():
