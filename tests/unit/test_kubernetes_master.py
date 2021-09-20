@@ -1,6 +1,9 @@
 import json
 from ipaddress import ip_interface
 from unittest import mock
+
+import pytest
+
 from reactive import kubernetes_master
 from charms.layer import kubernetes_common
 from charms.layer.kubernetes_common import get_version, kubectl
@@ -264,3 +267,59 @@ def test_ignore_vip(get_ingress_address, render):
     get_ingress_address.assert_called_with(
         "kube-api-endpoint", ignore_addresses=["1.2.3.4"]
     )
+
+
+class TestSendClusterDNSDetail:
+    @pytest.fixture(autouse=True)
+    def setup(self, monkeypatch):
+        self.kube_control = mock.Mock()
+        self.config = {"dns_provider": "auto", "dns_domain": "domain"}
+
+        hc = mock.Mock()
+        hc.side_effect = lambda k=None: self.config[k] if k else self.config
+        monkeypatch.setattr(hookenv, "config", hc)
+
+        gdp = self.get_dns_provider = mock.Mock()
+        gdp.side_effect = lambda: hc("dns_provider")
+        monkeypatch.setattr(kubernetes_master, "get_dns_provider", gdp)
+
+        gip = self.get_dns_ip = mock.Mock(return_value="ip")
+        monkeypatch.setattr(kubernetes_master.kubernetes_master, "get_dns_ip", gip)
+
+    def test_default_config(self):
+        endpoint_from_flag.return_value = None
+        hookenv.goal_state.return_value = {}
+        kubernetes_master.send_cluster_dns_detail(self.kube_control)
+        assert self.kube_control.set_dns.call_args == mock.call(
+            53, "domain", "ip", True
+        )
+
+    def test_invalid_config(self):
+        endpoint_from_flag.return_value = None
+        hookenv.goal_state.return_value = {}
+        self.get_dns_provider.side_effect = kubernetes_master.InvalidDnsProvider(
+            "invalid"
+        )
+        kubernetes_master.send_cluster_dns_detail(self.kube_control)
+        assert self.kube_control.set_dns.call_args is None
+
+    def test_dns_not_ready(self):
+        endpoint_from_flag.return_value = None
+        hookenv.goal_state.return_value = {}
+        self.get_dns_ip.side_effect = kubernetes_master.CalledProcessError(1, "cmd")
+        kubernetes_master.send_cluster_dns_detail(self.kube_control)
+        assert self.kube_control.set_dns.call_args is None
+
+    def test_dns_pending(self):
+        self.config["dns_provider"] = "none"
+        endpoint_from_flag.return_value = None
+        hookenv.goal_state.return_value = {"relations": {"dns-provider": True}}
+        kubernetes_master.send_cluster_dns_detail(self.kube_control)
+        assert self.kube_control.set_dns.call_args is None
+
+    def test_dns_disabled(self):
+        endpoint_from_flag.return_value = None
+        self.config["dns_provider"] = "none"
+        hookenv.goal_state.return_value = {}
+        kubernetes_master.send_cluster_dns_detail(self.kube_control)
+        assert self.kube_control.set_dns.call_args == mock.call(None, None, None, False)
