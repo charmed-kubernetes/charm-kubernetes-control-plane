@@ -3,6 +3,7 @@ import logging
 
 import aiohttp
 import pytest
+import time
 import yaml
 
 
@@ -119,3 +120,38 @@ async def test_auth_load(ops_test):
 
     log.info("Waiting for slow auth requests to complete")
     assert not any(await asyncio.gather(*tasks))
+
+
+async def test_pod_security_policy(ops_test, kubernetes):
+    """Test the pod-security-policy config option"""
+    test_psp = {
+        "apiVersion": "policy/v1beta1",
+        "kind": "PodSecurityPolicy",
+        "metadata": {"name": "privileged"},
+        "spec": {
+            "privileged": False,
+            "fsGroup": {"rule": "RunAsAny"},
+            "runAsUser": {"rule": "RunAsAny"},
+            "seLinux": {"rule": "RunAsAny"},
+            "supplementalGroups": {"rule": "RunAsAny"},
+            "volumes": ["*"],
+        },
+    }
+
+    async def wait_for_psp(privileged):
+        deadline = time.time() + 60 * 10
+        while time.time() < deadline:
+            psp = kubernetes.read_object(test_psp)
+            if bool(psp.spec.privileged) == privileged:
+                break
+            await asyncio.sleep(10)
+        else:
+            pytest.fail("Timed out waiting for PodSecurityPolicy update")
+
+    app = ops_test.model.applications["kubernetes-master"]
+
+    await app.set_config({"pod-security-policy": yaml.dump(test_psp)})
+    await wait_for_psp(privileged=False)
+
+    await app.set_config({"pod-security-policy": ""})
+    await wait_for_psp(privileged=True)
