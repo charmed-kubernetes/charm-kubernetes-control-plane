@@ -1036,7 +1036,7 @@ def register_auth_webhook():
         "host": get_ingress_address(
             "kube-api-endpoint", ignore_addresses=[hookenv.config("ha-cluster-vip")]
         ),
-        "pidfile": "auth-webhook.pid",
+        "pidfile": Path("/") / "run" / "auth-webhook.pid",
         "port": 5000,
         "root_dir": auth_webhook_root,
     }
