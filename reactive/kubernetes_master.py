@@ -130,7 +130,9 @@ aws_iam_webhook = "/root/cdk/aws-iam-webhook.yaml"
 auth_webhook_root = "/root/cdk/auth-webhook"
 auth_webhook_conf = os.path.join(auth_webhook_root, "auth-webhook-conf.yaml")
 auth_webhook_exe = os.path.join(auth_webhook_root, "auth-webhook.py")
-auth_webhook_svc = "/etc/systemd/system/cdk.master.auth-webhook.service"
+auth_webhook_svc_name = "cdk.master.auth-webhook"
+auth_webhook_svc = "/etc/systemd/system/{}.service".format(auth_webhook_svc_name)
+
 
 register_trigger(
     when="endpoint.aws.ready", set_flag="kubernetes-master.aws.changed"  # when set
@@ -1017,9 +1019,9 @@ def add_systemd_file_watcher():
 @when("etcd.available", "tls_client.certs.saved")
 @restart_on_change(
     {
-        auth_webhook_conf: ["cdk.master.auth-webhook"],
-        auth_webhook_exe: ["cdk.master.auth-webhook"],
-        auth_webhook_svc: ["cdk.master.auth-webhook"],
+        auth_webhook_conf: [auth_webhook_svc_name],
+        auth_webhook_exe: [auth_webhook_svc_name],
+        auth_webhook_svc: [auth_webhook_svc_name],
     }
 )
 def register_auth_webhook():
@@ -1099,14 +1101,14 @@ def register_auth_webhook():
         # we have to inform systemd about it
         check_call(["systemctl", "daemon-reload"])
     if not is_flag_set("kubernetes-master.auth-webhook-service.started"):
-        if service_resume("cdk.master.auth-webhook"):
+        if service_resume(auth_webhook_svc_name):
             set_flag("kubernetes-master.auth-webhook-service.started")
             clear_flag("kubernetes-master.apiserver.configured")
         else:
             hookenv.status_set(
-                "maintenance", "Waiting for cdk.master.auth-webhook to start."
+                "maintenance", "Waiting for {} to start.".format(auth_webhook_svc_name)
             )
-            hookenv.log("cdk.master.auth-webhook failed to start; will retry")
+            hookenv.log("{} failed to start; will retry".format(auth_webhook_svc_name))
 
 
 @when(
@@ -1926,6 +1928,7 @@ def remove_rbac_resources():
 @when_any("config.changed.nagios_context", "config.changed.nagios_servicegroups")
 def update_nrpe_config():
     services = ["snap.{}.daemon".format(s) for s in master_services]
+    services += [auth_webhook_svc_name]
 
     plugin = install_nagios_plugin_from_file(
         "templates/nagios_plugin.py", "check_k8s_master.py"
