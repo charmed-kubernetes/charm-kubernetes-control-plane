@@ -17,6 +17,7 @@
 import base64
 import os
 import re
+import shutil
 import socket
 import json
 import traceback
@@ -126,6 +127,7 @@ keystone_policy_path = os.path.join(keystone_root, "keystone-policy.yaml")
 kubecontrollermanagerconfig_path = "/root/cdk/kubecontrollermanagerconfig"
 kubeschedulerconfig_path = "/root/cdk/kubeschedulerconfig"
 cdk_addons_kubectl_config_path = "/root/cdk/cdk_addons_kubectl_config"
+cdk_logs = "/var/log/cdk/"
 aws_iam_webhook = "/root/cdk/aws-iam-webhook.yaml"
 auth_webhook_root = "/root/cdk/auth-webhook"
 auth_webhook_conf = os.path.join(auth_webhook_root, "auth-webhook-conf.yaml")
@@ -1038,7 +1040,8 @@ def register_auth_webhook():
         "host": get_ingress_address(
             "kube-api-endpoint", ignore_addresses=[hookenv.config("ha-cluster-vip")]
         ),
-        "pidfile": Path("/") / "run" / "auth-webhook.pid",
+        "pidfile": "{}.pid".format(auth_webhook_svc_name),
+        "logfile": "{}.log".format(auth_webhook_svc_name),
         "port": 5000,
         "root_dir": auth_webhook_root,
     }
@@ -1078,11 +1081,18 @@ def register_auth_webhook():
     if custom_authn:
         context["custom_authn_endpoint"] = custom_authn
 
+    cdk_log_path = Path(cdk_logs)
+    cdk_log_path.mkdir(parents=True, exist_ok=True)  # ensure log path exists
     render("cdk.master.auth-webhook-conf.yaml", auth_webhook_conf, context)
     render("cdk.master.auth-webhook.py", auth_webhook_exe, context)
     render(
         "cdk.master.auth-webhook.logrotate", "/etc/logrotate.d/auth-webhook", context
     )
+
+    # Move existing log files from ${auth_webhook_root} to /var/log/cdk/
+    for log_file in Path(auth_webhook_root).glob("auth-webhook.log*"):
+        if not (cdk_log_path / log_file.name).exists():
+            shutil.move(str(log_file), str(cdk_log_path))
 
     # Set the number of gunicorn workers based on our core count. (2*cores)+1 is
     # recommended: https://docs.gunicorn.org/en/stable/design.html#how-many-workers
