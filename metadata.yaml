@@ -86,28 +86,49 @@ resources:
   core:
     type: file
     filename: core.snap
-    description: core snap
+    description: |
+      core snap
+      [DEPRECATED] in favor of using a Snap Store Proxy.
+      See https://ubuntu.com/kubernetes/docs/proxies for more details.
   kubectl:
     type: file
     filename: kubectl.snap
-    description: kubectl snap
+    description:  |
+      kubectl snap
+      [DEPRECATED] in favor of using a Snap Store Proxy.
+      See https://ubuntu.com/kubernetes/docs/proxies for more details.
   kube-apiserver:
     type: file
     filename: kube-apiserver.snap
-    description: kube-apiserver snap
+    description: |
+      kube-apiserver snap
+      [DEPRECATED] in favor of using a Snap Store Proxy.
+      See https://ubuntu.com/kubernetes/docs/proxies for more details.
   kube-controller-manager:
     type: file
     filename: kube-controller-manager.snap
-    description: kube-controller-manager snap
+    description:  |
+      kube-controller-manager snap
+      [DEPRECATED] in favor of using a Snap Store Proxy.
+      See https://ubuntu.com/kubernetes/docs/proxies for more details.
   kube-scheduler:
     type: file
     filename: kube-scheduler.snap
-    description: kube-scheduler snap
+    description: |
+      kube-scheduler snap
+      [DEPRECATED] in favor of using a Snap Store Proxy.
+      See https://ubuntu.com/kubernetes/docs/proxies for more details.
   cdk-addons:
     type: file
     filename: cdk-addons.snap
-    description: CDK addons snap
+    description:  |
+      CDK addons snap
+      [DEPRECATED] in favor of using a Snap Store Proxy.
+      See https://ubuntu.com/kubernetes/docs/proxies for more details.
   kube-proxy:
     type: file
     filename: kube-proxy.snap
-    description: kube-proxy snap
+    description: |
+      kube-proxy snap
+      [DEPRECATED] in favor of using a Snap Store Proxy.
+      See https://ubuntu.com/kubernetes/docs/proxies for more details.
