@@ -17,7 +17,6 @@
 import base64
 import os
 import re
-import shutil
 import socket
 import json
 import traceback
@@ -1089,10 +1088,12 @@ def register_auth_webhook():
         "cdk.master.auth-webhook.logrotate", "/etc/logrotate.d/auth-webhook", context
     )
 
-    # Move existing log files from ${auth_webhook_root} to /var/log/cdk/
+    # Move existing log files from ${auth_webhook_root} to /var/log/kubernetes/
     for log_file in Path(auth_webhook_root).glob("auth-webhook.log*"):
-        if not (k8s_log_path / log_file.name).exists():
-            shutil.move(str(log_file), str(k8s_log_path))
+        # all historical log files (.log, .log.1 and .log.3.tgz)
+        new_log_file = k8s_log_path / ("cdk.master." + log_file.name)
+        if not new_log_file.exists():
+            move(str(log_file), str(new_log_file))
 
     # Set the number of gunicorn workers based on our core count. (2*cores)+1 is
     # recommended: https://docs.gunicorn.org/en/stable/design.html#how-many-workers
