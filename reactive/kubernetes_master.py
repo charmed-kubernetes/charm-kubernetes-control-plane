@@ -126,11 +126,14 @@ keystone_policy_path = os.path.join(keystone_root, "keystone-policy.yaml")
 kubecontrollermanagerconfig_path = "/root/cdk/kubecontrollermanagerconfig"
 kubeschedulerconfig_path = "/root/cdk/kubeschedulerconfig"
 cdk_addons_kubectl_config_path = "/root/cdk/cdk_addons_kubectl_config"
+kubernetes_logs = "/var/log/kubernetes/"
 aws_iam_webhook = "/root/cdk/aws-iam-webhook.yaml"
 auth_webhook_root = "/root/cdk/auth-webhook"
 auth_webhook_conf = os.path.join(auth_webhook_root, "auth-webhook-conf.yaml")
 auth_webhook_exe = os.path.join(auth_webhook_root, "auth-webhook.py")
-auth_webhook_svc = "/etc/systemd/system/cdk.master.auth-webhook.service"
+auth_webhook_svc_name = "cdk.master.auth-webhook"
+auth_webhook_svc = "/etc/systemd/system/{}.service".format(auth_webhook_svc_name)
+
 
 register_trigger(
     when="endpoint.aws.ready", set_flag="kubernetes-master.aws.changed"  # when set
@@ -1017,9 +1020,9 @@ def add_systemd_file_watcher():
 @when("etcd.available", "tls_client.certs.saved")
 @restart_on_change(
     {
-        auth_webhook_conf: ["cdk.master.auth-webhook"],
-        auth_webhook_exe: ["cdk.master.auth-webhook"],
-        auth_webhook_svc: ["cdk.master.auth-webhook"],
+        auth_webhook_conf: [auth_webhook_svc_name],
+        auth_webhook_exe: [auth_webhook_svc_name],
+        auth_webhook_svc: [auth_webhook_svc_name],
     }
 )
 def register_auth_webhook():
@@ -1036,7 +1039,8 @@ def register_auth_webhook():
         "host": get_ingress_address(
             "kube-api-endpoint", ignore_addresses=[hookenv.config("ha-cluster-vip")]
         ),
-        "pidfile": "auth-webhook.pid",
+        "pidfile": "{}.pid".format(auth_webhook_svc_name),
+        "logfile": "{}.log".format(auth_webhook_svc_name),
         "port": 5000,
         "root_dir": auth_webhook_root,
     }
@@ -1076,11 +1080,20 @@ def register_auth_webhook():
     if custom_authn:
         context["custom_authn_endpoint"] = custom_authn
 
+    k8s_log_path = Path(kubernetes_logs)
+    k8s_log_path.mkdir(parents=True, exist_ok=True)  # ensure log path exists
     render("cdk.master.auth-webhook-conf.yaml", auth_webhook_conf, context)
     render("cdk.master.auth-webhook.py", auth_webhook_exe, context)
     render(
         "cdk.master.auth-webhook.logrotate", "/etc/logrotate.d/auth-webhook", context
     )
+
+    # Move existing log files from ${auth_webhook_root} to /var/log/kubernetes/
+    for log_file in Path(auth_webhook_root).glob("auth-webhook.log*"):
+        # all historical log files (.log, .log.1 and .log.3.tgz)
+        new_log_file = k8s_log_path / ("cdk.master." + log_file.name)
+        if not new_log_file.exists():
+            move(str(log_file), str(new_log_file))
 
     # Set the number of gunicorn workers based on our core count. (2*cores)+1 is
     # recommended: https://docs.gunicorn.org/en/stable/design.html#how-many-workers
@@ -1099,14 +1112,14 @@ def register_auth_webhook():
         # we have to inform systemd about it
         check_call(["systemctl", "daemon-reload"])
     if not is_flag_set("kubernetes-master.auth-webhook-service.started"):
-        if service_resume("cdk.master.auth-webhook"):
+        if service_resume(auth_webhook_svc_name):
             set_flag("kubernetes-master.auth-webhook-service.started")
             clear_flag("kubernetes-master.apiserver.configured")
         else:
             hookenv.status_set(
-                "maintenance", "Waiting for cdk.master.auth-webhook to start."
+                "maintenance", "Waiting for {} to start.".format(auth_webhook_svc_name)
             )
-            hookenv.log("cdk.master.auth-webhook failed to start; will retry")
+            hookenv.log("{} failed to start; will retry".format(auth_webhook_svc_name))
 
 
 @when(
@@ -1926,6 +1939,7 @@ def remove_rbac_resources():
 @when_any("config.changed.nagios_context", "config.changed.nagios_servicegroups")
 def update_nrpe_config():
     services = ["snap.{}.daemon".format(s) for s in master_services]
+    services += [auth_webhook_svc_name]
 
     plugin = install_nagios_plugin_from_file(
         "templates/nagios_plugin.py", "check_k8s_master.py"

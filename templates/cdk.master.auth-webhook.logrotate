@@ -1,4 +1,4 @@
-{{ root_dir }}/*.log {
+/var/log/kubernetes/{{logfile}} {
     daily
     rotate 10
     missingok
@@ -6,6 +6,6 @@
     compress
     sharedscripts
     postrotate
-        kill -USR1 $(cat {{ root_dir }}/{{ pidfile }})
+        kill -USR1 $(cat /run/{{ pidfile }})
     endscript
 }

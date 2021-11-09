@@ -10,11 +10,11 @@ ExecStart={{ charm_dir }}/../.venv/bin/gunicorn \
     --bind {{ host }}:{{ port }} \
     --capture-output \
     --certfile /root/cdk/server.crt \
-    --disable-redirect-access-to-syslog \
-    --error-logfile auth-webhook.log \
     --keyfile /root/cdk/server.key \
+    --disable-redirect-access-to-syslog \
+    --error-logfile /var/log/kubernetes/{{logfile}} \
     --log-level debug \
-    --pid {{ pidfile }} \
+    --pid /run/{{ pidfile }} \
     --workers {{ num_workers }} \
     --worker-class aiohttp.worker.GunicornWebWorker \
     auth-webhook:app
