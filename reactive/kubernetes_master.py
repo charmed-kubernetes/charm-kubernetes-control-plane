@@ -548,14 +548,6 @@ def storage_backend_changed():
     remove_state("kubernetes-master.components.started")
 
 
-@when("cni.connected")
-@when_not("cni.configured")
-def configure_cni(cni):
-    """Set master configuration on the CNI relation. This lets the CNI
-    subordinate know that we're the master so it can respond accordingly."""
-    cni.set_config(is_master=True)
-
-
 @when("leadership.is_leader")
 @when_not("authentication.setup")
 def setup_leader_authentication():
