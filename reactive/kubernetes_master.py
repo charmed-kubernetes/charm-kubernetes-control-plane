@@ -751,7 +751,9 @@ def set_final_status():
     if azure_joined and cloud_blocked:
         hookenv.status_set("blocked", "Azure integration requires K8s 1.11 or greater")
         return
-
+    if not is_flag_set("kubernetes.cni-plugins.installed"):
+        hookenv.status_set("blocked", "Missing CNI resource")
+        return
     if is_state("kubernetes-master.cloud.pending"):
         hookenv.status_set("waiting", "Waiting for cloud integration")
         return
