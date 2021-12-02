@@ -1,3 +1,4 @@
 aiohttp>=3.7.4,<3.8.0
 gunicorn>=20.0.0,<21.0.0
 loadbalancer-interface
+typing_extensions<4.0
