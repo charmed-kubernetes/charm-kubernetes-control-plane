@@ -27,7 +27,9 @@ async def kubernetes(ops_test):
     namespace = "test-kubernetes-master-integration-" + "".join(
         random.choice(string.ascii_lowercase + string.digits) for _ in range(5)
     )
-    kubernetes = Kubernetes(namespace, kubeconfig=str(kubeconfig_path))
+    kubernetes = Kubernetes(
+        namespace, kubeconfig=str(kubeconfig_path), context="juju-context"
+    )
     namespace_object = {
         "apiVersion": "v1",
         "kind": "Namespace",

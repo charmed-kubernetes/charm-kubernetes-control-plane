@@ -1,12 +1,19 @@
 description: A minimal two-machine Kubernetes cluster, appropriate for development.
-series: focal
+series: &series focal
 machines:
   '0':
     constraints: cores=2 mem=4G root-disk=16G
-    series: focal
+    series: *series
   '1':
     constraints: cores=4 mem=4G root-disk=16G
-    series: focal
+    series: *series
+  '2':
+  '3':
+    constraints: mem=3072M
+  '4':
+    constraints: mem=3072M
+  '5':
+    constraints: mem=3072M
 services:
   containerd:
     charm: cs:~containers/containerd
@@ -28,6 +35,16 @@ services:
   flannel:
     charm: cs:~containers/flannel
     channel: edge
+  keystone:
+    charm: keystone
+    channel: edge
+    num_units: 1
+    options:
+      openstack-origin: distro
+      token-provider: 'fernet'
+      token-expiration: 300
+    to:
+    - '2'
   kubernetes-master:
     charm: {{master_charm}}
     constraints: cores=2 mem=4G root-disk=16G
@@ -35,6 +52,7 @@ services:
     num_units: 1
     options:
       channel: 1.23/edge
+      enable-keystone-authorization: True
     to:
     - '0'
   kubernetes-worker:
@@ -47,6 +65,17 @@ services:
       channel: 1.23/edge
     to:
     - '1'
+  keystone-mysql-router:
+    charm: mysql-router
+    channel: edge
+  mysql-innodb-cluster:
+    charm: mysql-innodb-cluster
+    channel: edge
+    num_units: 3
+    to:
+    - '3'
+    - '4'
+    - '5'
   prometheus:
     charm: cs:prometheus2
     num_units: 1
@@ -75,3 +104,10 @@ relations:
   - kubernetes-master:container-runtime
 - - kubernetes-master:prometheus
   - prometheus:manual-jobs
+# Keystone Relations
+- - kubernetes-master:keystone-credentials
+  - keystone:identity-credentials
+- - keystone-mysql-router:db-router
+  - mysql-innodb-cluster:db-router
+- - keystone-mysql-router:shared-db
+  - keystone:shared-db
