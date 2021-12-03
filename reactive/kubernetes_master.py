@@ -548,14 +548,6 @@ def storage_backend_changed():
     remove_state("kubernetes-master.components.started")
 
 
-@when("cni.connected")
-@when_not("cni.configured")
-def configure_cni(cni):
-    """Set master configuration on the CNI relation. This lets the CNI
-    subordinate know that we're the master so it can respond accordingly."""
-    cni.set_config(is_master=True)
-
-
 @when("leadership.is_leader")
 @when_not("authentication.setup")
 def setup_leader_authentication():
@@ -751,7 +743,9 @@ def set_final_status():
     if azure_joined and cloud_blocked:
         hookenv.status_set("blocked", "Azure integration requires K8s 1.11 or greater")
         return
-
+    if not is_flag_set("kubernetes.cni-plugins.installed"):
+        hookenv.status_set("blocked", "Missing CNI resource")
+        return
     if is_state("kubernetes-master.cloud.pending"):
         hookenv.status_set("waiting", "Waiting for cloud integration")
         return
