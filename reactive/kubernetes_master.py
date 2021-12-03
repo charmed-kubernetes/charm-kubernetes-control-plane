@@ -2598,7 +2598,9 @@ def configure_scheduler():
     scheduler_opts["config"] = kube_scheduler_config_path
 
     scheduler_ver = get_version("kube-scheduler")
-    if scheduler_ver >= (1, 19):
+    if scheduler_ver >= (1, 23):
+        api_ver = "v1beta2"
+    elif scheduler_ver >= (1, 19):
         api_ver = "v1beta1"
     elif scheduler_ver >= (1, 18):
         api_ver = "v1alpha2"
