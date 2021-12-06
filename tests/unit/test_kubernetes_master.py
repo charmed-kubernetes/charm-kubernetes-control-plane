@@ -153,6 +153,7 @@ def test_status_set_on_incomplete_lb():
     set_flag("kubernetes-master.auth-webhook-tokens.setup")
     set_flag("kubernetes-master.components.started")
     set_flag("cdk-addons.configured")
+    set_flag("kubernetes.cni-plugins.installed")
     set_flag("kubernetes-master.system-monitoring-rbac-role.applied")
     hookenv.config.return_value = "auto"
     host.service_running.return_value = True
