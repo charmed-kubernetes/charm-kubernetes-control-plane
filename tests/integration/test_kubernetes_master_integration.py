@@ -11,6 +11,23 @@ import yaml
 log = logging.getLogger(__name__)
 
 
+CNI_ARCH_URL = "https://api.jujucharms.com/charmstore/v5/~containers/kubernetes-master-{charm}/resource/cni-{arch}/{rev}"  # noqa
+CHUNK_SIZE = 16000
+
+
+async def _retrieve_url(charm, arch, rev, target_file):
+    url = CNI_ARCH_URL.format(
+        charm=charm,
+        arch=arch,
+        rev=rev,
+    )
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            with target_file.open("wb") as fd:
+                async for chunk in resp.content.iter_chunked(CHUNK_SIZE):
+                    fd.write(chunk)
+
+
 def _check_status_messages(ops_test):
     """Validate that the status messages are correct."""
     expected_messages = {
@@ -23,25 +40,41 @@ def _check_status_messages(ops_test):
 
 
 @pytest.fixture()
-async def build_resources(ops_test, tmpdir):
+async def setup_resources(ops_test, tmpdir):
+    """Provides the cni resources needed to deploy the charm."""
     cwd = Path.cwd()
     current_resources = list(cwd.glob("*.tgz"))
     if not current_resources:
+        # If they are not locally available, try to build them
         log.info("Build Resources...")
         build_script = cwd / "build-cni-resources.sh"
-        # build script needs docker permissions to run.
-        await ops_test.run(*shlex.split(f"sudo {build_script}"), cwd=tmpdir, check=True)
+        rc, stdout, stderr = await ops_test.run(
+            *shlex.split(f"sudo {build_script}"), cwd=tmpdir, check=False
+        )
+        if rc != 0:
+            log.warning(f"build-cni-resources failed: {(stderr or stdout).strip()}")
         current_resources = list(Path(tmpdir).glob("*.tgz"))
+    if not current_resources:
+        # if we couldn't build them, just download a fixed version
+        log.info("Downloading Resources...")
+        await asyncio.gather(
+            *(
+                _retrieve_url(1099, arch, 3, tmpdir / f"cni-{arch}.tgz")
+                for arch in ("amd64", "arm64", "s390x")
+            )
+        )
+        current_resources = list(Path(tmpdir).glob("*.tgz"))
+
     yield current_resources
 
 
 @pytest.mark.abort_on_fail
-async def test_build_and_deploy(ops_test, build_resources):
+async def test_build_and_deploy(ops_test, setup_resources):
     log.info("Build Charm...")
     charm = await ops_test.build_charm(".")
 
     log.info("Build Bundle...")
-    charm_resources = {rsc.stem.replace("-", "_"): rsc for rsc in build_resources}
+    charm_resources = {rsc.stem.replace("-", "_"): rsc for rsc in setup_resources}
     bundle = ops_test.render_bundle(
         "tests/data/bundle.yaml", master_charm=charm, **charm_resources
     )
