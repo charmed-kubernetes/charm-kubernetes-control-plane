@@ -1,12 +1,12 @@
 import asyncio
 import logging
+from pathlib import Path
+import shlex
 
 import aiohttp
 import pytest
 import time
 import yaml
-
-CNI_AMD64_URL = "https://api.jujucharms.com/charmstore/v5/~containers/kubernetes-worker-743/resource/cni-amd64/747"  # noqa
 
 log = logging.getLogger(__name__)
 
@@ -22,55 +22,36 @@ def _check_status_messages(ops_test):
             assert unit.workload_status_message == message
 
 
-async def _retrieve_url(url, target_file):
-    chunk_size = 16000
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
-            with target_file.open("wb") as fd:
-                async for chunk in resp.content.iter_chunked(chunk_size):
-                    fd.write(chunk)
+@pytest.fixture()
+async def build_resources(ops_test, tmpdir):
+    cwd = Path.cwd()
+    current_resources = list(cwd.glob("*.tgz"))
+    if not current_resources:
+        log.info("Build Resources...")
+        build_script = cwd / "build-cni-resources.sh"
+        # build script needs docker permissions to run.
+        await ops_test.run(*shlex.split(f"sudo {build_script}"), cwd=tmpdir, check=True)
+        current_resources = list(Path(tmpdir).glob("*.tgz"))
+    yield current_resources
 
 
 @pytest.mark.abort_on_fail
-async def test_build_and_deploy(ops_test):
-    log.info("Retrieve CNI...")
-    cni_amd64 = ops_test.tmp_path / "cni-amd64.tgz"
-    await _retrieve_url(CNI_AMD64_URL, cni_amd64)
-
+async def test_build_and_deploy(ops_test, build_resources):
     log.info("Build Charm...")
     charm = await ops_test.build_charm(".")
 
-    # Work around libjuju not handling local file resources by manually
-    # pre-deploying the charm w/ resource via the CLI. See
-    # https://github.com/juju/python-libjuju/issues/223
-    log.info("Deploy Charm...")
-    rc, stdout, stderr = await ops_test._run(
-        "juju",
-        "deploy",
-        "-m",
-        ops_test.model_full_name,
-        charm,
-        "--resource",
-        f"cni-amd64={cni_amd64}",
-        "--constraints",
-        "cores=4 mem=4G root-disk=16G",
-    )
-    assert rc == 0, f"Failed to deploy with resource: {stderr or stdout}"
-
-    bundle = ops_test.render_bundle(
-        "tests/data/bundle.yaml",
-        master_charm=charm,
-        # cni_amd64=cni_amd64,  # This doesn't work currently
-    )
-
-    # Use CLI to deploy bundle until https://github.com/juju/python-libjuju/pull/497
-    # is released.
-    # await ops_test.model.deploy(bundle)
     log.info("Build Bundle...")
-    retcode, stdout, stderr = await ops_test._run(
-        "juju", "deploy", "-m", ops_test.model_full_name, bundle
+    charm_resources = {rsc.stem.replace("-", "_"): rsc for rsc in build_resources}
+    bundle = ops_test.render_bundle(
+        "tests/data/bundle.yaml", master_charm=charm, **charm_resources
     )
-    assert retcode == 0, f"Bundle deploy failed: {(stderr or stdout).strip()}"
+
+    log.info("Deploy Charm...")
+    model = ops_test.model_full_name
+    cmd = f"juju deploy -m {model} {bundle}"
+    rc, stdout, stderr = await ops_test.run(*shlex.split(cmd))
+    assert rc == 0, f"Bundle deploy failed: {(stderr or stdout).strip()}"
+
     log.info(stdout)
     await ops_test.model.block_until(
         lambda: "kubernetes-master" in ops_test.model.applications, timeout=60

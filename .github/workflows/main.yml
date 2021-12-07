@@ -36,6 +36,19 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: 3.8
+      - name: Install docker
+        run: |
+          sudo snap install docker
+          sudo snap set system proxy.http="$HTTP_PROXY"
+          sudo snap set system proxy.https="$HTTPS_PROXY"
+          sudo snap stop docker
+          sudo snap start docker
+          sudo snap services docker
+          sudo snap logs docker
+      - name: Build cni resources
+        run: |
+          sleep 5
+          sudo --preserve-env=HTTP_PROXY,HTTPS_PROXY,NO_PROXY,http_proxy,https_proxy,no_proxy ARCH=amd64 ./build-cni-resources.sh
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
         with:
