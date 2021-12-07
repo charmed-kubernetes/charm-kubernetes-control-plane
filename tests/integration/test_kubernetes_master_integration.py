@@ -6,6 +6,7 @@ import pytest
 import time
 import yaml
 
+from lightkube.resources.policy_v1beta1 import PodSecurityPolicy
 
 log = logging.getLogger(__name__)
 
@@ -141,7 +142,7 @@ async def test_pod_security_policy(ops_test, kubernetes):
     async def wait_for_psp(privileged):
         deadline = time.time() + 60 * 10
         while time.time() < deadline:
-            psp = kubernetes.read_object(test_psp)
+            psp = kubernetes.get(PodSecurityPolicy, name="privileged")
             if bool(psp.spec.privileged) == privileged:
                 break
             await asyncio.sleep(10)
@@ -151,7 +152,9 @@ async def test_pod_security_policy(ops_test, kubernetes):
     app = ops_test.model.applications["kubernetes-master"]
 
     await app.set_config({"pod-security-policy": yaml.dump(test_psp)})
+    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=30)
     await wait_for_psp(privileged=False)
 
     await app.set_config({"pod-security-policy": ""})
+    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=30)
     await wait_for_psp(privileged=True)
