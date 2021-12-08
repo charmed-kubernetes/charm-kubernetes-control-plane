@@ -1,5 +1,7 @@
 import asyncio
 import logging
+from pathlib import Path
+import shlex
 
 import aiohttp
 import pytest
@@ -9,6 +11,23 @@ import yaml
 from lightkube.resources.policy_v1beta1 import PodSecurityPolicy
 
 log = logging.getLogger(__name__)
+
+
+CNI_ARCH_URL = "https://api.jujucharms.com/charmstore/v5/~containers/kubernetes-master-{charm}/resource/cni-{arch}/{rev}"  # noqa
+CHUNK_SIZE = 16000
+
+
+async def _retrieve_url(charm, arch, rev, target_file):
+    url = CNI_ARCH_URL.format(
+        charm=charm,
+        arch=arch,
+        rev=rev,
+    )
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            with target_file.open("wb") as fd:
+                async for chunk in resp.content.iter_chunked(CHUNK_SIZE):
+                    fd.write(chunk)
 
 
 def _check_status_messages(ops_test):
@@ -22,19 +41,52 @@ def _check_status_messages(ops_test):
             assert unit.workload_status_message == message
 
 
+@pytest.fixture()
+async def setup_resources(ops_test, tmpdir):
+    """Provides the cni resources needed to deploy the charm."""
+    cwd = Path.cwd()
+    current_resources = list(cwd.glob("*.tgz"))
+    if not current_resources:
+        # If they are not locally available, try to build them
+        log.info("Build Resources...")
+        build_script = cwd / "build-cni-resources.sh"
+        rc, stdout, stderr = await ops_test.run(
+            *shlex.split(f"sudo {build_script}"), cwd=tmpdir, check=False
+        )
+        if rc != 0:
+            log.warning(f"build-cni-resources failed: {(stderr or stdout).strip()}")
+        current_resources = list(Path(tmpdir).glob("*.tgz"))
+    if not current_resources:
+        # if we couldn't build them, just download a fixed version
+        log.info("Downloading Resources...")
+        await asyncio.gather(
+            *(
+                _retrieve_url(1099, arch, 3, tmpdir / f"cni-{arch}.tgz")
+                for arch in ("amd64", "arm64", "s390x")
+            )
+        )
+        current_resources = list(Path(tmpdir).glob("*.tgz"))
+
+    yield current_resources
+
+
 @pytest.mark.abort_on_fail
-async def test_build_and_deploy(ops_test):
+async def test_build_and_deploy(ops_test, setup_resources):
+    log.info("Build Charm...")
+    charm = await ops_test.build_charm(".")
+
+    log.info("Build Bundle...")
+    charm_resources = {rsc.stem.replace("-", "_"): rsc for rsc in setup_resources}
     bundle = ops_test.render_bundle(
-        "tests/data/bundle.yaml", master_charm=await ops_test.build_charm(".")
+        "tests/data/bundle.yaml", master_charm=charm, **charm_resources
     )
 
-    # Use CLI to deploy bundle until https://github.com/juju/python-libjuju/pull/497
-    # is released.
-    # await ops_test.model.deploy(bundle)
-    retcode, stdout, stderr = await ops_test._run(
-        "juju", "deploy", "-m", ops_test.model_full_name, bundle
-    )
-    assert retcode == 0, f"Bundle deploy failed: {(stderr or stdout).strip()}"
+    log.info("Deploy Charm...")
+    model = ops_test.model_full_name
+    cmd = f"juju deploy -m {model} {bundle}"
+    rc, stdout, stderr = await ops_test.run(*shlex.split(cmd))
+    assert rc == 0, f"Bundle deploy failed: {(stderr or stdout).strip()}"
+
     log.info(stdout)
     await ops_test.model.block_until(
         lambda: "kubernetes-master" in ops_test.model.applications, timeout=60

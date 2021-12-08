@@ -14,7 +14,7 @@ machines:
     constraints: mem=3072M
   '5':
     constraints: mem=3072M
-services:
+applications:
   containerd:
     charm: cs:~containers/containerd
     channel: edge
@@ -53,6 +53,17 @@ services:
     options:
       channel: 1.23/edge
       enable-keystone-authorization: True
+    resources:
+      cni-amd64: {{cni_amd64|default("0")}}
+      cni-arm64: {{cni_arm64|default("0")}}
+      cni-s390x: {{cni_s390x|default("0")}}
+      core: 0
+      kubectl: 0
+      kube-apiserver: 0
+      kube-controller-manager: 0
+      kube-scheduler: 0
+      cdk-addons: 0
+      kube-proxy: 0
     to:
     - '0'
   kubernetes-worker:
