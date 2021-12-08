@@ -7,6 +7,22 @@ from lightkube import KubeConfig, Client
 from lightkube.resources.core_v1 import Namespace
 from lightkube.models.meta_v1 import ObjectMeta
 
+# Quick hack to set `trust_env=False` on the httpx client,
+# so that it ignores environment *_proxy settings.
+# Issue with lightkube here: https://github.com/gtsystem/lightkube/issues/19
+from lightkube.core.generic_client import GenericClient
+from lightkube.config.client_adapter import httpx_parameters
+from lightkube.config.kubeconfig import SingleConfig
+import httpx
+
+
+def CustomClient(config: SingleConfig, timeout: httpx.Timeout) -> httpx.Client:
+    return httpx.Client(trust_env=False, **httpx_parameters(config, timeout))
+
+
+GenericClient.AdapterClient = staticmethod(CustomClient)
+# -------------------------------------------------------------------------------------------
+
 log = logging.getLogger(__name__)
 
 

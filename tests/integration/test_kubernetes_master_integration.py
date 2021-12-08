@@ -13,15 +13,14 @@ from lightkube.resources.policy_v1beta1 import PodSecurityPolicy
 log = logging.getLogger(__name__)
 
 
-CNI_ARCH_URL = "https://api.jujucharms.com/charmstore/v5/~containers/kubernetes-master-{charm}/resource/cni-{arch}/{rev}"  # noqa
+CNI_ARCH_URL = "https://api.jujucharms.com/charmstore/v5/~containers/kubernetes-master-{charm}/resource/cni-{arch}"  # noqa
 CHUNK_SIZE = 16000
 
 
-async def _retrieve_url(charm, arch, rev, target_file):
+async def _retrieve_url(charm, arch, target_file):
     url = CNI_ARCH_URL.format(
         charm=charm,
         arch=arch,
-        rev=rev,
     )
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
@@ -61,7 +60,7 @@ async def setup_resources(ops_test, tmpdir):
         log.info("Downloading Resources...")
         await asyncio.gather(
             *(
-                _retrieve_url(1099, arch, 3, tmpdir / f"cni-{arch}.tgz")
+                _retrieve_url(1099, arch, tmpdir / f"cni-{arch}.tgz")
                 for arch in ("amd64", "arm64", "s390x")
             )
         )
@@ -204,9 +203,9 @@ async def test_pod_security_policy(ops_test, kubernetes):
     app = ops_test.model.applications["kubernetes-master"]
 
     await app.set_config({"pod-security-policy": yaml.dump(test_psp)})
-    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=30)
+    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=60)
     await wait_for_psp(privileged=False)
 
     await app.set_config({"pod-security-policy": ""})
-    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=30)
+    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=60)
     await wait_for_psp(privileged=True)
