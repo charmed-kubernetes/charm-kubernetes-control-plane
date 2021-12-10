@@ -34,7 +34,7 @@ applications:
     expose: true
     num_units: 1
     options:
-      channel: 1.23/edge
+      channel: 1.23/stable
     resources:
       cni-amd64: {{cni_amd64|default("0")}}
       cni-arm64: {{cni_arm64|default("0")}}
@@ -55,7 +55,7 @@ applications:
     expose: true
     num_units: 1
     options:
-      channel: 1.23/edge
+      channel: 1.23/stable
     to:
     - '1'
   prometheus:
