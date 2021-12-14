@@ -2276,7 +2276,6 @@ def configure_apiserver():
     feature_gates = ["StreamingProxyRedirects=true"]
     if kubernetes_common.is_dual_stack(cluster_cidr):
         feature_gates.append("IPv6DualStack=true")
-    api_opts["feature-gates"] = ",".join(feature_gates)
     api_opts["min-request-timeout"] = "300"
     api_opts["v"] = "4"
     api_opts["tls-cert-file"] = str(server_crt_path)
@@ -2391,9 +2390,11 @@ def configure_apiserver():
     api_cloud_config_path = cloud_config_path("kube-apiserver")
     if is_state("endpoint.aws.ready"):
         api_opts["cloud-provider"] = "aws"
+        feature_gates.append("CSIMigrationAWS=false")
     elif is_state("endpoint.gcp.ready"):
         api_opts["cloud-provider"] = "gce"
         api_opts["cloud-config"] = str(api_cloud_config_path)
+        feature_gates.append("CSIMigrationGCE=false")
     elif is_state("endpoint.vsphere.ready") and get_version("kube-apiserver") >= (
         1,
         12,
@@ -2403,6 +2404,9 @@ def configure_apiserver():
     elif is_state("endpoint.azure.ready"):
         api_opts["cloud-provider"] = "azure"
         api_opts["cloud-config"] = str(api_cloud_config_path)
+        feature_gates.append("CSIMigrationAzureDisk=false")
+
+    api_opts["feature-gates"] = ",".join(feature_gates)
 
     audit_root = "/root/cdk/audit"
     os.makedirs(audit_root, exist_ok=True)
@@ -2551,11 +2555,11 @@ def configure_controller_manager():
     controller_opts["cluster-name"] = leader_get("cluster_tag")
     controller_opts["terminated-pod-gc-threshold"] = "12500"
     controller_opts["profiling"] = "false"
-    controller_opts["feature-gates"] = "RotateKubeletServerCertificate=true"
     controller_opts["service-cluster-ip-range"] = service_cidr
     controller_opts["cluster-cidr"] = cluster_cidr
+    feature_gates = ["RotateKubeletServerCertificate=true"]
     if kubernetes_common.is_dual_stack(cluster_cidr):
-        controller_opts["feature-gates"] = "IPv6DualStack=true"
+        feature_gates.append("IPv6DualStack=true")
     net_ipv6 = kubernetes_common.get_ipv6_network(cluster_cidr)
     if net_ipv6:
         controller_opts["node-cidr-mask-size-ipv6"] = net_ipv6.prefixlen
@@ -2563,9 +2567,11 @@ def configure_controller_manager():
     cm_cloud_config_path = cloud_config_path("kube-controller-manager")
     if is_state("endpoint.aws.ready"):
         controller_opts["cloud-provider"] = "aws"
+        feature_gates.append("CSIMigrationAWS=false")
     elif is_state("endpoint.gcp.ready"):
         controller_opts["cloud-provider"] = "gce"
         controller_opts["cloud-config"] = str(cm_cloud_config_path)
+        feature_gates.append("CSIMigrationGCE=false")
     elif is_state("endpoint.vsphere.ready") and get_version("kube-apiserver") >= (
         1,
         12,
@@ -2575,6 +2581,9 @@ def configure_controller_manager():
     elif is_state("endpoint.azure.ready"):
         controller_opts["cloud-provider"] = "azure"
         controller_opts["cloud-config"] = str(cm_cloud_config_path)
+        feature_gates.append("CSIMigrationAzureDisk=false")
+
+    controller_opts["feature-gates"] = ",".join(feature_gates)
 
     configure_kubernetes_service(
         configure_prefix,
@@ -2594,6 +2603,17 @@ def configure_scheduler():
     scheduler_opts["logtostderr"] = "true"
     scheduler_opts["profiling"] = "false"
     scheduler_opts["config"] = kube_scheduler_config_path
+
+    feature_gates = []
+
+    if is_state("endpoint.aws.ready"):
+        feature_gates.append("CSIMigrationAWS=false")
+    elif is_state("endpoint.gcp.ready"):
+        feature_gates.append("CSIMigrationGCE=false")
+    elif is_state("endpoint.azure.ready"):
+        feature_gates.append("CSIMigrationAzureDisk=false")
+
+    scheduler_opts["feature-gates"] = ",".join(feature_gates)
 
     scheduler_ver = get_version("kube-scheduler")
     if scheduler_ver >= (1, 23):
