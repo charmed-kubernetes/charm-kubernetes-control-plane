@@ -35,17 +35,22 @@ def test_user_create(mock_get, mock_master, mock_common, mock_chmod):
     user = secret_id = "testuser"
     test_data = {user: secret_id}
 
+    def make_api_url(endpoints):
+        return ["https://{0}:{1}".format(*endpoint) for endpoint in endpoints]
+
     # Ensure failure when user exists
     mock_get.return_value = user
     with mock.patch("actions.user_actions.user_list", return_value=test_data):
         user_actions.user_create()
         assert user_actions.action_fail.called
+        user_actions.action_fail.reset_mock()
 
     # Ensure failure when user name is invalid
     mock_get.return_value = "FunnyBu;sness"
     with mock.patch("actions.user_actions.user_list", return_value=test_data):
         user_actions.user_create()
         assert user_actions.action_fail.called
+        user_actions.action_fail.reset_mock()
 
     # Ensure calls/args when we have a new user
     user = "newuser"
@@ -53,13 +58,22 @@ def test_user_create(mock_get, mock_master, mock_common, mock_chmod):
     token = "{}::{}".format(user, password)
     mock_get.return_value = user
     mock_master.token_generator.return_value = password
-    mock_master.get_api_endpoint.return_value = [1, 1]
+    mock_master.get_external_api_endpoints.return_value = []
+    with mock.patch("actions.user_actions.user_list", return_value=test_data):
+        user_actions.user_create()
+        assert user_actions.action_fail.called
+        user_actions.action_fail.reset_mock()
+
+    mock_master.get_external_api_endpoints.return_value = [("test", 1234)]
+    mock_master.get_api_urls.side_effect = make_api_url
 
     with mock.patch("actions.user_actions.user_list", return_value=test_data):
         user_actions.user_create()
     args, kwargs = mock_common.create_secret.call_args
     assert token in args
     args, kwargs = mock_common.create_kubeconfig.call_args
+    assert args[0] == "/home/ubuntu/newuser-kubeconfig"
+    assert args[1] == "https://test:1234"
     assert token in kwargs["token"]
 
 
