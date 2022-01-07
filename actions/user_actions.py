@@ -64,8 +64,11 @@ def user_create():
     # Create a kubeconfig
     ca_crt = layer.kubernetes_common.ca_crt_path
     kubeconfig_path = "/home/ubuntu/{}-kubeconfig".format(user)
-    public_address, public_port = layer.kubernetes_master.get_api_endpoint()
-    public_server = "https://{0}:{1}".format(public_address, public_port)
+    endpoints = layer.kubernetes_master.get_external_api_endpoints()
+    if not endpoints:
+        action_fail("Kubernetes client endpoints currently unavailable.")
+        return
+    public_server = layer.kubernetes_master.get_api_urls(endpoints)[0]
 
     layer.kubernetes_common.create_kubeconfig(
         kubeconfig_path, public_server, ca_crt, token=token, user=user
