@@ -327,3 +327,16 @@ options:
 
       [0] https://kubernetes.io/docs/concepts/policy/pod-security-policy/
       [1] https://github.com/kubernetes/examples/blob/master/staging/podsecuritypolicy/rbac/policies.yaml
+  register-with-taints:
+    type: string
+    default: "juju.is/kubernetes-master=true:NoSchedule"
+    description: |
+      Space-separated list of taints to apply to this node at registration time.
+
+      This config is only used at deploy time when Kubelet first registers the
+      node with Kubernetes. To change node taints after deploy time, use kubectl
+      instead.
+
+      For more information, see the upstream Kubernetes documentation about
+      taints:
+      https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/

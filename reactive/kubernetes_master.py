@@ -88,6 +88,9 @@ from charms.layer.kubernetes_common import client_crt_path
 from charms.layer.kubernetes_common import client_key_path
 from charms.layer.kubernetes_common import kubectl, kubectl_manifest, kubectl_success
 from charms.layer.kubernetes_common import _get_vmware_uuid
+from charms.layer.kubernetes_common import get_node_name
+from charms.layer.kubernetes_common import get_sandbox_image_uri
+from charms.layer.kubernetes_common import kubelet_kubeconfig_path
 
 from charms.layer.nagios import install_nagios_plugin_from_file
 from charms.layer.nagios import remove_nagios_plugin
@@ -105,6 +108,7 @@ snap_resources = [
     "kube-scheduler",
     "cdk-addons",
     "kube-proxy",
+    "kubelet",
 ]
 
 master_services = [
@@ -112,9 +116,10 @@ master_services = [
     "kube-controller-manager",
     "kube-scheduler",
     "kube-proxy",
+    "kubelet",
 ]
 
-cohort_snaps = snap_resources + ["kubelet"]
+cohort_snaps = snap_resources
 
 
 os.environ["PATH"] += os.pathsep + os.path.join(os.sep, "snap", "bin")
@@ -190,6 +195,17 @@ register_trigger(
     when_not="kubernetes-master.apiserver.configured",
     clear_flag="kubernetes-master.apiserver.running",
 )
+register_trigger(
+    when="config.changed.image-registry",
+    clear_flag="kubernetes-master.kubelet.configured",
+)
+register_trigger(
+    when="config.changed.image-registry", clear_flag="kubernetes-master.sent-registry"
+)
+register_trigger(
+    when="config.changed.default-cni",
+    clear_flag="kubernetes-master.default-cni.configured",
+)
 
 
 def set_upgrade_needed(forced=False):
@@ -206,6 +222,14 @@ def set_upgrade_needed(forced=False):
 @when("config.changed.channel")
 def channel_changed():
     set_upgrade_needed()
+
+
+def maybe_install_kubelet():
+    if not snap.is_installed("kubelet"):
+        channel = hookenv.config("channel")
+        hookenv.status_set("maintenance", "Installing kubelet snap")
+        snap.install("kubelet", channel=channel, classic=True)
+        calculate_and_store_resource_checksums(checksum_prefix, snap_resources)
 
 
 def maybe_install_kube_proxy():
@@ -244,6 +268,7 @@ def check_for_upgrade_needed():
     # to old ceph on Kubernetes 1.10 or 1.11
     remove_state("kubernetes-master.ceph.configured")
 
+    maybe_install_kubelet()
     maybe_install_kube_proxy()
     update_certificates()
     switch_auth_mode(forced=True)
@@ -302,6 +327,9 @@ def check_for_upgrade_needed():
         update_nrpe_config()
 
     remove_state("kubernetes-master.system-monitoring-rbac-role.applied")
+    remove_state("kubernetes-master.kubelet.configured")
+    remove_state("kubernetes-master.default-cni.configured")
+    remove_state("kubernetes-master.sent-registry")
 
 
 @hook("pre-series-upgrade")
@@ -397,6 +425,8 @@ def install_snaps():
     snap.install("kube-scheduler", channel=channel)
     hookenv.status_set("maintenance", "Installing cdk-addons snap")
     snap.install("cdk-addons", channel=channel)
+    hookenv.status_set("maintenance", "Installing kubelet snap")
+    snap.install("kubelet", channel=channel, classic=True)
     hookenv.status_set("maintenance", "Installing kube-proxy snap")
     snap.install("kube-proxy", channel=channel, classic=True)
     calculate_and_store_resource_checksums(checksum_prefix, snap_resources)
@@ -1237,6 +1267,7 @@ def ca_written():
         if leader_get("kubernetes-master-addons-ca-in-use"):
             leader_set({"kubernetes-master-addons-restart-for-ca": True})
     clear_flag("tls_client.ca.written")
+    clear_flag("kubernetes-master.kubelet.configured")
 
 
 @when("etcd.available")
@@ -1270,10 +1301,7 @@ def etcd_data_change(etcd):
             leader_set(auto_storage_backend="etcd2")
 
 
-@when("kube-control.connected")
-@when("cdk-addons.configured")
-def send_cluster_dns_detail(kube_control):
-    """Send cluster DNS info"""
+def get_dns_info():
     dns_provider = endpoint_from_flag("dns-provider.available")
     try:
         goal_state_rels = hookenv.goal_state().get("relations", {})
@@ -1286,28 +1314,35 @@ def send_cluster_dns_detail(kube_control):
     except InvalidDnsProvider:
         dns_disabled_cfg = False
     if dns_provider_missing and dns_disabled_cfg:
-        kube_control.set_dns(None, None, None, False)
+        return True, None, None, None
     elif dns_provider_pending:
-        pass
+        return False, None, None, None
     elif dns_provider:
         details = dns_provider.details()
-        kube_control.set_dns(
-            details["port"], details["domain"], details["sdn-ip"], True
-        )
+        return True, details["sdn-ip"], details["port"], details["domain"]
     else:
         try:
             dns_provider = get_dns_provider()
         except InvalidDnsProvider:
             hookenv.log(traceback.format_exc())
-            return
+            return False, None, None, None
         dns_domain = hookenv.config("dns_domain")
         dns_ip = None
         try:
             dns_ip = kubernetes_master.get_dns_ip()
         except CalledProcessError:
             hookenv.log("DNS addon service not ready yet")
-            return
-        kube_control.set_dns(53, dns_domain, dns_ip, True)
+            return False, None, None, None
+        return True, dns_ip, 53, dns_domain
+
+
+@when("kube-control.connected")
+@when("cdk-addons.configured")
+def send_cluster_dns_detail(kube_control):
+    """Send cluster DNS info"""
+    dns_ready, dns_ip, dns_port, dns_domain = get_dns_info()
+    if dns_ready:
+        kube_control.set_dns(dns_port, dns_domain, dns_ip, dns_ip is not None)
 
 
 def create_tokens_and_sign_auth_requests():
@@ -3323,16 +3358,16 @@ def send_registry_location():
 
     # Construct and send the sandbox image (pause container) to our runtime
     runtime = endpoint_from_flag("endpoint.container-runtime.available")
-    if runtime:
-        uri = "{}/pause-{}:3.1".format(registry_location, arch())
-        runtime.set_config(sandbox_image=uri)
+    if not runtime:
+        hookenv.log(
+            "Container runtime not yet available, will retry setting sandbox image"
+        )
+        return
+
+    uri = get_sandbox_image_uri(registry_location)
+    runtime.set_config(sandbox_image=uri)
 
     set_flag("kubernetes-master.sent-registry")
-
-
-@when("config.changed.image-registry")
-def send_new_registry_location():
-    clear_flag("kubernetes-master.sent-registry")
 
 
 @when(
@@ -3546,3 +3581,71 @@ def send_default_cni():
 @when("config.changed.default-cni")
 def default_cni_changed():
     remove_state("kubernetes-master.components.started")
+
+
+@when("kubernetes-master.components.started", "kubernetes-master.apiserver.configured")
+@when_not("kubernetes-master.kubelet.configured")
+def configure_kubelet():
+    uid = hookenv.local_unit()
+    username = "system:node:{}".format(get_node_name().lower())
+    group = "system:nodes"
+    token = get_token(username)
+    if not token:
+        setup_tokens(None, username, uid, group)
+        token = get_token(username)
+    if not token:
+        hookenv.log(
+            "Failed to create token for {}; will retry".format(username),
+            hookenv.WARNING,
+        )
+        return
+
+    local_endpoint = kubernetes_master.get_local_api_endpoint()
+    local_url = kubernetes_master.get_api_url(local_endpoint)
+    create_kubeconfig(
+        kubelet_kubeconfig_path, local_url, ca_crt_path, token=token, user="kubelet"
+    )
+
+    dns_ready, dns_ip, dns_port, dns_domain = get_dns_info()
+    if not dns_ready:
+        hookenv.log("DNS not ready, waiting to configure Kubelet")
+        return
+    dns_info = [dns_ip, dns_port, dns_domain]
+    db.set("kubernetes-master.kubelet.dns-used", dns_info)
+
+    registry = hookenv.config("image-registry")
+    taints = hookenv.config("register-with-taints").split()
+    kubernetes_common.configure_kubelet(dns_domain, dns_ip, registry, taints=taints)
+    service_restart("snap.kubelet.daemon")
+
+    set_flag("kubernetes-master.kubelet.configured")
+
+
+@when_any("config.changed.kubelet-extra-args", "config.changed.kubelet-extra-config")
+def reconfigure_kubelet():
+    # LP bug #1826833, always delete the state file when extra config changes
+    # since CPU manager doesn’t support offlining and onlining of CPUs at runtime.
+    cpu_manager_state = "/var/lib/kubelet/cpu_manager_state"
+    if os.path.isfile(cpu_manager_state):
+        hookenv.log("Removing file: " + cpu_manager_state)
+        os.remove(cpu_manager_state)
+    clear_flag("kubernetes-master.kubelet.configured")
+
+
+@when("kubernetes-master.kubelet.configured")
+def watch_dns_for_changes():
+    dns_ready, dns_ip, dns_port, dns_domain = get_dns_info()
+    dns_info = [dns_ip, dns_port, dns_domain]
+    previous_dns_info = db.get("kubernetes-master.kubelet.dns-used")
+    dns_changed = dns_info != previous_dns_info
+    if dns_ready and dns_changed:
+        hookenv.log("DNS info has changed, will reconfigure Kubelet")
+        clear_flag("kubernetes-master.kubelet.configured")
+
+
+@when("cni.available")
+@when_not("kubernetes-master.default-cni.configured")
+def configure_default_cni():
+    default_cni = hookenv.config("default-cni")
+    kubernetes_common.configure_default_cni(default_cni)
+    set_flag("kubernetes-master.default-cni.configured")

@@ -34,11 +34,11 @@ def test_series_upgrade():
     assert kubernetes_master.service_pause.call_count == 0
     assert kubernetes_master.service_resume.call_count == 0
     kubernetes_master.pre_series_upgrade()
-    assert kubernetes_master.service_pause.call_count == 4
+    assert kubernetes_master.service_pause.call_count == 5
     assert kubernetes_master.service_resume.call_count == 0
     kubernetes_master.post_series_upgrade()
-    assert kubernetes_master.service_pause.call_count == 4
-    assert kubernetes_master.service_resume.call_count == 4
+    assert kubernetes_master.service_pause.call_count == 5
+    assert kubernetes_master.service_resume.call_count == 5
 
 
 @mock.patch("builtins.open", mock.mock_open())
