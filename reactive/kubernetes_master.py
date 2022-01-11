@@ -3583,7 +3583,11 @@ def default_cni_changed():
     remove_state("kubernetes-master.components.started")
 
 
-@when("kubernetes-master.components.started", "kubernetes-master.apiserver.configured")
+@when(
+    "kubernetes-master.components.started",
+    "kubernetes-master.apiserver.configured",
+    "endpoint.container-runtime.available",
+)
 @when_not("kubernetes-master.kubelet.configured")
 def configure_kubelet():
     uid = hookenv.local_unit()
