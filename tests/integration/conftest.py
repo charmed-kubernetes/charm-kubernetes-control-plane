@@ -16,15 +16,15 @@ async def kubernetes(ops_test):
         "scp",
         "-m",
         ops_test.model_full_name,
-        "kubernetes-master/leader:config",
+        "kubernetes-control-plane/leader:config",
         kubeconfig_path,
     )
     if retcode != 0:
         log.error(f"retcode: {retcode}")
         log.error(f"stdout:\n{stdout.strip()}")
         log.error(f"stderr:\n{stderr.strip()}")
-        pytest.fail("Failed to copy kubeconfig from kubernetes-master")
-    namespace = "test-kubernetes-master-integration-" + "".join(
+        pytest.fail("Failed to copy kubeconfig from kubernetes-control-plane")
+    namespace = "test-kubernetes-control-plane-integration-" + "".join(
         random.choice(string.ascii_lowercase + string.digits) for _ in range(5)
     )
     kubernetes = Kubernetes(namespace, kubeconfig=str(kubeconfig_path))

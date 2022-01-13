@@ -31,7 +31,7 @@ async def _retrieve_url(charm, arch, rev, target_file):
 def _check_status_messages(ops_test):
     """Validate that the status messages are correct."""
     expected_messages = {
-        "kubernetes-master": "Kubernetes master running.",
+        "kubernetes-control-plane": "Kubernetes master running.",
         "kubernetes-worker": "Kubernetes worker running.",
     }
     for app, message in expected_messages.items():
@@ -76,7 +76,7 @@ async def test_build_and_deploy(ops_test, setup_resources):
     log.info("Build Bundle...")
     charm_resources = {rsc.stem.replace("-", "_"): rsc for rsc in setup_resources}
     bundle = ops_test.render_bundle(
-        "tests/data/bundle.yaml", master_charm=charm, **charm_resources
+        "tests/data/bundle.yaml", charm=charm, **charm_resources
     )
 
     log.info("Deploy Charm...")
@@ -87,15 +87,15 @@ async def test_build_and_deploy(ops_test, setup_resources):
 
     log.info(stdout)
     await ops_test.model.block_until(
-        lambda: "kubernetes-master" in ops_test.model.applications, timeout=60
+        lambda: "kubernetes-control-plane" in ops_test.model.applications, timeout=60
     )
 
     try:
         await ops_test.model.wait_for_idle(wait_for_active=True, timeout=60 * 60)
     except asyncio.TimeoutError:
-        if "kubernetes-master" not in ops_test.model.applications:
+        if "kubernetes-control-plane" not in ops_test.model.applications:
             raise
-        app = ops_test.model.applications["kubernetes-master"]
+        app = ops_test.model.applications["kubernetes-control-plane"]
         if not app.units:
             raise
         unit = app.units[0]
@@ -112,7 +112,8 @@ async def test_build_and_deploy(ops_test, setup_resources):
 async def test_kube_api_endpoint(ops_test):
     """Validate that adding the kube-api-endpoint relation works"""
     await ops_test.model.add_relation(
-        "kubernetes-master:kube-api-endpoint", "kubernetes-worker:kube-api-endpoint"
+        "kubernetes-control-plane:kube-api-endpoint",
+        "kubernetes-worker:kube-api-endpoint",
     )
     await ops_test.model.wait_for_idle(wait_for_active=True, timeout=10 * 60)
     _check_status_messages(ops_test)
@@ -129,7 +130,7 @@ async def juju_run(unit, cmd):
 
 async def test_auth_load(ops_test):
     """Verify that the auth server can handle heavy load and / or dead endpoints."""
-    app = ops_test.model.applications["kubernetes-master"]
+    app = ops_test.model.applications["kubernetes-control-plane"]
     unit = app.units[0]
 
     log.info("Opening auth-webhook port")
@@ -199,7 +200,7 @@ async def test_pod_security_policy(ops_test, kubernetes):
         else:
             pytest.fail("Timed out waiting for PodSecurityPolicy update")
 
-    app = ops_test.model.applications["kubernetes-master"]
+    app = ops_test.model.applications["kubernetes-control-plane"]
 
     await app.set_config({"pod-security-policy": yaml.dump(test_psp)})
     await wait_for_psp(privileged=False)
