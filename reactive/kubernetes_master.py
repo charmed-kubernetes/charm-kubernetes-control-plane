@@ -440,7 +440,16 @@ def install_snaps():
 def create_or_update_cohort_keys():
     cohort_keys = {}
     for snapname in cohort_snaps:
-        cohort_key = snap.create_cohort_snapshot(snapname)
+        try:
+            cohort_key = snap.create_cohort_snapshot(snapname)
+        except CalledProcessError:
+            # Snap store outages prevent keys from being created; log it
+            # and retry later. LP:1956608
+            hookenv.log(
+                "Failed to create cohort for {}; will retry".format(snapname),
+                level=hookenv.INFO,
+            )
+            return
         cohort_keys[snapname] = cohort_key
     leader_set(cohort_keys=json.dumps(cohort_keys))
     hookenv.log("Snap cohort keys have been created.", level=hookenv.INFO)
