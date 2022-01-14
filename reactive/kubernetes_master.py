@@ -2377,9 +2377,8 @@ def configure_apiserver():
 
     ks = endpoint_from_flag("keystone-credentials.available")
     if ks:
-        ks_ip = None
         ks_ip = get_service_ip("k8s-keystone-auth-service", errors_fatal=False)
-        if ks and ks_ip:
+        if ks_ip:
             os.makedirs(keystone_root, exist_ok=True)
 
             keystone_webhook = keystone_root + "/webhook.yaml"
@@ -2394,26 +2393,23 @@ def configure_apiserver():
                 api_opts["authorization-webhook-config-file"] = keystone_webhook  # noqa
             set_state("keystone.apiserver.configured")
         else:
-            if ks and not ks_ip:
-                hookenv.log(
-                    "Unable to find k8s-keystone-auth-service " "service. Will retry"
+            hookenv.log("Unable to find k8s-keystone-auth-service. Will retry")
+            # Note that we can get into a nasty state here
+            # if the user has specified webhook and they're relying on
+            # keystone auth to handle that, the api server will fail to
+            # start because we push it Webhook and no webhook config.
+            # We can't generate the config because we can't talk to the
+            # apiserver to get the ip of the service to put into the
+            # webhook template. A chicken and egg problem. To fix this,
+            # remove Webhook if keystone is related and trying to come
+            # up until we can find the service IP.
+            if "Webhook" in auth_mode:
+                auth_mode = ",".join(
+                    [i for i in auth_mode.split(",") if i != "Webhook"]
                 )
-                # Note that we can get into a nasty state here
-                # if the user has specified webhook and they're relying on
-                # keystone auth to handle that, the api server will fail to
-                # start because we push it Webhook and no webhook config.
-                # We can't generate the config because we can't talk to the
-                # apiserver to get the ip of the service to put into the
-                # webhook template. A chicken and egg problem. To fix this,
-                # remove Webhook if keystone is related and trying to come
-                # up until we can find the service IP.
-                if "Webhook" in auth_mode:
-                    auth_mode = ",".join(
-                        [i for i in auth_mode.split(",") if i != "Webhook"]
-                    )
-            elif is_state("leadership.set.keystone-cdk-addons-configured"):
-                hookenv.log("Unable to find keystone endpoint. Will retry")
             remove_state("keystone.apiserver.configured")
+    elif is_state("leadership.set.keystone-cdk-addons-configured"):
+        hookenv.log("Keystone endpoint not found, will retry.")
 
     api_opts["authorization-mode"] = auth_mode
     api_opts["enable-admission-plugins"] = ",".join(admission_plugins)
