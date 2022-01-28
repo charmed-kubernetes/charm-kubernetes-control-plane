@@ -1,4 +1,4 @@
-# Kubernetes-master
+# Kubernetes-control-plane
 
 [Kubernetes](http://kubernetes.io/) is an open source system for managing
 application containers across a cluster of hosts. The Kubernetes project was
@@ -9,12 +9,13 @@ The Kubernetes project defines some new terms that may be unfamiliar to users
 or operators. For more information please refer to the concept guide in the
 [getting started guide](https://kubernetes.io/docs/home/).
 
-This charm is an encapsulation of the Kubernetes master processes and the
-operations to run on any cloud for the entire lifecycle of the cluster.
+This charm is an encapsulation of the Kubernetes control plane processes and the
+operations to run on any cloud for the entire lifecycle of the cluster except for
+etcd, which is available in a separate charm.
 
 This charm is built from other charm layers using the Juju reactive framework.
 The other layers focus on specific subset of operations making this layer
-specific to operations of Kubernetes master processes.
+specific to operations of Kubernetes control-plane processes.
 
 # Charmed Kubernetes
 
@@ -32,7 +33,7 @@ examples of complete models of Kubernetes clusters.
 
 For full install instructions, please see the [Charmed Kubernetes documentation](https://ubuntu.com/kubernetes/docs/quickstart).
 
-For details on configuring and operating this charm, see the [kubernetes-master documentation](https://ubuntu.com/kubernetes/docs/charm-kubernetes-master) on the same site.
+For details on configuring and operating this charm, see the [kubernetes-contro-plane documentation](https://ubuntu.com/kubernetes/docs/charm-kubernetes-master) on the same site.
 
 # Developers
 
