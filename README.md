@@ -33,7 +33,7 @@ examples of complete models of Kubernetes clusters.
 
 For full install instructions, please see the [Charmed Kubernetes documentation](https://ubuntu.com/kubernetes/docs/quickstart).
 
-For details on configuring and operating this charm, see the [kubernetes-contro-plane documentation](https://ubuntu.com/kubernetes/docs/charm-kubernetes-master) on the same site.
+For details on configuring and operating this charm, see the [kubernetes-control-plane documentation](https://ubuntu.com/kubernetes/docs/charm-kubernetes-master) on the same site.
 
 # Developers
 
