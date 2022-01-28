@@ -30,7 +30,7 @@ async def kubernetes(ops_test):
         pytest.fail("Failed to copy kubeconfig from kubernetes-control-plane")
 
     namespace = (
-        "test-kubernetes-master-integration-"
+        "test-kubernetes-control-plane-integration-"
         + random.choice(string.ascii_lowercase + string.digits) * 5
     )
     config = KubeConfig.from_file(kubeconfig_path)
