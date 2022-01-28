@@ -30,7 +30,7 @@ def test_user_list():
 @mock.patch("actions.user_actions.layer.kubernetes_common")
 @mock.patch("actions.user_actions.layer.kubernetes_master")
 @mock.patch("actions.user_actions.action_get")
-def test_user_create(mock_get, mock_master, mock_common, mock_chmod):
+def test_user_create(mock_get, mock_control_plane, mock_common, mock_chmod):
     """Verify expected calls are made when creating a user."""
     user = secret_id = "testuser"
     test_data = {user: secret_id}
@@ -57,15 +57,15 @@ def test_user_create(mock_get, mock_master, mock_common, mock_chmod):
     password = "password"
     token = "{}::{}".format(user, password)
     mock_get.return_value = user
-    mock_master.token_generator.return_value = password
-    mock_master.get_external_api_endpoints.return_value = []
+    mock_control_plane.token_generator.return_value = password
+    mock_control_plane.get_external_api_endpoints.return_value = []
     with mock.patch("actions.user_actions.user_list", return_value=test_data):
         user_actions.user_create()
         assert user_actions.action_fail.called
         user_actions.action_fail.reset_mock()
 
-    mock_master.get_external_api_endpoints.return_value = [("test", 1234)]
-    mock_master.get_api_urls.side_effect = make_api_url
+    mock_control_plane.get_external_api_endpoints.return_value = [("test", 1234)]
+    mock_control_plane.get_api_urls.side_effect = make_api_url
 
     with mock.patch("actions.user_actions.user_list", return_value=test_data):
         user_actions.user_create()
@@ -79,7 +79,7 @@ def test_user_create(mock_get, mock_master, mock_common, mock_chmod):
 
 @mock.patch("actions.user_actions.layer.kubernetes_master")
 @mock.patch("actions.user_actions.action_get")
-def test_user_delete(mock_get, mock_master):
+def test_user_delete(mock_get, mock_control_plane):
     """Verify expected calls are made when deleting a user."""
     user = secret_id = "testuser"
     test_data = {user: secret_id}
@@ -95,5 +95,5 @@ def test_user_delete(mock_get, mock_master):
 
     with mock.patch("actions.user_actions.user_list", return_value=test_data):
         user_actions.user_delete()
-    args, kwargs = mock_master.delete_secret.call_args
+    args, kwargs = mock_control_plane.delete_secret.call_args
     assert secret_id in args

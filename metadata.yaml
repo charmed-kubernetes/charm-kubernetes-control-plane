@@ -1,4 +1,4 @@
-name: kubernetes-master
+name: kubernetes-control-plane
 summary: The Kubernetes control plane.
 maintainers:
     - Tim Van Steenburgh <tim.van.steenburgh@canonical.com>
@@ -19,6 +19,7 @@ tags:
   - infrastructure
   - kubernetes
   - master
+  - control-plane
 subordinate: false
 series:
   - focal
@@ -32,9 +33,9 @@ provides:
     # Use of this relation is strongly discouraged as the API endpoints will be
     # provided via the kube-control relation. However, it can be used to
     # override those endpoints if you need to inject a reverse proxy between
-    # the master and workers using a charm which only supports the old MITM
+    # the control-plane and workers using a charm which only supports the old MITM
     # style relations. Note, though, that since this reverse proxy will not be
-    # visible to the master, it will not be used in any of the client or
+    # visible to the control-plane, it will not be used in any of the client or
     # component kube config files.
     interface: http
   kube-control:
