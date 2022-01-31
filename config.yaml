@@ -329,7 +329,7 @@ options:
       [1] https://github.com/kubernetes/examples/blob/master/staging/podsecuritypolicy/rbac/policies.yaml
   register-with-taints:
     type: string
-    default: "juju.is/kubernetes-master=true:NoSchedule"
+    default: "juju.is/kubernetes-control-plane=true:NoSchedule"
     description: |
       Space-separated list of taints to apply to this node at registration time.
 
