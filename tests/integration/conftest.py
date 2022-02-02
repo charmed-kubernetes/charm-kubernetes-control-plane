@@ -11,6 +11,34 @@ from lightkube.models.meta_v1 import ObjectMeta
 log = logging.getLogger(__name__)
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--enable-hacluster",
+        action="store_true",
+        default=False,
+        help="run hacluster tests",
+    )
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "hacluster: mark test as hacluster to run")
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--enable-hacluster"):
+        # --enable-hacluster given in cli: do not skip hacluster tests
+        return
+    skip_hacluster = pytest.mark.skip(reason="need --enable-hacluster option to run")
+    for item in items:
+        if "hacluster" in item.keywords:
+            item.add_marker(skip_hacluster)
+
+
+@pytest.fixture
+def hacluster(request):
+    return request.config.getoption("--enable-hacluster")
+
+
 @pytest.fixture(scope="module")
 @pytest.mark.asyncio
 async def kubernetes(ops_test):
