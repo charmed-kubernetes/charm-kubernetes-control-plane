@@ -199,6 +199,69 @@ def test_status_set_on_incomplete_lb():
     hookenv.status_set.assert_called_with("active", mock.ANY)
 
 
+@mock.patch("reactive.kubernetes_master.master_services_down")
+@mock.patch("reactive.kubernetes_master.HEAL_HANDLER")
+@mock.patch("reactive.kubernetes_master.call")
+def test_status_set_on_failed_master_services(call, heal_handler, msd):
+    """Test that set_final_status() will set node to standby mode if a service fail"""
+    set_flag("certificates.available")
+    clear_flag("kubernetes-master.secure-storage.failed")
+    set_flag("kube-control.connected")
+    set_flag("etcd.available")
+    set_flag("cni.available")
+    set_flag("tls_client.certs.saved")
+    set_flag("kubernetes-master.auth-webhook-service.started")
+    set_flag("kubernetes-master.apiserver.configured")
+    set_flag("kubernetes-master.apiserver.running")
+    set_flag("authentication.setup")
+    set_flag("kubernetes-master.auth-webhook-tokens.setup")
+    set_flag("kubernetes-master.components.started")
+    set_flag("ha.connected")
+
+    msd.return_value = ["kube-apiserver"]
+    dummy_heal_handler = {
+        "kube-apiserver": {
+            "run": lambda: "dummy_heal",
+            "clear_flags": ["kubernetes-master.apiserver.configured"],
+        }
+    }
+    heal_handler.__getitem__.side_effect = dummy_heal_handler.__getitem__
+    kubernetes_master.set_final_status()
+    hookenv.status_set.assert_called_with(
+        "blocked",
+        "Stopped services: kube-apiserver",
+    )
+    call.assert_called_with("crm -w -F node standby".split())
+    clear_flag.assert_called_with("kubernetes-master.apiserver.configured")
+    set_flag.assert_called_with("kubernetes-master.components.failed")
+
+
+@mock.patch("reactive.kubernetes_master.master_services_down")
+@mock.patch("reactive.kubernetes_master.HEAL_HANDLER")
+@mock.patch("reactive.kubernetes_master.call")
+def test_status_set_on_healed_master_services(call, heal_handler, msd):
+    """Test that set_final_status() will set node to online mode if service recover"""
+    set_flag("certificates.available")
+    clear_flag("kubernetes-master.secure-storage.failed")
+    set_flag("kube-control.connected")
+    set_flag("etcd.available")
+    set_flag("cni.available")
+    set_flag("tls_client.certs.saved")
+    set_flag("kubernetes-master.auth-webhook-service.started")
+    set_flag("kubernetes-master.apiserver.configured")
+    set_flag("kubernetes-master.apiserver.running")
+    set_flag("authentication.setup")
+    set_flag("kubernetes-master.auth-webhook-tokens.setup")
+    set_flag("kubernetes-master.components.started")
+    set_flag("kubernetes-master.components.failed")
+    set_flag("ha.connected")
+
+    msd.return_value = []
+    kubernetes_master.set_final_status()
+    call.assert_called_with("crm -w -F node online".split())
+    clear_flag.assert_called_with("kubernetes-master.components.failed")
+
+
 @mock.patch("reactive.kubernetes_master.setup_tokens")
 @mock.patch("reactive.kubernetes_master.get_token")
 def test_create_token_sign_auth_requests(get_token, setup_tokens):
