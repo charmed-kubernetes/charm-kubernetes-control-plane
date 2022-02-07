@@ -4,6 +4,8 @@ from pathlib import Path
 import shlex
 
 import aiohttp
+import json
+import os
 import pytest
 import time
 import yaml
@@ -25,7 +27,7 @@ def _check_status_messages(ops_test):
 
 
 @pytest.mark.abort_on_fail
-async def test_build_and_deploy(ops_test):
+async def test_build_and_deploy(ops_test, hacluster):
     log.info("Build Charm...")
     charm = await ops_test.build_charm(".")
 
@@ -48,6 +50,22 @@ async def test_build_and_deploy(ops_test):
     bundle = ops_test.render_bundle(
         "tests/data/bundle.yaml", charm=charm, **resources
     )
+
+    if hacluster:
+        log.info("Using hacluster bundle")
+        vips = os.getenv("OS_VIP00", "10.5.2.204 10.5.2.205")
+        log.info("OS_VIP00: {}".format(vips))
+        bundle = ops_test.render_bundle(
+            "tests/data/bundle-hacluster.yaml",
+            charm=charm,
+            OS_VIP00=vips,
+            **resources,
+        )
+
+    else:
+        bundle = ops_test.render_bundle(
+            "tests/data/bundle.yaml", charm=charm, **resources
+        )
 
     log.info("Deploy Charm...")
     model = ops_test.model_full_name
@@ -173,9 +191,36 @@ async def test_pod_security_policy(ops_test, kubernetes):
     app = ops_test.model.applications["kubernetes-control-plane"]
 
     await app.set_config({"pod-security-policy": yaml.dump(test_psp)})
-    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=60)
+    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=120)
     await wait_for_psp(privileged=False)
 
     await app.set_config({"pod-security-policy": ""})
-    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=60)
+    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=120)
     await wait_for_psp(privileged=True)
+
+
+@pytest.mark.hacluster
+async def test_service_down(ops_test):
+    """Test VIP change node when master services fail"""
+    ha_unit = ops_test.model.applications["hacluster-kubernetes-control-plane"].units[0]
+    action = await ha_unit.run_action("status")
+    action = await action.wait()
+    result = json.loads(action.results["result"])
+    vip_master = result["resources"]["groups"]["grp_kubernetes-control-plane_vips"]
+    node_before = vip_master[0]["nodes"][0]["name"]
+
+    # simulate a failover on one master resource (scheduler)
+    master_machine = node_before.split("-")[-1]
+    for unit in ops_test.model.applications["kubernetes-control-plane"].units:
+        if unit.entity_id.split("/")[-1] == master_machine:
+            await unit.run("systemctl stop snap.kube-scheduler.daemon")
+            # run a hook to update status of the unit
+            await unit.run("./hooks/update-status")
+
+    # check that the resource changed node
+    action = await ha_unit.run_action("status")
+    action = await action.wait()
+    result = json.loads(action.results["result"])
+    vip_master = result["resources"]["groups"]["grp_kubernetes-control-plane_vips"]
+    node_after = vip_master[0]["nodes"][0]["name"]
+    assert node_after != node_before

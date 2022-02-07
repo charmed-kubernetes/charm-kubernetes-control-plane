@@ -25,7 +25,7 @@ import yaml
 from itertools import filterfalse
 from shutil import move, copyfile
 from pathlib import Path
-from subprocess import check_call
+from subprocess import check_call, call
 from subprocess import check_output
 from subprocess import CalledProcessError
 from urllib.request import Request, urlopen
@@ -57,8 +57,6 @@ from charmhelpers.contrib.charmsupport import nrpe
 from charms.layer import kubernetes_master
 from charms.layer import kubernetes_common
 
-from charms.layer.hacluster import add_service_to_hacluster
-from charms.layer.hacluster import remove_service_from_hacluster
 from charms.layer.kubernetes_common import kubeclientconfig_path
 from charms.layer.kubernetes_common import migrate_resource_checksums
 from charms.layer.kubernetes_common import check_resources_for_upgrade_needed
@@ -330,6 +328,14 @@ def check_for_upgrade_needed():
     remove_state("kubernetes-master.kubelet.configured")
     remove_state("kubernetes-master.default-cni.configured")
     remove_state("kubernetes-master.sent-registry")
+
+    # Remove services from hacluster and leave to systemd while
+    # hacluster is not ready to accept order and colocation constraints
+    if is_flag_set("ha.connected"):
+        hacluster = endpoint_from_flag("ha.connected")
+        for service in master_services:
+            daemon = "snap.{}.daemon".format(service)
+            hacluster.remove_systemd_service(service, daemon)
 
 
 @hook("pre-series-upgrade")
@@ -891,7 +897,25 @@ def set_final_status():
         if len(failing_services) != 0:
             msg = "Stopped services: {}".format(",".join(failing_services))
             hookenv.status_set("blocked", msg)
+            if is_flag_set("ha.connected"):
+                hookenv.log("Disabling node to pass resources to other nodes")
+                cmd = "crm -w -F node standby"
+                call(cmd.split())
+            for service in failing_services:
+                heal_handler = HEAL_HANDLER[service]
+                for flag in heal_handler["clear_flags"]:
+                    clear_flag(flag)
+                heal_handler["run"]()
+            set_flag("kubernetes-master.components.failed")
             return
+        else:
+            if is_flag_set("kubernetes-master.components.failed"):
+                if is_flag_set("ha.connected"):
+                    hookenv.log("Enabling node again to receive resources")
+                    cmd = "crm -w -F node online"
+                    call(cmd.split())
+                clear_flag("kubernetes-master.components.failed")
+
     else:
         # if we don't have components starting, we're waiting for that and
         # shouldn't fall through to Kubernetes master running.
@@ -3285,14 +3309,9 @@ def haconfig_changed():
 @when("ha.connected", "kubernetes-master.components.started")
 @when_not("hacluster-configured")
 def configure_hacluster():
-    for service in master_services:
-        daemon = "snap.{}.daemon".format(service)
-        add_service_to_hacluster(service, daemon)
-
     # get a new cert
     if is_flag_set("certificates.available"):
         send_data()
-
     # update workers
     if is_flag_set("kube-control.connected"):
         send_api_urls()
@@ -3305,10 +3324,6 @@ def configure_hacluster():
 @when_not("ha.connected")
 @when("hacluster-configured")
 def remove_hacluster():
-    for service in master_services:
-        daemon = "snap.{}.daemon".format(service)
-        remove_service_from_hacluster(service, daemon)
-
     # get a new cert
     if is_flag_set("certificates.available"):
         send_data()
@@ -3658,3 +3673,20 @@ def configure_default_cni():
     default_cni = hookenv.config("default-cni")
     kubernetes_common.configure_default_cni(default_cni)
     set_flag("kubernetes-master.default-cni.configured")
+
+
+HEAL_HANDLER = {
+    "kube-apiserver": {
+        "run": configure_apiserver,
+        "clear_flags": [
+            "kubernetes-master.apiserver.configured",
+            "kubernetes-master.apiserver.running",
+        ],
+    },
+    "kube-controller-manager": {"run": configure_controller_manager, "clear_flags": []},
+    "kube-scheduler": {"run": configure_scheduler, "clear_flags": []},
+    "kube-proxy": {
+        "run": start_master,
+        "clear_flags": ["kubernetes-master.components.started"],
+    },
+}
