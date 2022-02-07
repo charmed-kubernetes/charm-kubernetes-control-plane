@@ -37,6 +37,7 @@ async def test_build_and_deploy(ops_test, hacluster):
     if resources:
         resources = {rsc.stem.replace("-", "_"): rsc for rsc in resources}
     else:
+
         def rename(resource, path):
             _, ext = path.name.split(".", 1)
             return path.parent / f"{resource}.{ext}"
@@ -47,9 +48,7 @@ async def test_build_and_deploy(ops_test, hacluster):
         )
 
     assert resources, "Failed to build or download charm resources."
-    bundle = ops_test.render_bundle(
-        "tests/data/bundle.yaml", charm=charm, **resources
-    )
+    bundle = ops_test.render_bundle("tests/data/bundle.yaml", charm=charm, **resources)
 
     if hacluster:
         log.info("Using hacluster bundle")
