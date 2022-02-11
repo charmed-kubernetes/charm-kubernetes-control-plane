@@ -16,28 +16,28 @@ machines:
     constraints: mem=3072M
 applications:
   containerd:
-    charm: cs:~containers/containerd
-    channel: edge
+    charm: containerd
+    channel: latest/edge
   easyrsa:
-    charm: cs:~containers/easyrsa
-    channel: edge
+    charm: easyrsa
+    channel: latest/edge
     num_units: 1
     to:
     - '1'
   etcd:
-    charm: cs:~containers/etcd
-    channel: edge
+    charm: etcd
+    channel: latest/edge
     num_units: 1
     options:
       channel: 3.4/stable
     to:
     - '0'
   flannel:
-    charm: cs:~containers/flannel
-    channel: edge
+    charm: flannel
+    channel: latest/edge
   keystone:
     charm: keystone
-    channel: edge
+    channel: latest/edge
     num_units: 1
     options:
       openstack-origin: distro
@@ -67,8 +67,8 @@ applications:
     to:
     - '0'
   kubernetes-worker:
-    charm: cs:~containers/kubernetes-worker
-    channel: edge
+    charm: kubernetes-worker
+    channel: latest/edge
     constraints: cores=4 mem=4G root-disk=16G
     expose: true
     num_units: 1
@@ -78,17 +78,18 @@ applications:
     - '1'
   keystone-mysql-router:
     charm: mysql-router
-    channel: edge
+    channel: latest/edge
   mysql-innodb-cluster:
     charm: mysql-innodb-cluster
-    channel: edge
+    channel: latest/stable
     num_units: 3
     to:
     - '3'
     - '4'
     - '5'
   prometheus:
-    charm: cs:prometheus2
+    charm: prometheus2
+    channel: latest/stable
     num_units: 1
     to:
       - '0'
