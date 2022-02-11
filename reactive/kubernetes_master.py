@@ -3653,9 +3653,13 @@ def configure_kubelet():
 
     registry = hookenv.config("image-registry")
     taints = hookenv.config("register-with-taints").split()
-    kubernetes_common.configure_kubelet(
-        dns_domain, dns_ip, registry, taints=taints, has_xcp=has_xcp
-    )
+    try:
+        kubernetes_common.configure_kubelet(
+            dns_domain, dns_ip, registry, taints=taints, has_xcp=has_xcp
+        )
+    except TypeError:
+        # older kubernetes-common doesn't support the has_xcp flag
+        kubernetes_common.configure_kubelet(dns_domain, dns_ip, registry, taints=taints)
     service_restart("snap.kubelet.daemon")
 
     set_flag("kubernetes-master.kubelet.configured")
