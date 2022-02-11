@@ -1508,7 +1508,7 @@ def send_api_urls():
 @when("kube-control.connected")
 def send_xcp_flag():
     kube_control = endpoint_from_name("kube-control")
-    if not hasattr(kube_control, "set_external_cloud_provider"):
+    if not hasattr(kube_control, "set_has_xcp"):
         # built with an old version of the kube-control interface
         return
     kube_control.set_has_xcp(hookenv.relations()["external-cloud-provider"])
