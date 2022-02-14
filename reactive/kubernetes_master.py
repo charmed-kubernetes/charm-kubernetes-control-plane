@@ -1508,9 +1508,6 @@ def send_api_urls():
 @when("kube-control.connected")
 def send_xcp_flag():
     kube_control = endpoint_from_name("kube-control")
-    if not hasattr(kube_control, "set_has_xcp"):
-        # built with an old version of the kube-control interface
-        return
     kube_control.set_has_xcp(hookenv.relations()["external-cloud-provider"])
 
 
@@ -3653,13 +3650,9 @@ def configure_kubelet():
 
     registry = hookenv.config("image-registry")
     taints = hookenv.config("register-with-taints").split()
-    try:
-        kubernetes_common.configure_kubelet(
-            dns_domain, dns_ip, registry, taints=taints, has_xcp=has_xcp
-        )
-    except TypeError:
-        # older kubernetes-common doesn't support the has_xcp flag
-        kubernetes_common.configure_kubelet(dns_domain, dns_ip, registry, taints=taints)
+    kubernetes_common.configure_kubelet(
+        dns_domain, dns_ip, registry, taints=taints, has_xcp=has_xcp
+    )
     service_restart("snap.kubelet.daemon")
 
     set_flag("kubernetes-master.kubelet.configured")
