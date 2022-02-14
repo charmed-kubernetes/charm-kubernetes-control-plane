@@ -3636,7 +3636,7 @@ def configure_kubelet():
             hookenv.WARNING,
         )
         return
-    has_xcp = hookenv.relations()["external-cloud-provider"]
+    has_xcp = bool(hookenv.relations()["external-cloud-provider"])
 
     local_endpoint = kubernetes_master.get_local_api_endpoint()
     local_url = kubernetes_master.get_api_url(local_endpoint)
