@@ -1505,6 +1505,12 @@ def send_api_urls():
     kube_control.set_api_endpoints(kubernetes_master.get_api_urls(endpoints))
 
 
+@when("kube-control.connected")
+def send_xcp_flag():
+    kube_control = endpoint_from_name("kube-control")
+    kube_control.set_has_xcp(hookenv.relations()["external-cloud-provider"])
+
+
 @when("certificates.available", "cni.available")
 def send_data():
     """Send the data that is required to create a server certificate for
@@ -2452,7 +2458,9 @@ def configure_apiserver():
         api_opts["client-ca-file"] = str(ca_crt_path)
 
     api_cloud_config_path = cloud_config_path("kube-apiserver")
-    if is_state("endpoint.aws.ready"):
+    if hookenv.relations()["external-cloud-provider"]:
+        api_opts["cloud-provider"] = "external"
+    elif is_state("endpoint.aws.ready"):
         api_opts["cloud-provider"] = "aws"
         feature_gates.append("CSIMigrationAWS=false")
     elif is_state("endpoint.gcp.ready"):
@@ -2629,7 +2637,9 @@ def configure_controller_manager():
         controller_opts["node-cidr-mask-size-ipv6"] = net_ipv6.prefixlen
 
     cm_cloud_config_path = cloud_config_path("kube-controller-manager")
-    if is_state("endpoint.aws.ready"):
+    if hookenv.relations()["external-cloud-provider"]:
+        controller_opts["cloud-provider"] = "external"
+    elif is_state("endpoint.aws.ready"):
         controller_opts["cloud-provider"] = "aws"
         feature_gates.append("CSIMigrationAWS=false")
     elif is_state("endpoint.gcp.ready"):
@@ -3623,6 +3633,7 @@ def configure_kubelet():
             hookenv.WARNING,
         )
         return
+    has_xcp = bool(hookenv.relations()["external-cloud-provider"])
 
     local_endpoint = kubernetes_master.get_local_api_endpoint()
     local_url = kubernetes_master.get_api_url(local_endpoint)
@@ -3639,7 +3650,9 @@ def configure_kubelet():
 
     registry = hookenv.config("image-registry")
     taints = hookenv.config("register-with-taints").split()
-    kubernetes_common.configure_kubelet(dns_domain, dns_ip, registry, taints=taints)
+    kubernetes_common.configure_kubelet(
+        dns_domain, dns_ip, registry, taints=taints, has_xcp=has_xcp
+    )
     service_restart("snap.kubelet.daemon")
 
     set_flag("kubernetes-master.kubelet.configured")
