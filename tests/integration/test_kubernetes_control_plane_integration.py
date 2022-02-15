@@ -33,10 +33,12 @@ async def test_build_and_deploy(ops_test, hacluster):
 
     build_script = Path.cwd() / "build-cni-resources.sh"
     resources = await ops_test.build_resources(build_script)
+    expected_resources = {"cni-amd64", "cni-arm64", "cni-s390x"}
 
-    if resources:
+    if all(rsc.stem in expected_resources for rsc in resources):
         resources = {rsc.stem.replace("-", "_"): rsc for rsc in resources}
     else:
+        log.info("Failed to build resources, downloading from latest/edge")
         arch_resources = ops_test.arch_specific_resources(charm)
         resources = await ops_test.download_resources(charm, resources=arch_resources)
         resources = {name.replace("-", "_"): rsc for name, rsc in resources.items()}
