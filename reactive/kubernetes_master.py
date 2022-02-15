@@ -1505,10 +1505,15 @@ def send_api_urls():
     kube_control.set_api_endpoints(kubernetes_master.get_api_urls(endpoints))
 
 
+def has_external_cloud_provider():
+    return bool(hookenv.relations().get("external-cloud-provider"))
+
+
 @when("kube-control.connected")
 def send_xcp_flag():
+    has_xcp = has_external_cloud_provider()
     kube_control = endpoint_from_name("kube-control")
-    kube_control.set_has_xcp(hookenv.relations()["external-cloud-provider"])
+    kube_control.set_has_xcp(has_xcp)
 
 
 @when("certificates.available", "cni.available")
@@ -2458,7 +2463,7 @@ def configure_apiserver():
         api_opts["client-ca-file"] = str(ca_crt_path)
 
     api_cloud_config_path = cloud_config_path("kube-apiserver")
-    if hookenv.relations()["external-cloud-provider"]:
+    if has_external_cloud_provider():
         api_opts["cloud-provider"] = "external"
     elif is_state("endpoint.aws.ready"):
         api_opts["cloud-provider"] = "aws"
@@ -2637,7 +2642,7 @@ def configure_controller_manager():
         controller_opts["node-cidr-mask-size-ipv6"] = net_ipv6.prefixlen
 
     cm_cloud_config_path = cloud_config_path("kube-controller-manager")
-    if hookenv.relations()["external-cloud-provider"]:
+    if has_external_cloud_provider():
         controller_opts["cloud-provider"] = "external"
     elif is_state("endpoint.aws.ready"):
         controller_opts["cloud-provider"] = "aws"
@@ -3633,7 +3638,7 @@ def configure_kubelet():
             hookenv.WARNING,
         )
         return
-    has_xcp = bool(hookenv.relations()["external-cloud-provider"])
+    has_xcp = has_external_cloud_provider()
 
     local_endpoint = kubernetes_master.get_local_api_endpoint()
     local_url = kubernetes_master.get_api_url(local_endpoint)
