@@ -11,6 +11,7 @@ import time
 import yaml
 
 from lightkube.resources.policy_v1beta1 import PodSecurityPolicy
+from lightkube.resources.core_v1 import Node
 
 log = logging.getLogger(__name__)
 
@@ -218,3 +219,13 @@ async def test_service_down(ops_test):
     vip_master = result["resources"]["groups"]["grp_kubernetes-control-plane_vips"]
     node_after = vip_master[0]["nodes"][0]["name"]
     assert node_after != node_before
+
+
+async def test_node_label(ops_test, kubernetes):
+    nodes = kubernetes.list(Node)
+    for node in nodes:
+        assert "juju-application" in node.metadata.labels
+        assert node.metadata.labels["juju-application"] in [
+            "kubernetes-worker",
+            "kubernetes-control-plane",
+        ]
