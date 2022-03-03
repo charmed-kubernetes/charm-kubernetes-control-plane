@@ -15,10 +15,11 @@
 # limitations under the License.
 
 import base64
+import json
 import os
 import re
 import socket
-import json
+import time
 import traceback
 import yaml
 
@@ -326,6 +327,7 @@ def check_for_upgrade_needed():
 
     remove_state("kubernetes-master.system-monitoring-rbac-role.applied")
     remove_state("kubernetes-master.kubelet.configured")
+    remove_state("kubernetes-master.config.created")
     remove_state("kubernetes-master.default-cni.configured")
     remove_state("kubernetes-master.sent-registry")
 
@@ -2946,6 +2948,42 @@ def clear_cluster_tag_sent():
     remove_state("kubernetes-master.cluster-tag-sent")
 
 
+class ApplyNodeLabelFailed(Exception):
+    pass
+
+
+def persistent_call(cmd, retry_message):
+    deadline = time.time() + 180
+    while time.time() < deadline:
+        code = call(cmd)
+        if code == 0:
+            return True
+        hookenv.log(retry_message)
+        time.sleep(1)
+    else:
+        return False
+
+
+def set_label(label, value):
+    nodename = get_node_name()
+    cmd = "kubectl --kubeconfig={0} label node {1} {2}={3} --overwrite"
+    cmd = cmd.format(kubelet_kubeconfig_path, nodename, label, value)
+    cmd = cmd.split()
+    retry = "Failed to apply label %s=%s. Will retry." % (label, value)
+    if not persistent_call(cmd, retry):
+        raise ApplyNodeLabelFailed(retry)
+
+
+def remove_label(label):
+    nodename = get_node_name()
+    cmd = "kubectl --kubeconfig={0} label node {1} {2}-"
+    cmd = cmd.format(kubelet_kubeconfig_path, nodename, label)
+    cmd = cmd.split()
+    retry = "Failed to remove label {0}. Will retry.".format(label)
+    if not persistent_call(cmd, retry):
+        raise ApplyNodeLabelFailed(retry)
+
+
 @when_any(
     "endpoint.aws.joined",
     "endpoint.gcp.joined",
@@ -3658,9 +3696,71 @@ def configure_kubelet():
     kubernetes_common.configure_kubelet(
         dns_domain, dns_ip, registry, taints=taints, has_xcp=has_xcp
     )
+    set_state("kubernetes-master.config.created")
     service_restart("snap.kubelet.daemon")
-
+    set_state("kubernetes-master.label-config-required")
     set_flag("kubernetes-master.kubelet.configured")
+
+
+@when("config.changed.labels")
+def handle_labels_changed():
+    set_state("kubernetes-master.label-config-required")
+
+
+@when("kubernetes-master.label-config-required", "kubernetes-master.config.created")
+def apply_node_labels():
+    """
+    Parse the labels configuration option and apply the labels to the
+    node.
+    """
+    # Get the user's configured labels.
+    config = hookenv.config()
+    user_labels = {}
+    for item in config.get("labels").split(" "):
+        if "=" in item:
+            key, val = item.split("=")
+            user_labels[key] = val
+        else:
+            hookenv.log("Skipping malformed option: {}.".format(item))
+    # Collect the current label state.
+    current_labels = db.get("current_labels") or {}
+
+    try:
+        # Remove any labels that the user has removed from the config.
+        for key in list(current_labels.keys()):
+            if key not in user_labels:
+                remove_label(key)
+                del current_labels[key]
+                db.set("current_labels", current_labels)
+
+        # Add any new labels.
+        for key, val in user_labels.items():
+            set_label(key, val)
+            current_labels[key] = val
+            db.set("current_labels", current_labels)
+
+        # Set the juju-application label.
+        set_label("juju-application", hookenv.service_name())
+
+        # Set the juju.io/cloud label.
+        if is_state("endpoint.aws.ready"):
+            set_label("juju.io/cloud", "ec2")
+        elif is_state("endpoint.gcp.ready"):
+            set_label("juju.io/cloud", "gce")
+        elif is_state("endpoint.openstack.ready"):
+            set_label("juju.io/cloud", "openstack")
+        elif is_state("endpoint.vsphere.ready"):
+            set_label("juju.io/cloud", "vsphere")
+        elif is_state("endpoint.azure.ready"):
+            set_label("juju.io/cloud", "azure")
+        else:
+            remove_label("juju.io/cloud")
+    except ApplyNodeLabelFailed as e:
+        hookenv.log(str(e))
+        return
+
+    # Label configuration complete.
+    remove_state("kubernetes-master.label-config-required")
 
 
 @when_any("config.changed.kubelet-extra-args", "config.changed.kubelet-extra-config")

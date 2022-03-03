@@ -280,6 +280,12 @@ options:
 
       DEPRECATED: this option has no effect on Kubernetes 1.19 and above.
     default: "auto"
+  labels:
+    type: string
+    default: ""
+    description: |
+      Labels can be used to organize and to select subsets of nodes in the
+      cluster. Declare node labels in key=value format, separated by spaces.
   loadbalancer-ips:
     type: string
     description: |

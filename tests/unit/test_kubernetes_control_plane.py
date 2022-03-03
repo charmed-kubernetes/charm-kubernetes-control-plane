@@ -387,3 +387,47 @@ class TestSendClusterDNSDetail:
         hookenv.goal_state.return_value = {}
         kubernetes_master.send_cluster_dns_detail(self.kube_control)
         assert self.kube_control.set_dns.call_args == mock.call(None, None, None, False)
+
+
+class TestNodeLabels:
+    @pytest.fixture(autouse=True)
+    def setup(self, monkeypatch, request):
+        self.kube_control = mock.Mock()
+        self.config = {"labels": f'{request.node.name}="value"'}
+
+        hc = mock.Mock()
+        hc.side_effect = lambda k=None: self.config[k] if k else self.config
+        monkeypatch.setattr(hookenv, "config", hc)
+
+        hsn = mock.Mock(return_value="kubernetes-control-plane")
+        monkeypatch.setattr(hookenv, "service_name", hsn)
+
+        gnn = mock.Mock(return_value="the-node")
+        monkeypatch.setattr(kubernetes_master, "get_node_name", gnn)
+
+        mock_call = self.call = mock.Mock(return_value=0)
+        monkeypatch.setattr(kubernetes_master, "call", mock_call)
+
+        monkeypatch.setattr(
+            kubernetes_master, "kubelet_kubeconfig_path", "/path/to/kube/config"
+        )
+
+    def test_label_add(self, request):
+        base_node_cmd = [
+            "kubectl",
+            "--kubeconfig=/path/to/kube/config",
+            "label",
+            "node",
+            "the-node",
+        ]
+        kubernetes_master.apply_node_labels()
+
+        call_set = [
+            mock.call(base_node_cmd + expected)
+            for expected in [
+                [f'{request.node.name}="value"', "--overwrite"],
+                ["juju-application=kubernetes-control-plane", "--overwrite"],
+                ["juju.io/cloud-"],
+            ]
+        ]
+        self.call.assert_has_calls(call_set, any_order=False)
