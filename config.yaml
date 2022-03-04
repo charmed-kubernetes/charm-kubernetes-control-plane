@@ -80,7 +80,7 @@ options:
       created for the master nodes.
   service-cidr:
     type: string
-    default: 10.152.183.0/24
+    default: 10.152.0.0/16
     description: |
       CIDR to use for Kubernetes services. After deployment it is
       only possible to increase the size of the IP range. It is not possible to
