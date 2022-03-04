@@ -2967,7 +2967,7 @@ def persistent_call(cmd, retry_message):
 def set_label(label, value):
     nodename = get_node_name()
     cmd = "kubectl --kubeconfig={0} label node {1} {2}={3} --overwrite"
-    cmd = cmd.format(kubelet_kubeconfig_path, nodename, label, value)
+    cmd = cmd.format(kubeclientconfig_path, nodename, label, value)
     cmd = cmd.split()
     retry = "Failed to apply label %s=%s. Will retry." % (label, value)
     if not persistent_call(cmd, retry):
@@ -2977,7 +2977,7 @@ def set_label(label, value):
 def remove_label(label):
     nodename = get_node_name()
     cmd = "kubectl --kubeconfig={0} label node {1} {2}-"
-    cmd = cmd.format(kubelet_kubeconfig_path, nodename, label)
+    cmd = cmd.format(kubeclientconfig_path, nodename, label)
     cmd = cmd.split()
     retry = "Failed to remove label {0}. Will retry.".format(label)
     if not persistent_call(cmd, retry):

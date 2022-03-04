@@ -409,7 +409,7 @@ class TestNodeLabels:
         monkeypatch.setattr(kubernetes_master, "call", mock_call)
 
         monkeypatch.setattr(
-            kubernetes_master, "kubelet_kubeconfig_path", "/path/to/kube/config"
+            kubernetes_master, "kubeclientconfig_path", "/path/to/kube/config"
         )
 
     def test_label_add(self, request):
