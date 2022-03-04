@@ -119,7 +119,7 @@ section on [configuring K8s services](#k8s-services).
 | <a id="table-proxy-extra-args"> </a> proxy-extra-args | string |  | [See notes](#proxy-extra-args-description)  |
 | <a id="table-require-manual-upgrade"> </a> require-manual-upgrade | boolean | True | When true, master nodes will not be upgraded until the user triggers it manually by running the upgrade action.  |
 | <a id="table-scheduler-extra-args"> </a> scheduler-extra-args | string |  | [See notes](#scheduler-extra-args-description)  |
-| <a id="table-service-cidr"> </a> service-cidr | string | 10.152.183.0/24 | CIDR to user for Kubernetes services. Cannot be changed after deployment.  |
+| <a id="table-service-cidr"> </a> service-cidr | string | 10.152.0.0/16 | CIDR to user for Kubernetes services. Cannot be changed after deployment.  |
 | <a id="table-snap_proxy"> </a> snap_proxy | string |  | DEPRECATED. Use snap-http-proxy and snap-https-proxy model configuration settings. HTTP/HTTPS web proxy for Snappy to use when accessing the snap store.  |
 | <a id="table-snap_proxy_url"> </a> snap_proxy_url | string |  | DEPRECATED. Use snap-store-proxy model configuration setting. The address of a Snap Store Proxy to use for snaps e.g. http://snap-proxy.example.com  |
 | <a id="table-snapd_refresh"> </a> snapd_refresh | string | max | [See notes](#snapd_refresh-description)  |
