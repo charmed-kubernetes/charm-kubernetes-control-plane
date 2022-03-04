@@ -3661,17 +3661,12 @@ def configure_kubelet():
         dns_domain, dns_ip, registry, taints=taints, has_xcp=has_xcp
     )
     service_restart("snap.kubelet.daemon")
-    set_state("kubernetes-master.label-config-required")
+    set_state("node.label-config-required")
     set_flag("kubernetes-master.kubelet.configured")
 
 
-@when("config.changed.labels")
-def handle_labels_changed():
-    set_state("kubernetes-master.label-config-required")
-
-
 @when(
-    "kubernetes-master.label-config-required",
+    "node.label-config-required",
     "kubernetes-master.kubelet.configured",
     "kubernetes-master.apiserver.configured",
     "authentication.setup",
@@ -3683,7 +3678,7 @@ def apply_node_labels():
         label_maker.apply_node_labels()
     except LabelMaker.NodeLabelError:
         return
-    remove_state("kubernetes-master.label-config-required")
+    remove_state("node.label-config-required")
 
 
 @when_any("config.changed.kubelet-extra-args", "config.changed.kubelet-extra-config")
