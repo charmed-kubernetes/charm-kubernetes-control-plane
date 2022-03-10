@@ -15,10 +15,10 @@
 # limitations under the License.
 
 import base64
+import json
 import os
 import re
 import socket
-import json
 import traceback
 import yaml
 
@@ -89,6 +89,8 @@ from charms.layer.kubernetes_common import _get_vmware_uuid
 from charms.layer.kubernetes_common import get_node_name
 from charms.layer.kubernetes_common import get_sandbox_image_uri
 from charms.layer.kubernetes_common import kubelet_kubeconfig_path
+
+from charms.layer.kubernetes_master_worker_base import LabelMaker
 
 from charms.layer.nagios import install_nagios_plugin_from_file
 from charms.layer.nagios import remove_nagios_plugin
@@ -3659,8 +3661,24 @@ def configure_kubelet():
         dns_domain, dns_ip, registry, taints=taints, has_xcp=has_xcp
     )
     service_restart("snap.kubelet.daemon")
-
+    set_state("node.label-config-required")
     set_flag("kubernetes-master.kubelet.configured")
+
+
+@when(
+    "node.label-config-required",
+    "kubernetes-master.kubelet.configured",
+    "kubernetes-master.apiserver.configured",
+    "authentication.setup",
+)
+def apply_node_labels():
+    # Label configuration complete.
+    label_maker = LabelMaker(kubeclientconfig_path)
+    try:
+        label_maker.apply_node_labels()
+    except LabelMaker.NodeLabelError:
+        return
+    remove_state("node.label-config-required")
 
 
 @when_any("config.changed.kubelet-extra-args", "config.changed.kubelet-extra-config")
