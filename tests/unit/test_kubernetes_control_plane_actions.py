@@ -30,42 +30,56 @@ def test_user_list():
 @mock.patch("actions.user_actions.layer.kubernetes_common")
 @mock.patch("actions.user_actions.layer.kubernetes_master")
 @mock.patch("actions.user_actions.action_get")
-def test_user_create(mock_get, mock_master, mock_common, mock_chmod):
+def test_user_create(mock_get, mock_control_plane, mock_common, mock_chmod):
     """Verify expected calls are made when creating a user."""
     user = secret_id = "testuser"
     test_data = {user: secret_id}
+
+    def make_api_url(endpoints):
+        return ["https://{0}:{1}".format(*endpoint) for endpoint in endpoints]
 
     # Ensure failure when user exists
     mock_get.return_value = user
     with mock.patch("actions.user_actions.user_list", return_value=test_data):
         user_actions.user_create()
         assert user_actions.action_fail.called
+        user_actions.action_fail.reset_mock()
 
     # Ensure failure when user name is invalid
     mock_get.return_value = "FunnyBu;sness"
     with mock.patch("actions.user_actions.user_list", return_value=test_data):
         user_actions.user_create()
         assert user_actions.action_fail.called
+        user_actions.action_fail.reset_mock()
 
     # Ensure calls/args when we have a new user
     user = "newuser"
     password = "password"
     token = "{}::{}".format(user, password)
     mock_get.return_value = user
-    mock_master.token_generator.return_value = password
-    mock_master.get_api_endpoint.return_value = [1, 1]
+    mock_control_plane.token_generator.return_value = password
+    mock_control_plane.get_external_api_endpoints.return_value = []
+    with mock.patch("actions.user_actions.user_list", return_value=test_data):
+        user_actions.user_create()
+        assert user_actions.action_fail.called
+        user_actions.action_fail.reset_mock()
+
+    mock_control_plane.get_external_api_endpoints.return_value = [("test", 1234)]
+    mock_control_plane.get_api_urls.side_effect = make_api_url
 
     with mock.patch("actions.user_actions.user_list", return_value=test_data):
         user_actions.user_create()
     args, kwargs = mock_common.create_secret.call_args
     assert token in args
     args, kwargs = mock_common.create_kubeconfig.call_args
+    assert args[0] == "/home/ubuntu/newuser-kubeconfig"
+    assert args[1] == "https://test:1234"
     assert token in kwargs["token"]
 
 
 @mock.patch("actions.user_actions.layer.kubernetes_master")
 @mock.patch("actions.user_actions.action_get")
-def test_user_delete(mock_get, mock_master):
+def test_user_delete(mock_get, mock_control_plane):
     """Verify expected calls are made when deleting a user."""
     user = secret_id = "testuser"
     test_data = {user: secret_id}
@@ -81,5 +95,5 @@ def test_user_delete(mock_get, mock_master):
 
     with mock.patch("actions.user_actions.user_list", return_value=test_data):
         user_actions.user_delete()
-    args, kwargs = mock_master.delete_secret.call_args
+    args, kwargs = mock_control_plane.delete_secret.call_args
     assert secret_id in args

@@ -8,18 +8,19 @@ import pytest
 import time
 import yaml
 
+from lightkube.resources.policy_v1beta1 import PodSecurityPolicy
+
 log = logging.getLogger(__name__)
 
 
-CNI_ARCH_URL = "https://api.jujucharms.com/charmstore/v5/~containers/kubernetes-master-{charm}/resource/cni-{arch}/{rev}"  # noqa
+CNI_ARCH_URL = "https://api.jujucharms.com/charmstore/v5/~containers/kubernetes-master-{charm}/resource/cni-{arch}"  # noqa
 CHUNK_SIZE = 16000
 
 
-async def _retrieve_url(charm, arch, rev, target_file):
+async def _retrieve_url(charm, arch, target_file):
     url = CNI_ARCH_URL.format(
         charm=charm,
         arch=arch,
-        rev=rev,
     )
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
@@ -31,7 +32,7 @@ async def _retrieve_url(charm, arch, rev, target_file):
 def _check_status_messages(ops_test):
     """Validate that the status messages are correct."""
     expected_messages = {
-        "kubernetes-master": "Kubernetes master running.",
+        "kubernetes-control-plane": "Kubernetes master running.",
         "kubernetes-worker": "Kubernetes worker running.",
     }
     for app, message in expected_messages.items():
@@ -40,10 +41,12 @@ def _check_status_messages(ops_test):
 
 
 @pytest.fixture()
-async def setup_resources(ops_test, tmpdir):
+async def setup_resources(ops_test):
     """Provides the cni resources needed to deploy the charm."""
     cwd = Path.cwd()
     current_resources = list(cwd.glob("*.tgz"))
+    tmpdir = ops_test.tmp_path / "resources"
+    tmpdir.mkdir(parents=True, exist_ok=True)
     if not current_resources:
         # If they are not locally available, try to build them
         log.info("Build Resources...")
@@ -59,7 +62,7 @@ async def setup_resources(ops_test, tmpdir):
         log.info("Downloading Resources...")
         await asyncio.gather(
             *(
-                _retrieve_url(1099, arch, 3, tmpdir / f"cni-{arch}.tgz")
+                _retrieve_url(1099, arch, tmpdir / f"cni-{arch}.tgz")
                 for arch in ("amd64", "arm64", "s390x")
             )
         )
@@ -76,7 +79,7 @@ async def test_build_and_deploy(ops_test, setup_resources):
     log.info("Build Bundle...")
     charm_resources = {rsc.stem.replace("-", "_"): rsc for rsc in setup_resources}
     bundle = ops_test.render_bundle(
-        "tests/data/bundle.yaml", master_charm=charm, **charm_resources
+        "tests/data/bundle.yaml", charm=charm, **charm_resources
     )
 
     log.info("Deploy Charm...")
@@ -87,15 +90,15 @@ async def test_build_and_deploy(ops_test, setup_resources):
 
     log.info(stdout)
     await ops_test.model.block_until(
-        lambda: "kubernetes-master" in ops_test.model.applications, timeout=60
+        lambda: "kubernetes-control-plane" in ops_test.model.applications, timeout=60
     )
 
     try:
         await ops_test.model.wait_for_idle(wait_for_active=True, timeout=60 * 60)
     except asyncio.TimeoutError:
-        if "kubernetes-master" not in ops_test.model.applications:
+        if "kubernetes-control-plane" not in ops_test.model.applications:
             raise
-        app = ops_test.model.applications["kubernetes-master"]
+        app = ops_test.model.applications["kubernetes-control-plane"]
         if not app.units:
             raise
         unit = app.units[0]
@@ -112,7 +115,8 @@ async def test_build_and_deploy(ops_test, setup_resources):
 async def test_kube_api_endpoint(ops_test):
     """Validate that adding the kube-api-endpoint relation works"""
     await ops_test.model.add_relation(
-        "kubernetes-master:kube-api-endpoint", "kubernetes-worker:kube-api-endpoint"
+        "kubernetes-control-plane:kube-api-endpoint",
+        "kubernetes-worker:kube-api-endpoint",
     )
     await ops_test.model.wait_for_idle(wait_for_active=True, timeout=10 * 60)
     _check_status_messages(ops_test)
@@ -129,7 +133,7 @@ async def juju_run(unit, cmd):
 
 async def test_auth_load(ops_test):
     """Verify that the auth server can handle heavy load and / or dead endpoints."""
-    app = ops_test.model.applications["kubernetes-master"]
+    app = ops_test.model.applications["kubernetes-control-plane"]
     unit = app.units[0]
 
     log.info("Opening auth-webhook port")
@@ -192,17 +196,19 @@ async def test_pod_security_policy(ops_test, kubernetes):
     async def wait_for_psp(privileged):
         deadline = time.time() + 60 * 10
         while time.time() < deadline:
-            psp = kubernetes.read_object(test_psp)
+            psp = kubernetes.get(PodSecurityPolicy, name="privileged")
             if bool(psp.spec.privileged) == privileged:
                 break
             await asyncio.sleep(10)
         else:
             pytest.fail("Timed out waiting for PodSecurityPolicy update")
 
-    app = ops_test.model.applications["kubernetes-master"]
+    app = ops_test.model.applications["kubernetes-control-plane"]
 
     await app.set_config({"pod-security-policy": yaml.dump(test_psp)})
+    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=60)
     await wait_for_psp(privileged=False)
 
     await app.set_config({"pod-security-policy": ""})
+    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=60)
     await wait_for_psp(privileged=True)

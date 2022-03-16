@@ -1,12 +1,19 @@
 description: A minimal two-machine Kubernetes cluster, appropriate for development.
-series: focal
+series: &series focal
 machines:
   '0':
     constraints: cores=2 mem=4G root-disk=16G
-    series: focal
+    series: *series
   '1':
     constraints: cores=4 mem=4G root-disk=16G
-    series: focal
+    series: *series
+  '2':
+  '3':
+    constraints: mem=3072M
+  '4':
+    constraints: mem=3072M
+  '5':
+    constraints: mem=3072M
 applications:
   containerd:
     charm: cs:~containers/containerd
@@ -28,13 +35,24 @@ applications:
   flannel:
     charm: cs:~containers/flannel
     channel: edge
-  kubernetes-master:
-    charm: {{master_charm}}
+  keystone:
+    charm: keystone
+    channel: edge
+    num_units: 1
+    options:
+      openstack-origin: distro
+      token-provider: 'fernet'
+      token-expiration: 300
+    to:
+    - '2'
+  kubernetes-control-plane:
+    charm: {{charm}}
     constraints: cores=2 mem=4G root-disk=16G
     expose: true
     num_units: 1
     options:
       channel: 1.23/stable
+      enable-keystone-authorization: True
     resources:
       cni-amd64: {{cni_amd64|default("0")}}
       cni-arm64: {{cni_arm64|default("0")}}
@@ -58,17 +76,28 @@ applications:
       channel: 1.23/stable
     to:
     - '1'
+  keystone-mysql-router:
+    charm: mysql-router
+    channel: edge
+  mysql-innodb-cluster:
+    charm: mysql-innodb-cluster
+    channel: edge
+    num_units: 3
+    to:
+    - '3'
+    - '4'
+    - '5'
   prometheus:
     charm: cs:prometheus2
     num_units: 1
     to:
       - '0'
 relations:
-- - kubernetes-master:kube-control
+- - kubernetes-control-plane:kube-control
   - kubernetes-worker:kube-control
-- - kubernetes-master:certificates
+- - kubernetes-control-plane:certificates
   - easyrsa:client
-- - kubernetes-master:etcd
+- - kubernetes-control-plane:etcd
   - etcd:db
 - - kubernetes-worker:certificates
   - easyrsa:client
@@ -77,12 +106,19 @@ relations:
 - - flannel:etcd
   - etcd:db
 - - flannel:cni
-  - kubernetes-master:cni
+  - kubernetes-control-plane:cni
 - - flannel:cni
   - kubernetes-worker:cni
 - - containerd:containerd
   - kubernetes-worker:container-runtime
 - - containerd:containerd
-  - kubernetes-master:container-runtime
-- - kubernetes-master:prometheus
+  - kubernetes-control-plane:container-runtime
+- - kubernetes-control-plane:prometheus
   - prometheus:manual-jobs
+# Keystone Relations
+- - kubernetes-control-plane:keystone-credentials
+  - keystone:identity-credentials
+- - keystone-mysql-router:db-router
+  - mysql-innodb-cluster:db-router
+- - keystone-mysql-router:shared-db
+  - keystone:shared-db

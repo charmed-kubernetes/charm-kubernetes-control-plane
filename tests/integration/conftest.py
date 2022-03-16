@@ -1,8 +1,12 @@
-from kubernetes_wrapper import Kubernetes
 import logging
 import pytest
 import random
 import string
+
+from lightkube import KubeConfig, Client
+from lightkube.resources.core_v1 import Namespace
+from lightkube.models.meta_v1 import ObjectMeta
+
 
 log = logging.getLogger(__name__)
 
@@ -16,23 +20,26 @@ async def kubernetes(ops_test):
         "scp",
         "-m",
         ops_test.model_full_name,
-        "kubernetes-master/leader:config",
+        "kubernetes-control-plane/leader:config",
         kubeconfig_path,
     )
     if retcode != 0:
         log.error(f"retcode: {retcode}")
         log.error(f"stdout:\n{stdout.strip()}")
         log.error(f"stderr:\n{stderr.strip()}")
-        pytest.fail("Failed to copy kubeconfig from kubernetes-master")
-    namespace = "test-kubernetes-master-integration-" + "".join(
-        random.choice(string.ascii_lowercase + string.digits) for _ in range(5)
+        pytest.fail("Failed to copy kubeconfig from kubernetes-control-plane")
+
+    namespace = (
+        "test-kubernetes-control-plane-integration-"
+        + random.choice(string.ascii_lowercase + string.digits) * 5
     )
-    kubernetes = Kubernetes(namespace, kubeconfig=str(kubeconfig_path))
-    namespace_object = {
-        "apiVersion": "v1",
-        "kind": "Namespace",
-        "metadata": {"name": namespace},
-    }
-    kubernetes.apply_object(namespace_object)
+    config = KubeConfig.from_file(kubeconfig_path)
+    kubernetes = Client(
+        config=config.get(context_name="juju-context"),
+        namespace=namespace,
+        trust_env=False,
+    )
+    namespace_obj = Namespace(metadata=ObjectMeta(name=namespace))
+    kubernetes.create(namespace_obj)
     yield kubernetes
-    kubernetes.delete_object(namespace_object)
+    kubernetes.delete(Namespace, namespace)
