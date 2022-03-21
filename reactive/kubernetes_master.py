@@ -3725,4 +3725,5 @@ HEAL_HANDLER = {
         "run": start_master,
         "clear_flags": ["kubernetes-master.components.started"],
     },
+    "kubelet": {"run": reconfigure_kubelet, "clear_flags": []},
 }
