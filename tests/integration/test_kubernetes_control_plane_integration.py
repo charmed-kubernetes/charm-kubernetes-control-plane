@@ -196,18 +196,18 @@ async def test_pod_security_policy(ops_test, kubernetes):
 
 @pytest.mark.hacluster
 async def test_service_down(ops_test):
-    """Test VIP change node when master services fail"""
+    """Test VIP change node when control_plane services fail"""
     ha_unit = ops_test.model.applications["hacluster-kubernetes-control-plane"].units[0]
     action = await ha_unit.run_action("status")
     action = await action.wait()
     result = json.loads(action.results["result"])
-    vip_master = result["resources"]["groups"]["grp_kubernetes-control-plane_vips"]
-    node_before = vip_master[0]["nodes"][0]["name"]
+    vip_main = result["resources"]["groups"]["grp_kubernetes-control-plane_vips"]
+    node_before = vip_main[0]["nodes"][0]["name"]
 
-    # simulate a failover on one master resource (scheduler)
-    master_machine = node_before.split("-")[-1]
+    # simulate a failover on one control_plane resource (scheduler)
+    main_machine = node_before.split("-")[-1]
     for unit in ops_test.model.applications["kubernetes-control-plane"].units:
-        if unit.entity_id.split("/")[-1] == master_machine:
+        if unit.entity_id.split("/")[-1] == main_machine:
             await unit.run("systemctl stop snap.kube-scheduler.daemon")
             # run a hook to update status of the unit
             await unit.run("./hooks/update-status")
@@ -216,8 +216,8 @@ async def test_service_down(ops_test):
     action = await ha_unit.run_action("status")
     action = await action.wait()
     result = json.loads(action.results["result"])
-    vip_master = result["resources"]["groups"]["grp_kubernetes-control-plane_vips"]
-    node_after = vip_master[0]["nodes"][0]["name"]
+    vip_main = result["resources"]["groups"]["grp_kubernetes-control-plane_vips"]
+    node_after = vip_main[0]["nodes"][0]["name"]
     assert node_after != node_before
 
 

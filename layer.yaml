@@ -8,7 +8,7 @@ includes:
   - 'layer:metrics'
   - 'layer:nagios'
   - 'layer:cdk-service-kicker'
-  - 'layer:kubernetes-master-worker-base'
+  - 'layer:kubernetes-master-worker-base'  # wokeignore:rule=master
   - 'layer:vault-kv'
   - 'layer:vaultlocker'
   - 'layer:hacluster'
@@ -19,7 +19,7 @@ includes:
   - 'interface:kubernetes-cni'
   - 'interface:kube-dns'
   - 'interface:kube-control'
-  - 'interface:kube-masters'
+  - 'interface:kube-masters'              # wokeignore:rule=master
   - 'interface:public-address'
   - 'interface:aws-integration'
   - 'interface:gcp-integration'

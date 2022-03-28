@@ -2,6 +2,17 @@ name: Test Suite
 on: [pull_request]
 
 jobs:
+  Inclusive-naming-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+      - name: woke
+        uses: canonical-web-and-design/inclusive-naming@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-check
+          fail-on-error: true
   lint-unit-wheelhouse:
     name: Lint, Unit, Wheelhouse
     runs-on: ubuntu-latest

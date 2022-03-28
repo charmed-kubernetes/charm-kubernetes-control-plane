@@ -201,7 +201,7 @@ async def check_custom(token_review):
     '''Check the request with a user-specified authn server.'''
     app.logger.info('Checking Custom Endpoint')
 
-    # User will set the URL in k8s-master config
+    # User will set the URL in k8s-cp config
     app.logger.debug('Forwarding to: {}'.format(CUSTOM_AUTHN_ENDPOINT))
 
     return await forward_request(token_review, CUSTOM_AUTHN_ENDPOINT)
@@ -377,7 +377,7 @@ async def refresh_secrets(app):
         # uid::token. Split the decoded password so we can send a 'uid' back.
         # If there is no delimiter, set uid == username.
         # TODO: make the delimeter less magical so it doesn't get out of
-        # sync with the function that creates secrets in k8s-master.py.
+        # sync with the function that creates secrets in kubernetes_control_plane.py.
         pw_delim = '::'
         if pw_delim in password:
             uid = password.rsplit(pw_delim, 1)[0]

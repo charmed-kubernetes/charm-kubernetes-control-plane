@@ -77,7 +77,7 @@ options:
     default: ""
     description: |
       Space-separated list of extra SAN entries to add to the x509 certificate
-      created for the master nodes.
+      created for the  control plane nodes.
   service-cidr:
     type: string
     default: 10.152.183.0/24
@@ -107,7 +107,7 @@ options:
     type: string
     default: "1.23/edge"
     description: |
-      Snap channel to install Kubernetes master services from
+      Snap channel to install Kubernetes  control plane services from
   client_password:
     type: string
     default: ""
@@ -150,7 +150,7 @@ options:
     type: boolean
     default: true
     description: |
-      When true, master nodes will not be upgraded until the user triggers
+      When true,  control plane nodes will not be upgraded until the user triggers
       it manually by running the upgrade action.
   storage-backend:
     type: string
@@ -256,7 +256,7 @@ options:
     type: string
     description: |
       Policy for Keystone authorization. This is used when a Keystone charm is
-      related to kubernetes-master in order to provide authorization
+      related to kubernetes-control-plane in order to provide authorization
       for Keystone users on the Kubernetes cluster.
   enable-keystone-authorization:
     type: boolean
@@ -269,14 +269,14 @@ options:
     type: string
     description: |
       Keystone certificate authority encoded in base64 for securing communications to Keystone.
-      For example: `juju config kubernetes-master keystone-ssl-ca=$(base64 /path/to/ca.crt)`
+      For example: `juju config kubernetes-control-plane keystone-ssl-ca=$(base64 /path/to/ca.crt)`
     default: ""
   dashboard-auth:
     type: string
     description: |
       Method of authentication for the Kubernetes dashboard. Allowed values are "auto",
       "basic", and "token". If set to "auto", basic auth is used unless Keystone is
-      related to kubernetes-master, in which case token auth is used.
+      related to kubernetes-control-plane, in which case token auth is used.
 
       DEPRECATED: this option has no effect on Kubernetes 1.19 and above.
     default: "auto"
@@ -288,7 +288,7 @@ options:
       plane or the IP of a loadbalancer appliance such as an F5. Workers will alternate IP
       addresses from this list to distribute load - for example If you have 2 IPs and 4 workers,
       each IP will be used by 2 workers. Note that this will only work if kubeapi-load-balancer
-      is not in use and there is a relation between kubernetes-master:kube-api-endpoint and
+      is not in use and there is a relation between kubernetes-control-plane:kube-api-endpoint and
       kubernetes-worker:kube-api-endpoint. If using the kubeapi-load-balancer, see the
       loadbalancer-ips configuration variable on the kubeapi-load-balancer charm.
     default: ""
@@ -300,7 +300,7 @@ options:
       The value of this config should be the application name of a related CNI
       subordinate. For example:
 
-      juju config kubernetes-master default-cni=flannel
+      juju config kubernetes-control-plane default-cni=flannel
 
       If unspecified, then the default CNI network is chosen alphabetically.
     default: ""
@@ -309,7 +309,7 @@ options:
     default: ""
     description: |
       Custom endpoint to check when authenticating kube-apiserver requests.
-      This must be an https url accessible by the k8s-master units. For example:
+      This must be an https url accessible by the k8s- control plane units. For example:
 
       https://your.server:8443/authenticate
 
@@ -326,7 +326,7 @@ options:
       A good example of a PSP policy can be found here [1].
 
       [0] https://kubernetes.io/docs/concepts/policy/pod-security-policy/
-      [1] https://github.com/kubernetes/examples/blob/master/staging/podsecuritypolicy/rbac/policies.yaml
+      [1] https://github.com/kubernetes/examples/blob/main/staging/podsecuritypolicy/rbac/policies.yaml
   register-with-taints:
     type: string
     default: "juju.is/kubernetes-control-plane=true:NoSchedule"

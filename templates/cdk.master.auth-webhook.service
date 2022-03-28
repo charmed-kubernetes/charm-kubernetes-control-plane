@@ -1,5 +1,5 @@
 [Unit]
-Description=CDK master auth webhook
+Description=CDK control-plane auth webhook
 After=network.target
 StartLimitIntervalSec=0
 
