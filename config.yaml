@@ -77,7 +77,7 @@ options:
     default: ""
     description: |
       Space-separated list of extra SAN entries to add to the x509 certificate
-      created for the  control plane nodes.
+      created for the control plane nodes.
   service-cidr:
     type: string
     default: 10.152.183.0/24
@@ -107,7 +107,7 @@ options:
     type: string
     default: "1.23/edge"
     description: |
-      Snap channel to install Kubernetes  control plane services from
+      Snap channel to install Kubernetes control plane services from
   client_password:
     type: string
     default: ""
@@ -150,7 +150,7 @@ options:
     type: boolean
     default: true
     description: |
-      When true,  control plane nodes will not be upgraded until the user triggers
+      When true, control plane nodes will not be upgraded until the user triggers
       it manually by running the upgrade action.
   storage-backend:
     type: string
@@ -309,7 +309,7 @@ options:
     default: ""
     description: |
       Custom endpoint to check when authenticating kube-apiserver requests.
-      This must be an https url accessible by the k8s- control plane units. For example:
+      This must be an https url accessible by the kubernetes-control-plane units. For example:
 
       https://your.server:8443/authenticate
 
@@ -326,7 +326,7 @@ options:
       A good example of a PSP policy can be found here [1].
 
       [0] https://kubernetes.io/docs/concepts/policy/pod-security-policy/
-      [1] https://github.com/kubernetes/examples/blob/main/staging/podsecuritypolicy/rbac/policies.yaml
+      [1] https://github.com/kubernetes/examples/blob/master/staging/podsecuritypolicy/rbac/policies.yaml
   register-with-taints:
     type: string
     default: "juju.is/kubernetes-control-plane=true:NoSchedule"
