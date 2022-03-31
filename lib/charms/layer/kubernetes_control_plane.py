@@ -19,7 +19,6 @@ from charms.layer import kubernetes_common
 from charms.layer.kubernetes_common import AUTH_SECRET_NS, create_secret
 
 
-CHARM_PREFIX = "kubernetes-master"  # wokeignore:rule=master
 AUTH_BACKUP_EXT = "pre-secrets"
 AUTH_BASIC_FILE = "/root/cdk/basic_auth.csv"
 AUTH_TOKENS_FILE = "/root/cdk/known_tokens.csv"
@@ -366,7 +365,7 @@ except AttributeError:
 
 
 def is_service_cidr_expansion():
-    service_cidr_from_db = db.get(CHARM_PREFIX + ".service-cidr")
+    service_cidr_from_db = db.get("kubernetes-master.service-cidr")
     service_cidr_from_config = hookenv.config("service-cidr")
     if not service_cidr_from_db:
         return False
@@ -388,16 +387,16 @@ def is_service_cidr_expansion():
 
 def service_cidr():
     """Return the charm's service-cidr config"""
-    frozen_cidr = db.get(CHARM_PREFIX + ".service-cidr")
+    frozen_cidr = db.get("kubernetes-master.service-cidr")
     return frozen_cidr or hookenv.config("service-cidr")
 
 
 def freeze_service_cidr():
     """Freeze the service CIDR. Once the apiserver has started, we can no
     longer safely change this value."""
-    frozen_service_cidr = db.get(CHARM_PREFIX + ".service-cidr")
+    frozen_service_cidr = db.get("kubernetes-master.service-cidr")
     if not frozen_service_cidr or is_service_cidr_expansion():
-        db.set(CHARM_PREFIX + ".service-cidr", hookenv.config("service-cidr"))
+        db.set("kubernetes-master.service-cidr", hookenv.config("service-cidr"))
 
 
 def get_preferred_service_network(service_cidrs):

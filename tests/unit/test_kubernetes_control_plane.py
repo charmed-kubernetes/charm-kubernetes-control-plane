@@ -12,19 +12,9 @@ from charms.reactive import set_flag, is_flag_set, clear_flag
 from charmhelpers.core import hookenv, host, unitdata
 
 
-kflags = kubernetes_control_plane.flags
 kubernetes_common.get_networks = lambda cidrs: [
     ip_interface(cidr.strip()).network for cidr in cidrs.split(",")
 ]
-
-
-def test_flag_maker():
-    assert kflags.charm("abc") == "kubernetes-master.abc"  # wokeignore:rule=master
-    assert kflags.nrpe("a", "b") == "nrpe-external-master.a.b"  # wokeignore:rule=master
-    assert kflags.cdk("abc", "def.") == "cdk.master.abc.def."  # wokeignore:rule=master
-    with pytest.raises(AttributeError) as ie:
-        kflags.test_name("test")
-    assert str(ie.value) == "'MkFlag' object has no attribute 'test_name'"
 
 
 def test_send_default_cni():
@@ -35,9 +25,9 @@ def test_send_default_cni():
 
 
 def test_default_cni_changed():
-    set_flag(kflags.charm("components.started"))
+    set_flag("kubernetes-master.components.started")
     kubernetes_control_plane.default_cni_changed()
-    assert not is_flag_set(kflags.charm("components.started"))
+    assert not is_flag_set("kubernetes-master.components.started")
 
 
 def test_series_upgrade():
@@ -56,7 +46,7 @@ def test_series_upgrade():
 def configure_apiserver(service_cidr_from_db, service_cidr_from_config):
     set_flag("leadership.is_leader")
     db = unitdata.kv()
-    db.set(kflags.charm("service-cidr"), service_cidr_from_db)
+    db.set("kubernetes-master.service-cidr", service_cidr_from_db)
     hookenv.config.return_value = service_cidr_from_config
     get_version.return_value = (1, 18)
     kubernetes_control_plane.configure_apiserver()
@@ -87,33 +77,33 @@ def update_for_service_cidr_expansion():
 
 def test_service_cidr_greenfield_deploy():
     configure_apiserver(None, "10.152.183.0/24")
-    assert not is_flag_set(kflags.charm("had-service-cidr-expanded"))
+    assert not is_flag_set("kubernetes-master.had-service-cidr-expanded")
     configure_apiserver(None, "10.152.183.0/24,fe80::/120")
-    assert not is_flag_set(kflags.charm("had-service-cidr-expanded"))
+    assert not is_flag_set("kubernetes-master.had-service-cidr-expanded")
 
 
 def test_service_cidr_no_change():
     configure_apiserver("10.152.183.0/24", "10.152.183.0/24")
-    assert not is_flag_set(kflags.charm("had-service-cidr-expanded"))
+    assert not is_flag_set("kubernetes-master.had-service-cidr-expanded")
     configure_apiserver("10.152.183.0/24,fe80::/120", "10.152.183.0/24,fe80::/120")
-    assert not is_flag_set(kflags.charm("had-service-cidr-expanded"))
+    assert not is_flag_set("kubernetes-master.had-service-cidr-expanded")
 
 
 def test_service_cidr_non_expansion():
     configure_apiserver("10.152.183.0/24", "10.154.183.0/24")
-    assert not is_flag_set(kflags.charm("had-service-cidr-expanded"))
+    assert not is_flag_set("kubernetes-master.had-service-cidr-expanded")
     configure_apiserver("10.152.183.0/24,fe80::/120", "10.152.183.0/24,fe81::/120")
-    assert not is_flag_set(kflags.charm("had-service-cidr-expanded"))
+    assert not is_flag_set("kubernetes-master.had-service-cidr-expanded")
 
 
 def test_service_cidr_expansion():
     configure_apiserver("10.152.183.0/24", "10.152.0.0/16")
-    assert is_flag_set(kflags.charm("had-service-cidr-expanded"))
-    clear_flag(kflags.charm("had-service-cidr-expanded"))
+    assert is_flag_set("kubernetes-master.had-service-cidr-expanded")
+    clear_flag("kubernetes-master.had-service-cidr-expanded")
     configure_apiserver("10.152.183.0/24,fe80::/120", "10.152.183.0/24,fe80::/112")
-    assert is_flag_set(kflags.charm("had-service-cidr-expanded"))
+    assert is_flag_set("kubernetes-master.had-service-cidr-expanded")
     db = unitdata.kv()
-    db.set(kflags.charm("service-cidr"), "10.152.0.0/16")
+    db.set("kubernetes-master.service-cidr", "10.152.0.0/16")
     update_for_service_cidr_expansion()
     assert kubectl.call_count == 4
 
@@ -135,7 +125,7 @@ def test_update_certificates_with_missing_relations(mock_send_data):
 def test_status_set_on_missing_ca():
     """Test that set_final_status() will set blocked state if CA is missing"""
     set_flag("certificates.available")
-    set_flag(kflags.charm("secure-storage.failed"))
+    set_flag("kubernetes-master.secure-storage.failed")
     kubernetes_control_plane.set_final_status()
     hookenv.status_set.assert_called_with(
         "blocked",
@@ -151,20 +141,20 @@ def test_status_set_on_missing_ca():
 def test_status_set_on_incomplete_lb():
     """Test that set_final_status() will set waiting if LB is pending."""
     set_flag("certificates.available")
-    clear_flag(kflags.charm("secure-storage.failed"))
+    clear_flag("kubernetes-master.secure-storage.failed")
     set_flag("kube-control.connected")
     set_flag("etcd.available")
     set_flag("cni.available")
     set_flag("tls_client.certs.saved")
-    set_flag(kflags.charm("auth-webhook-service.started"))
-    set_flag(kflags.charm("apiserver.configured"))
-    set_flag(kflags.charm("apiserver.running"))
+    set_flag("kubernetes-master.auth-webhook-service.started")
+    set_flag("kubernetes-master.apiserver.configured")
+    set_flag("kubernetes-master.apiserver.running")
     set_flag("authentication.setup")
-    set_flag(kflags.charm("auth-webhook-tokens.setup"))
-    set_flag(kflags.charm("components.started"))
+    set_flag("kubernetes-master.auth-webhook-tokens.setup")
+    set_flag("kubernetes-master.components.started")
     set_flag("cdk-addons.configured")
     set_flag("kubernetes.cni-plugins.installed")
-    set_flag(kflags.charm("system-monitoring-rbac-role.applied"))
+    set_flag("kubernetes-master.system-monitoring-rbac-role.applied")
     hookenv.config.return_value = "auto"
     host.service_running.return_value = True
     kubectl.side_effect = None
@@ -215,24 +205,24 @@ def test_status_set_on_incomplete_lb():
 def test_status_set_on_failed_master_services(call, heal_handler, msd):
     """Test that set_final_status() will set node to standby mode if a service fail"""
     set_flag("certificates.available")
-    clear_flag(kflags.charm("secure-storage.failed"))
+    clear_flag("kubernetes-master.secure-storage.failed")
     set_flag("kube-control.connected")
     set_flag("etcd.available")
     set_flag("cni.available")
     set_flag("tls_client.certs.saved")
-    set_flag(kflags.charm("auth-webhook-service.started"))
-    set_flag(kflags.charm("apiserver.configured"))
-    set_flag(kflags.charm("apiserver.running"))
+    set_flag("kubernetes-master.auth-webhook-service.started")
+    set_flag("kubernetes-master.apiserver.configured")
+    set_flag("kubernetes-master.apiserver.running")
     set_flag("authentication.setup")
-    set_flag(kflags.charm("auth-webhook-tokens.setup"))
-    set_flag(kflags.charm("components.started"))
+    set_flag("kubernetes-master.auth-webhook-tokens.setup")
+    set_flag("kubernetes-master.components.started")
     set_flag("ha.connected")
 
     msd.return_value = ["kube-apiserver"]
     test_heal_handler = {
         "kube-apiserver": {
             "run": lambda: "test_heal",
-            "clear_flags": [kflags.charm("apiserver.configured")],
+            "clear_flags": ["kubernetes-master.apiserver.configured"],
         }
     }
     heal_handler.__getitem__.side_effect = test_heal_handler.__getitem__
@@ -242,8 +232,8 @@ def test_status_set_on_failed_master_services(call, heal_handler, msd):
         "Stopped services: kube-apiserver",
     )
     call.assert_called_with("crm -w -F node standby".split())
-    clear_flag.assert_called_with(kflags.charm("apiserver.configured"))
-    set_flag.assert_called_with(kflags.charm("components.failed"))
+    clear_flag.assert_called_with("kubernetes-master.apiserver.configured")
+    set_flag.assert_called_with("kubernetes-master.components.failed")
 
 
 @mock.patch("reactive.kubernetes_control_plane.control_plane_services_down")
@@ -252,62 +242,62 @@ def test_status_set_on_failed_master_services(call, heal_handler, msd):
 def test_status_set_on_healed_master_services(call, heal_handler, msd):
     """Test that set_final_status() will set node to online mode if service recover"""
     set_flag("certificates.available")
-    clear_flag(kflags.charm("secure-storage.failed"))
+    clear_flag("kubernetes-master.secure-storage.failed")
     set_flag("kube-control.connected")
     set_flag("etcd.available")
     set_flag("cni.available")
     set_flag("tls_client.certs.saved")
-    set_flag(kflags.charm("auth-webhook-service.started"))
-    set_flag(kflags.charm("apiserver.configured"))
-    set_flag(kflags.charm("apiserver.running"))
+    set_flag("kubernetes-master.auth-webhook-service.started")
+    set_flag("kubernetes-master.apiserver.configured")
+    set_flag("kubernetes-master.apiserver.running")
     set_flag("authentication.setup")
-    set_flag(kflags.charm("auth-webhook-tokens.setup"))
-    set_flag(kflags.charm("components.started"))
-    set_flag(kflags.charm("components.failed"))
+    set_flag("kubernetes-master.auth-webhook-tokens.setup")
+    set_flag("kubernetes-master.components.started")
+    set_flag("kubernetes-master.components.failed")
     set_flag("ha.connected")
 
     msd.return_value = []
     kubernetes_control_plane.set_final_status()
     call.assert_called_with("crm -w -F node online".split())
-    clear_flag.assert_called_with(kflags.charm("components.failed"))
+    clear_flag.assert_called_with("kubernetes-master.components.failed")
 
 
 @mock.patch("reactive.kubernetes_control_plane.setup_tokens")
 @mock.patch("reactive.kubernetes_control_plane.get_token")
 def test_create_token_sign_auth_requests(get_token, setup_tokens):
-    set_flag(kflags.charm("auth-webhook-tokens.setup"))
+    set_flag("kubernetes-master.auth-webhook-tokens.setup")
     kube_control = endpoint_from_flag.return_value
     get_token.return_value = None
-    clear_flag(kflags.charm("auth-webhook-tokens.setup"))
+    clear_flag("kubernetes-master.auth-webhook-tokens.setup")
     assert not kubernetes_control_plane.create_tokens_and_sign_auth_requests()
     assert kube_control.sign_auth_request.call_count == 0
-    assert not is_flag_set(kflags.charm("auth-webhook-tokens.setup"))
+    assert not is_flag_set("kubernetes-master.auth-webhook-tokens.setup")
 
     endpoint_from_flag.return_value = None
     get_token.return_value = True
-    clear_flag(kflags.charm("auth-webhook-tokens.setup"))
+    clear_flag("kubernetes-master.auth-webhook-tokens.setup")
     assert kubernetes_control_plane.create_tokens_and_sign_auth_requests()
     assert kube_control.sign_auth_request.call_count == 0
-    assert is_flag_set(kflags.charm("auth-webhook-tokens.setup"))
+    assert is_flag_set("kubernetes-master.auth-webhook-tokens.setup")
 
     endpoint_from_flag.return_value = kube_control
     kube_control.auth_user.return_value = [
         (None, {"user": "foo", "group": "foo"}),
         (None, {"user": None, "group": None}),
     ]
-    clear_flag(kflags.charm("auth-webhook-tokens.setup"))
+    clear_flag("kubernetes-master.auth-webhook-tokens.setup")
     assert kubernetes_control_plane.create_tokens_and_sign_auth_requests()
     assert kube_control.sign_auth_request.call_count == 1
-    assert is_flag_set(kflags.charm("auth-webhook-tokens.setup"))
+    assert is_flag_set("kubernetes-master.auth-webhook-tokens.setup")
 
     kube_control.auth_user.return_value = [
         (None, {"user": "foo", "group": "foo"}),
         (None, {"user": "bar", "group": "bar"}),
     ]
-    clear_flag(kflags.charm("auth-webhook-tokens.setup"))
+    clear_flag("kubernetes-master.auth-webhook-tokens.setup")
     assert kubernetes_control_plane.create_tokens_and_sign_auth_requests()
     assert kube_control.sign_auth_request.call_count == 3
-    assert is_flag_set(kflags.charm("auth-webhook-tokens.setup"))
+    assert is_flag_set("kubernetes-master.auth-webhook-tokens.setup")
 
 
 @mock.patch("reactive.kubernetes_control_plane.create_tokens_and_sign_auth_requests")
