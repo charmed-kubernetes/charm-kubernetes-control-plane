@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 def _check_status_messages(ops_test):
     """Validate that the status messages are correct."""
     expected_messages = {
-        "kubernetes-control-plane": "Kubernetes master running.",
+        "kubernetes-control-plane": "Kubernetes control-plane running.",
         "kubernetes-worker": "Kubernetes worker running.",
     }
     for app, message in expected_messages.items():

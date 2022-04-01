@@ -8,7 +8,7 @@ includes:
   - 'layer:metrics'
   - 'layer:nagios'
   - 'layer:cdk-service-kicker'
-  - 'layer:kubernetes-master-worker-base'  # wokeignore:rule=master
+  - 'layer:kubernetes-node-base'
   - 'layer:vault-kv'
   - 'layer:vaultlocker'
   - 'layer:hacluster'
