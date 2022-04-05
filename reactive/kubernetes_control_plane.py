@@ -274,6 +274,7 @@ def check_for_upgrade_needed():
         remove_state("kubernetes-control-plane.cloud-request-sent")
         set_state("kubernetes-control-plane.cloud.request-sent")
     if is_flag_set("kubernetes-control-plane.snaps.installed"):
+        # consistent with layer-kubernetes-node-base
         remove_state("kubernetes-node.snaps.installed")
         set_state("kubernetes-node.snaps.installed")
 
