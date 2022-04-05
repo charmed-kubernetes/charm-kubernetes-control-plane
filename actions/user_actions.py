@@ -55,20 +55,20 @@ def user_create():
 
     # Create the secret
     # TODO: make the token format less magical so it doesn't get out of
-    # sync with the function that creates secrets in k8s-master.py.
-    token = "{}::{}".format(user, layer.kubernetes_master.token_generator())
-    if not layer.kubernetes_common.create_secret(token, user, user, groups):
+    # sync with the function that creates secrets in kubernetes_control_plane.py.
+    token = "{}::{}".format(user, layer.kubernetes_control_plane.token_generator())
+    if not layer.kubernetes_control_plane.create_secret(token, user, user, groups):
         action_fail("Failed to create secret for: {}".format(user))
         return
 
     # Create a kubeconfig
     ca_crt = layer.kubernetes_common.ca_crt_path
     kubeconfig_path = "/home/ubuntu/{}-kubeconfig".format(user)
-    endpoints = layer.kubernetes_master.get_external_api_endpoints()
+    endpoints = layer.kubernetes_control_plane.get_external_api_endpoints()
     if not endpoints:
         action_fail("Kubernetes client endpoints currently unavailable.")
         return
-    public_server = layer.kubernetes_master.get_api_urls(endpoints)[0]
+    public_server = layer.kubernetes_control_plane.get_api_urls(endpoints)[0]
 
     layer.kubernetes_common.create_kubeconfig(
         kubeconfig_path, public_server, ca_crt, token=token, user=user
@@ -93,7 +93,7 @@ def user_delete():
 
     # Delete the secret
     secret_id = users[user]
-    layer.kubernetes_master.delete_secret(secret_id)
+    layer.kubernetes_control_plane.delete_secret(secret_id)
 
     action_set({"msg": 'User "{}" deleted.'.format(user)})
     action_set({"users": ", ".join(u for u in list(users) if u != user)})

@@ -1,5 +1,5 @@
 restart:
-  description: Restart the Kubernetes master services on demand.
+  description: Restart the Kubernetes control-plane services on demand.
 namespace-list:
   description: List existing k8s namespaces
 namespace-create:

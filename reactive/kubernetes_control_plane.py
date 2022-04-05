@@ -35,7 +35,7 @@ from charms.layer import snap
 from charms.leadership import leader_get, leader_set
 from charms.reactive import hook
 from charms.reactive import remove_state, clear_flag
-from charms.reactive import set_state, set_flag
+from charms.reactive import get_flags, set_state, set_flag
 from charms.reactive import is_state, is_flag_set, get_unset_flags
 from charms.reactive import endpoint_from_flag, endpoint_from_name
 from charms.reactive import when, when_any, when_not, when_none
@@ -54,7 +54,7 @@ from charmhelpers.core.host import service_pause, service_resume, service_stop
 from charmhelpers.core.templating import render
 from charmhelpers.contrib.charmsupport import nrpe
 
-from charms.layer import kubernetes_master
+from charms.layer import kubernetes_control_plane
 from charms.layer import kubernetes_common
 
 from charms.layer.kubernetes_common import kubeclientconfig_path
@@ -90,7 +90,7 @@ from charms.layer.kubernetes_common import get_node_name
 from charms.layer.kubernetes_common import get_sandbox_image_uri
 from charms.layer.kubernetes_common import kubelet_kubeconfig_path
 
-from charms.layer.kubernetes_master_worker_base import LabelMaker
+from charms.layer.kubernetes_node_base import LabelMaker
 
 from charms.layer.nagios import install_nagios_plugin_from_file
 from charms.layer.nagios import remove_nagios_plugin
@@ -111,7 +111,7 @@ snap_resources = [
     "kubelet",
 ]
 
-master_services = [
+control_plane_services = [
     "kube-apiserver",
     "kube-controller-manager",
     "kube-scheduler",
@@ -141,31 +141,35 @@ auth_webhook_svc = "/etc/systemd/system/{}.service".format(auth_webhook_svc_name
 
 
 register_trigger(
-    when="endpoint.aws.ready", set_flag="kubernetes-master.aws.changed"  # when set
+    when="endpoint.aws.ready",
+    set_flag="kubernetes-control-plane.aws.changed",  # when set
 )
 register_trigger(
     when_not="endpoint.aws.ready",  # when cleared
-    set_flag="kubernetes-master.aws.changed",
+    set_flag="kubernetes-control-plane.aws.changed",
 )
 register_trigger(
-    when="endpoint.azure.ready", set_flag="kubernetes-master.azure.changed"  # when set
+    when="endpoint.azure.ready",
+    set_flag="kubernetes-control-plane.azure.changed",  # when set
 )
 register_trigger(
     when_not="endpoint.azure.ready",  # when cleared
-    set_flag="kubernetes-master.azure.changed",
+    set_flag="kubernetes-control-plane.azure.changed",
 )
 register_trigger(
-    when="endpoint.gcp.ready", set_flag="kubernetes-master.gcp.changed"  # when set
+    when="endpoint.gcp.ready",
+    set_flag="kubernetes-control-plane.gcp.changed",  # when set
 )
 register_trigger(
     when_not="endpoint.gcp.ready",  # when cleared
-    set_flag="kubernetes-master.gcp.changed",
+    set_flag="kubernetes-control-plane.gcp.changed",
 )
 register_trigger(
-    when="kubernetes-master.ceph.configured", set_flag="cdk-addons.reconfigure"
+    when="kubernetes-control-plane.ceph.configured", set_flag="cdk-addons.reconfigure"
 )
 register_trigger(
-    when_not="kubernetes-master.ceph.configured", set_flag="cdk-addons.reconfigure"
+    when_not="kubernetes-control-plane.ceph.configured",
+    set_flag="cdk-addons.reconfigure",
 )
 register_trigger(
     when="keystone-credentials.available", set_flag="cdk-addons.reconfigure"
@@ -174,49 +178,50 @@ register_trigger(
     when_not="keystone-credentials.available", set_flag="cdk-addons.reconfigure"
 )
 register_trigger(
-    when="kubernetes-master.aws.changed", set_flag="cdk-addons.reconfigure"
+    when="kubernetes-control-plane.aws.changed", set_flag="cdk-addons.reconfigure"
 )
 register_trigger(
-    when="kubernetes-master.azure.changed", set_flag="cdk-addons.reconfigure"
+    when="kubernetes-control-plane.azure.changed", set_flag="cdk-addons.reconfigure"
 )
 register_trigger(
-    when="kubernetes-master.gcp.changed", set_flag="cdk-addons.reconfigure"
+    when="kubernetes-control-plane.gcp.changed", set_flag="cdk-addons.reconfigure"
 )
 register_trigger(
-    when="kubernetes-master.openstack.changed", set_flag="cdk-addons.reconfigure"
+    when="kubernetes-control-plane.openstack.changed", set_flag="cdk-addons.reconfigure"
 )
 register_trigger(
-    when_not="cni.available", clear_flag="kubernetes-master.components.started"
+    when_not="cni.available", clear_flag="kubernetes-control-plane.components.started"
 )
 register_trigger(
     when="kube-control.requests.changed", clear_flag="authentication.setup"
 )
 register_trigger(
-    when_not="kubernetes-master.apiserver.configured",
-    clear_flag="kubernetes-master.apiserver.running",
+    when_not="kubernetes-control-plane.apiserver.configured",
+    clear_flag="kubernetes-control-plane.apiserver.running",
 )
 register_trigger(
     when="config.changed.image-registry",
-    clear_flag="kubernetes-master.kubelet.configured",
+    clear_flag="kubernetes-control-plane.kubelet.configured",
 )
 register_trigger(
-    when="config.changed.image-registry", clear_flag="kubernetes-master.sent-registry"
+    when="config.changed.image-registry",
+    clear_flag="kubernetes-control-plane.sent-registry",
 )
 register_trigger(
     when="config.changed.default-cni",
-    clear_flag="kubernetes-master.default-cni.configured",
+    clear_flag="kubernetes-control-plane.default-cni.configured",
 )
 
 
 def set_upgrade_needed(forced=False):
-    set_state("kubernetes-master.upgrade-needed")
+    set_state("kubernetes-control-plane.upgrade-needed")
     config = hookenv.config()
     previous_channel = config.previous("channel")
     require_manual = config.get("require-manual-upgrade")
     hookenv.log("set upgrade needed")
     if previous_channel is None or not require_manual or forced:
         hookenv.log("forcing upgrade")
-        set_state("kubernetes-master.upgrade-specified")
+        set_state("kubernetes-control-plane.upgrade-specified")
 
 
 @when("config.changed.channel")
@@ -243,7 +248,7 @@ def maybe_install_kube_proxy():
 @hook("install")
 def fresh_install():
     # fresh installs should always send the unique cluster tag to cdk-addons
-    set_state("kubernetes-master.cdk-addons.unique-cluster-tag")
+    set_state("kubernetes-control-plane.cdk-addons.unique-cluster-tag")
 
 
 @hook("upgrade-charm")
@@ -252,21 +257,33 @@ def check_for_upgrade_needed():
     hookenv.status_set("maintenance", "Checking resources")
     is_leader = is_state("leadership.is_leader")
 
+    # migrate to inclusive flags
+    old, new = "kubernetes-master", "kubernetes-control-plane"  # wokeignore:rule=master
+    for flag in get_flags():
+        if flag.startswith(old):
+            new_flag = flag.replace(old, new, 1)
+            clear_flag(flag)
+            set_flag(new_flag)
+
     # migrate to new flags
-    if is_state("kubernetes-master.restarted-for-cloud"):
-        remove_state("kubernetes-master.restarted-for-cloud")
-        set_state("kubernetes-master.cloud.ready")
-    if is_state("kubernetes-master.cloud-request-sent"):
+    if is_state("kubernetes-control-plane.restarted-for-cloud"):
+        remove_state("kubernetes-control-plane.restarted-for-cloud")
+        set_state("kubernetes-control-plane.cloud.ready")
+    if is_state("kubernetes-control-plane.cloud-request-sent"):
         # minor change, just for consistency
-        remove_state("kubernetes-master.cloud-request-sent")
-        set_state("kubernetes-master.cloud.request-sent")
+        remove_state("kubernetes-control-plane.cloud-request-sent")
+        set_state("kubernetes-control-plane.cloud.request-sent")
+    if is_flag_set("kubernetes-control-plane.snaps.installed"):
+        # consistent with layer-kubernetes-node-base
+        remove_state("kubernetes-node.snaps.installed")
+        set_state("kubernetes-node.snaps.installed")
 
     # ceph-storage.configured flag no longer exists
     remove_state("ceph-storage.configured")
 
     # reconfigure ceph. we need this in case we're reverting from ceph-csi back
     # to old ceph on Kubernetes 1.10 or 1.11
-    remove_state("kubernetes-master.ceph.configured")
+    remove_state("kubernetes-control-plane.ceph.configured")
 
     maybe_install_kubelet()
     maybe_install_kube_proxy()
@@ -275,34 +292,38 @@ def check_for_upgrade_needed():
 
     # File-based auth is gone in 1.19; ensure any entries in basic_auth.csv are
     # added to known_tokens.csv, and any known_tokens entries are created as secrets.
-    if not is_flag_set("kubernetes-master.basic-auth.migrated"):
-        if kubernetes_master.migrate_auth_file(kubernetes_master.AUTH_BASIC_FILE):
-            set_flag("kubernetes-master.basic-auth.migrated")
+    if not is_flag_set("kubernetes-control-plane.basic-auth.migrated"):
+        if kubernetes_control_plane.migrate_auth_file(
+            kubernetes_control_plane.AUTH_BASIC_FILE
+        ):
+            set_flag("kubernetes-control-plane.basic-auth.migrated")
         else:
             hookenv.log(
                 "Unable to migrate {} to {}".format(
-                    kubernetes_master.AUTH_BASIC_FILE,
-                    kubernetes_master.AUTH_TOKENS_FILE,
+                    kubernetes_control_plane.AUTH_BASIC_FILE,
+                    kubernetes_control_plane.AUTH_TOKENS_FILE,
                 )
             )
-    if not is_flag_set("kubernetes-master.token-auth.migrated"):
+    if not is_flag_set("kubernetes-control-plane.token-auth.migrated"):
         register_auth_webhook()
         add_rbac_roles()
-        if kubernetes_master.migrate_auth_file(kubernetes_master.AUTH_TOKENS_FILE):
-            set_flag("kubernetes-master.token-auth.migrated")
+        if kubernetes_control_plane.migrate_auth_file(
+            kubernetes_control_plane.AUTH_TOKENS_FILE
+        ):
+            set_flag("kubernetes-control-plane.token-auth.migrated")
         else:
             hookenv.log(
                 "Unable to migrate {} to Kubernetes secrets".format(
-                    kubernetes_master.AUTH_TOKENS_FILE
+                    kubernetes_control_plane.AUTH_TOKENS_FILE
                 )
             )
     set_state("reconfigure.authentication.setup")
     remove_state("authentication.setup")
 
     if not db.get("snap.resources.fingerprint.initialised"):
-        # We are here on an upgrade from non-rolling master
+        # We are here on an upgrade from non-rolling control plane
         # Since this upgrade might also include resource updates eg
-        # juju upgrade-charm kubernetes-master --resource kube-any=my.snap
+        # juju upgrade-charm kubernetes-control-plane --resource kube-any=my.snap
         # we take no risk and forcibly upgrade the snaps.
         # Forcibly means we do not prompt the user to call the upgrade action.
         set_upgrade_needed(forced=True)
@@ -326,33 +347,33 @@ def check_for_upgrade_needed():
     if is_flag_set("nrpe-external-master.available"):
         update_nrpe_config()
 
-    remove_state("kubernetes-master.system-monitoring-rbac-role.applied")
-    remove_state("kubernetes-master.kubelet.configured")
-    remove_state("kubernetes-master.default-cni.configured")
-    remove_state("kubernetes-master.sent-registry")
+    remove_state("kubernetes-control-plane.system-monitoring-rbac-role.applied")
+    remove_state("kubernetes-control-plane.kubelet.configured")
+    remove_state("kubernetes-control-plane.default-cni.configured")
+    remove_state("kubernetes-control-plane.sent-registry")
 
     # Remove services from hacluster and leave to systemd while
     # hacluster is not ready to accept order and colocation constraints
     if is_flag_set("ha.connected"):
         hacluster = endpoint_from_flag("ha.connected")
-        for service in master_services:
+        for service in control_plane_services:
             daemon = "snap.{}.daemon".format(service)
             hacluster.remove_systemd_service(service, daemon)
 
 
 @hook("pre-series-upgrade")
 def pre_series_upgrade():
-    """Stop the kubernetes master services"""
-    for service in master_services:
+    """Stop the kubernetes control plane services"""
+    for service in control_plane_services:
         service_pause("snap.%s.daemon" % service)
 
 
 @hook("post-series-upgrade")
 def post_series_upgrade():
-    for service in master_services:
+    for service in control_plane_services:
         service_resume("snap.%s.daemon" % service)
     # set ourselves up to restart
-    remove_state("kubernetes-master.components.started")
+    remove_state("kubernetes-control-plane.components.started")
 
 
 @hook("leader-elected")
@@ -366,7 +387,7 @@ def add_rbac_roles():
     DEPRECATED: Once known_tokens are migrated, group data will be stored in K8s
     secrets. Do not use this function after migrating to authn with secrets.
     """
-    if is_flag_set("kubernetes-master.token-auth.migrated"):
+    if is_flag_set("kubernetes-control-plane.token-auth.migrated"):
         hookenv.log("Known tokens have migrated to secrets. Skipping group changes")
         return
     tokens_fname = "/root/cdk/known_tokens.csv"
@@ -412,11 +433,11 @@ def add_rbac_roles():
                     ftokens.write("{}".format(line))
 
 
-@when("kubernetes-master.upgrade-specified")
+@when("kubernetes-control-plane.upgrade-specified")
 def do_upgrade():
     install_snaps()
-    remove_state("kubernetes-master.upgrade-needed")
-    remove_state("kubernetes-master.upgrade-specified")
+    remove_state("kubernetes-control-plane.upgrade-needed")
+    remove_state("kubernetes-control-plane.upgrade-specified")
 
 
 def install_snaps():
@@ -439,11 +460,11 @@ def install_snaps():
     snap.install("kube-proxy", channel=channel, classic=True)
     calculate_and_store_resource_checksums(checksum_prefix, snap_resources)
     db.set("snap.resources.fingerprint.initialised", True)
-    set_state("kubernetes-master.snaps.installed")
-    remove_state("kubernetes-master.components.started")
+    set_state("kubernetes-node.snaps.installed")
+    remove_state("kubernetes-control-plane.components.started")
 
 
-@when("kubernetes-master.snaps.installed", "leadership.is_leader")
+@when("kubernetes-node.snaps.installed", "leadership.is_leader")
 @when_not("leadership.set.cohort_keys")
 def create_or_update_cohort_keys():
     cohort_keys = {}
@@ -463,7 +484,7 @@ def create_or_update_cohort_keys():
     hookenv.log("Snap cohort keys have been created.", level=hookenv.INFO)
 
     # Prime revision info so we can detect changes later
-    cohort_revs = kubernetes_master.get_snap_revs(cohort_snaps)
+    cohort_revs = kubernetes_control_plane.get_snap_revs(cohort_snaps)
     data_changed("leader-cohort-revs", cohort_revs)
     hookenv.log(
         "Tracking cohort revisions: {}".format(cohort_revs), level=hookenv.DEBUG
@@ -471,18 +492,18 @@ def create_or_update_cohort_keys():
 
 
 @when(
-    "kubernetes-master.snaps.installed",
+    "kubernetes-node.snaps.installed",
     "leadership.is_leader",
     "leadership.set.cohort_keys",
 )
 def check_cohort_updates():
-    cohort_revs = kubernetes_master.get_snap_revs(cohort_snaps)
+    cohort_revs = kubernetes_control_plane.get_snap_revs(cohort_snaps)
     if cohort_revs and data_changed("leader-cohort-revs", cohort_revs):
         leader_set(cohort_keys=None)
         hookenv.log("Snap cohort revisions have changed.", level=hookenv.INFO)
 
 
-@when("kubernetes-master.snaps.installed", "leadership.set.cohort_keys")
+@when("kubernetes-node.snaps.installed", "leadership.set.cohort_keys")
 @when_none("coordinator.granted.cohort", "coordinator.requested.cohort")
 def safely_join_cohort():
     """Coordinate the rollout of snap refreshes.
@@ -494,17 +515,17 @@ def safely_join_cohort():
     cohort_keys = leader_get("cohort_keys")
     # NB: initial data-changed is always true
     if data_changed("leader-cohorts", cohort_keys):
-        clear_flag("kubernetes-master.cohorts.joined")
-        clear_flag("kubernetes-master.cohorts.sent")
+        clear_flag("kubernetes-control-plane.cohorts.joined")
+        clear_flag("kubernetes-control-plane.cohorts.sent")
         charms.coordinator.acquire("cohort")
 
 
 @when(
-    "kubernetes-master.snaps.installed",
+    "kubernetes-node.snaps.installed",
     "leadership.set.cohort_keys",
     "coordinator.granted.cohort",
 )
-@when_not("kubernetes-master.cohorts.joined")
+@when_not("kubernetes-control-plane.cohorts.joined")
 def join_or_update_cohorts():
     """Join or update a cohort snapshot.
 
@@ -517,34 +538,34 @@ def join_or_update_cohorts():
         if snap.is_installed(snapname):  # we also manage workers' cohorts
             hookenv.status_set("maintenance", "Joining snap cohort.")
             snap.join_cohort_snapshot(snapname, cohort_key)
-    set_flag("kubernetes-master.cohorts.joined")
+    set_flag("kubernetes-control-plane.cohorts.joined")
     hookenv.log("{} has joined the snap cohort".format(hookenv.local_unit()))
 
 
 @when(
-    "kubernetes-master.snaps.installed",
+    "kubernetes-node.snaps.installed",
     "leadership.set.cohort_keys",
-    "kubernetes-master.cohorts.joined",
+    "kubernetes-control-plane.cohorts.joined",
     "kube-control.connected",
 )
-@when_not("kubernetes-master.cohorts.sent")
+@when_not("kubernetes-control-plane.cohorts.sent")
 def send_cohorts():
     """Send cohort information to workers.
 
     If we have peers, wait until all peers are updated before sending.
-    Otherwise, we're a single unit k8s-master and can fire when connected.
+    Otherwise, we're a single unit k8s-cp and can fire when connected.
     """
     cohort_keys = json.loads(leader_get("cohort_keys"))
     kube_control = endpoint_from_flag("kube-control.connected")
-    kube_masters = endpoint_from_flag("kube-masters.connected")
+    kube_cps = endpoint_from_flag("kube-masters.connected")  # wokeignore:rule=master
 
     # If we have peers, tell them we've joined the cohort. This is needed so
-    # we don't tell workers about cohorts until all masters are in-sync.
+    # we don't tell workers about cohorts until all control planes are in-sync.
     goal_peers = len(list(hookenv.expected_peer_units()))
     if goal_peers > 0:
-        if kube_masters:
+        if kube_cps:
             # tell peers about the cohort keys
-            kube_masters.set_cohort_keys(cohort_keys)
+            kube_cps.set_cohort_keys(cohort_keys)
         else:
             msg = "Waiting for {} peers before setting the cohort.".format(goal_peers)
             hookenv.log(msg, level=hookenv.DEBUG)
@@ -557,7 +578,7 @@ def send_cohorts():
                 "{} (peer) sent cohort keys to workers".format(hookenv.local_unit())
             )
         else:
-            msg = "Waiting for k8s-masters to agree on cohorts."
+            msg = "Waiting for k8s-cps to agree on cohorts."
             hookenv.log(msg, level=hookenv.DEBUG)
             return
     else:
@@ -567,7 +588,7 @@ def send_cohorts():
             "{} (single) sent cohort keys to workers".format(hookenv.local_unit())
         )
 
-    set_flag("kubernetes-master.cohorts.sent")
+    set_flag("kubernetes-control-plane.cohorts.sent")
 
 
 @when("etcd.available")
@@ -578,7 +599,7 @@ def enable_metric_changed():
 
     :return: None
     """
-    clear_flag("kubernetes-master.apiserver.configured")
+    clear_flag("kubernetes-control-plane.apiserver.configured")
 
     if is_state("leadership.is_leader"):
         configure_cdk_addons()
@@ -592,7 +613,7 @@ def password_changed():
 
 @when("config.changed.storage-backend")
 def storage_backend_changed():
-    remove_state("kubernetes-master.components.started")
+    remove_state("kubernetes-control-plane.components.started")
 
 
 @when("leadership.is_leader")
@@ -614,11 +635,11 @@ def setup_leader_authentication():
     keys = [basic_auth, known_tokens, service_key]
     # Try first to fetch data from an old leadership broadcast.
     if not get_keys_from_leader(keys) or is_state("reconfigure.authentication.setup"):
-        kubernetes_master.deprecate_auth_file(basic_auth)
-        set_flag("kubernetes-master.basic-auth.migrated")
+        kubernetes_control_plane.deprecate_auth_file(basic_auth)
+        set_flag("kubernetes-control-plane.basic-auth.migrated")
 
-        kubernetes_master.deprecate_auth_file(known_tokens)
-        set_flag("kubernetes-master.token-auth.migrated")
+        kubernetes_control_plane.deprecate_auth_file(known_tokens)
+        set_flag("kubernetes-control-plane.token-auth.migrated")
 
         # Generate the default service account token key
         if not os.path.isfile(service_key):
@@ -648,7 +669,7 @@ def setup_leader_authentication():
     # {'/root/cdk/serviceaccount.key': 'RSA:2471731...'}
     leader_set(leader_data)
 
-    remove_state("kubernetes-master.components.started")
+    remove_state("kubernetes-control-plane.components.started")
     remove_state("kube-control.requests.changed")
     set_state("authentication.setup")
 
@@ -667,9 +688,9 @@ def setup_non_leader_authentication():
         "kube-scheduler": get_token("system:kube-scheduler"),
     }
     if data_changed("secrets-data", secrets):
-        set_flag("kubernetes-master.token-auth.migrated")
+        set_flag("kubernetes-control-plane.token-auth.migrated")
         build_kubeconfig()
-        remove_state("kubernetes-master.components.started")
+        remove_state("kubernetes-control-plane.components.started")
 
     keys = [basic_auth, known_tokens, service_key]
     # Pre-secrets, the source of truth for non-leaders is the leader.
@@ -679,7 +700,7 @@ def setup_non_leader_authentication():
         return
 
     if any_file_changed(keys):
-        remove_state("kubernetes-master.components.started")
+        remove_state("kubernetes-control-plane.components.started")
 
     # Clear stale creds from the kube-control relation so that the leader can
     # assume full control of them.
@@ -723,7 +744,7 @@ def get_keys_from_leader(keys, overwrite_local=False):
     return True
 
 
-@when("kubernetes-master.snaps.installed")
+@when("kubernetes-node.snaps.installed")
 def set_app_version():
     """Declare the application version to juju"""
     version = check_output(["kube-apiserver", "--version"])
@@ -741,9 +762,9 @@ def check_vault_pending():
     vault_kv_related = vault_kv_goal or vault_kv_connected
     vault_kv_ready = is_state("layer.vault-kv.ready")
     if vault_kv_related and not vault_kv_ready:
-        set_flag("kubernetes-master.vault-kv.pending")
+        set_flag("kubernetes-control-plane.vault-kv.pending")
     else:
-        clear_flag("kubernetes-master.vault-kv.pending")
+        clear_flag("kubernetes-control-plane.vault-kv.pending")
 
 
 @hookenv.atexit
@@ -765,14 +786,14 @@ def set_final_status():
             hookenv.status_set("blocked", "Missing relation to certificate authority.")
         return
 
-    if is_flag_set("kubernetes-master.secure-storage.failed"):
+    if is_flag_set("kubernetes-control-plane.secure-storage.failed"):
         hookenv.status_set(
             "blocked",
             "Failed to configure encryption; "
             "secrets are unencrypted or inaccessible",
         )
         return
-    elif is_flag_set("kubernetes-master.secure-storage.created"):
+    elif is_flag_set("kubernetes-control-plane.secure-storage.created"):
         if not encryption_config_path().exists():
             hookenv.status_set(
                 "blocked", "VaultLocker containing encryption config unavailable"
@@ -781,7 +802,7 @@ def set_final_status():
 
     vsphere_joined = is_state("endpoint.vsphere.joined")
     azure_joined = is_state("endpoint.azure.joined")
-    cloud_blocked = is_state("kubernetes-master.cloud.blocked")
+    cloud_blocked = is_state("kubernetes-control-plane.cloud.blocked")
     if vsphere_joined and cloud_blocked:
         hookenv.status_set(
             "blocked", "vSphere integration requires K8s 1.12 or greater"
@@ -793,7 +814,7 @@ def set_final_status():
     if not is_flag_set("kubernetes.cni-plugins.installed"):
         hookenv.status_set("blocked", "Missing CNI resource")
         return
-    if is_state("kubernetes-master.cloud.pending"):
+    if is_state("kubernetes-control-plane.cloud.pending"):
         hookenv.status_set("waiting", "Waiting for cloud integration")
         return
 
@@ -823,8 +844,8 @@ def set_final_status():
         hookenv.status_set("blocked", msg)
         return
 
-    upgrade_needed = is_state("kubernetes-master.upgrade-needed")
-    upgrade_specified = is_state("kubernetes-master.upgrade-specified")
+    upgrade_needed = is_state("kubernetes-control-plane.upgrade-needed")
+    upgrade_specified = is_state("kubernetes-control-plane.upgrade-specified")
     if upgrade_needed and not upgrade_specified:
         msg = "Needs manual upgrade, run the upgrade action"
         hookenv.status_set("blocked", msg)
@@ -840,13 +861,13 @@ def set_final_status():
         hookenv.status_set("blocked", msg)
         return
 
-    if is_state("kubernetes-master.vault-kv.pending"):
+    if is_state("kubernetes-control-plane.vault-kv.pending"):
         hookenv.status_set(
             "waiting", "Waiting for encryption info from Vault to secure secrets"
         )
         return
 
-    if is_state("kubernetes-master.had-service-cidr-expanded"):
+    if is_state("kubernetes-control-plane.had-service-cidr-expanded"):
         hookenv.status_set(
             "waiting", "Waiting to retry updates for service-cidr expansion"
         )
@@ -872,15 +893,15 @@ def set_final_status():
         hookenv.status_set("waiting", "Waiting for certificates")
         return
 
-    if not is_flag_set("kubernetes-master.auth-webhook-service.started"):
+    if not is_flag_set("kubernetes-control-plane.auth-webhook-service.started"):
         hookenv.status_set("waiting", "Waiting for auth-webhook service to start")
         return
 
-    if not is_flag_set("kubernetes-master.apiserver.configured"):
+    if not is_flag_set("kubernetes-control-plane.apiserver.configured"):
         hookenv.status_set("waiting", "Waiting for API server to be configured")
         return
 
-    if not is_flag_set("kubernetes-master.apiserver.running"):
+    if not is_flag_set("kubernetes-control-plane.apiserver.running"):
         hookenv.status_set("waiting", "Waiting for API server to start")
         return
 
@@ -889,13 +910,13 @@ def set_final_status():
         hookenv.status_set("waiting", "Waiting on crypto keys.")
         return
 
-    if not is_flag_set("kubernetes-master.auth-webhook-tokens.setup"):
+    if not is_flag_set("kubernetes-control-plane.auth-webhook-tokens.setup"):
         hookenv.status_set("waiting", "Waiting for auth-webhook tokens")
         return
 
-    if is_state("kubernetes-master.components.started"):
+    if is_state("kubernetes-control-plane.components.started"):
         # All services should be up and running at this point. Double-check...
-        failing_services = master_services_down()
+        failing_services = control_plane_services_down()
         if len(failing_services) != 0:
             msg = "Stopped services: {}".format(",".join(failing_services))
             hookenv.status_set("blocked", msg)
@@ -908,23 +929,25 @@ def set_final_status():
                 for flag in heal_handler["clear_flags"]:
                     clear_flag(flag)
                 heal_handler["run"]()
-            set_flag("kubernetes-master.components.failed")
+            set_flag("kubernetes-control-plane.components.failed")
             return
         else:
-            if is_flag_set("kubernetes-master.components.failed"):
+            if is_flag_set("kubernetes-control-plane.components.failed"):
                 if is_flag_set("ha.connected"):
                     hookenv.log("Enabling node again to receive resources")
                     cmd = "crm -w -F node online"
                     call(cmd.split())
-                clear_flag("kubernetes-master.components.failed")
+                clear_flag("kubernetes-control-plane.components.failed")
 
     else:
         # if we don't have components starting, we're waiting for that and
-        # shouldn't fall through to Kubernetes master running.
-        hookenv.status_set("maintenance", "Waiting for master components to start")
+        # shouldn't fall through to Kubernetes control plane running.
+        hookenv.status_set(
+            "maintenance", "Waiting for control plane components to start"
+        )
         return
 
-    # Note that after this point, kubernetes-master.components.started is
+    # Note that after this point, kubernetes-control-plane.components.started is
     # always True.
 
     is_leader = is_state("leadership.is_leader")
@@ -934,7 +957,7 @@ def set_final_status():
         return
 
     if is_leader and not is_state(
-        "kubernetes-master.system-monitoring-rbac-role.applied"
+        "kubernetes-control-plane.system-monitoring-rbac-role.applied"
     ):
         msg = "Waiting to retry applying system:monitoring RBAC role"
         hookenv.status_set("waiting", msg)
@@ -953,14 +976,14 @@ def set_final_status():
         hookenv.status_set("waiting", msg)
         return
 
-    service_cidr = kubernetes_master.service_cidr()
+    service_cidr = kubernetes_control_plane.service_cidr()
     if hookenv.config("service-cidr") != service_cidr:
         msg = "WARN: cannot change service-cidr, still using " + service_cidr
         hookenv.status_set("active", msg)
         return
 
     gpu_available = is_state("kube-control.gpu.available")
-    gpu_enabled = is_state("kubernetes-master.gpu.enabled")
+    gpu_enabled = is_state("kubernetes-control-plane.gpu.enabled")
     if gpu_available and not gpu_enabled:
         msg = 'GPUs available. Set allow-privileged="auto" to enable.'
         hookenv.status_set("active", msg)
@@ -969,8 +992,8 @@ def set_final_status():
     if (
         is_state("ceph-storage.available")
         and is_state("ceph-client.connected")
-        and is_state("kubernetes-master.privileged")
-        and not is_state("kubernetes-master.ceph.configured")
+        and is_state("kubernetes-control-plane.privileged")
+        and not is_state("kubernetes-control-plane.ceph.configured")
     ):
 
         ceph_admin = endpoint_from_flag("ceph-storage.available")
@@ -979,26 +1002,32 @@ def set_final_status():
             hookenv.status_set("waiting", "Waiting for Ceph to provide a key.")
             return
 
-    if is_leader and ks and is_flag_set("kubernetes-master.keystone-policy-error"):
+    if (
+        is_leader
+        and ks
+        and is_flag_set("kubernetes-control-plane.keystone-policy-error")
+    ):
         hookenv.status_set("blocked", "Invalid keystone policy file.")
         return
 
     if (
         is_leader
         and ks
-        and not is_flag_set("kubernetes-master.keystone-policy-handled")
+        and not is_flag_set("kubernetes-control-plane.keystone-policy-handled")
     ):
         hookenv.status_set("waiting", "Waiting to apply keystone policy file.")
         return
 
-    hookenv.status_set("active", "Kubernetes master running.")
+    hookenv.status_set("active", "Kubernetes control-plane running.")
 
 
-def master_services_down():
-    """Ensure master services are up and running.
+def control_plane_services_down():
+    """Ensure control plane services are up and running.
 
     Return: list of failing services"""
-    return list(filterfalse(kubernetes_master.check_service, master_services))
+    return list(
+        filterfalse(kubernetes_control_plane.check_service, control_plane_services)
+    )
 
 
 def add_systemd_file_limit():
@@ -1035,7 +1064,7 @@ def add_systemd_restart_always():
             "Failed to detect systemd version, using latest template", level="ERROR"
         )
 
-    for service in master_services:
+    for service in control_plane_services:
         dest_dir = "/etc/systemd/system/snap.{}.daemon.service.d".format(service)
         os.makedirs(dest_dir, exist_ok=True)
         copyfile(template, "{}/always-restart.conf".format(dest_dir))
@@ -1159,7 +1188,7 @@ def register_auth_webhook():
     try:
         cores = int(check_output(["nproc"]).decode("utf-8").strip())
     except CalledProcessError:
-        # Our default architecture is 2-cores for k8s-master units
+        # Our default architecture is 2-cores for k8s-cp units
         cores = 2
     else:
         # Put an upper bound on cores; more than 12ish workers is overkill
@@ -1170,10 +1199,10 @@ def register_auth_webhook():
         # if the service file has changed (or is new),
         # we have to inform systemd about it
         check_call(["systemctl", "daemon-reload"])
-    if not is_flag_set("kubernetes-master.auth-webhook-service.started"):
+    if not is_flag_set("kubernetes-control-plane.auth-webhook-service.started"):
         if service_resume(auth_webhook_svc_name):
-            set_flag("kubernetes-master.auth-webhook-service.started")
-            clear_flag("kubernetes-master.apiserver.configured")
+            set_flag("kubernetes-control-plane.auth-webhook-service.started")
+            clear_flag("kubernetes-control-plane.apiserver.configured")
         else:
             hookenv.status_set(
                 "maintenance", "Waiting for {} to start.".format(auth_webhook_svc_name)
@@ -1182,11 +1211,11 @@ def register_auth_webhook():
 
 
 @when(
-    "kubernetes-master.apiserver.running",
-    "kubernetes-master.auth-webhook-service.started",
+    "kubernetes-control-plane.apiserver.running",
+    "kubernetes-control-plane.auth-webhook-service.started",
     "authentication.setup",
 )
-@when_not("kubernetes-master.auth-webhook-tokens.setup")
+@when_not("kubernetes-control-plane.auth-webhook-tokens.setup")
 def setup_auth_webhook_tokens():
     """Reconfigure authentication to setup auth-webhook tokens.
 
@@ -1213,20 +1242,22 @@ def setup_auth_webhook_tokens():
     "cni.available",
 )
 @when_not(
-    "kubernetes-master.components.started",
-    "kubernetes-master.cloud.pending",
-    "kubernetes-master.cloud.blocked",
-    "kubernetes-master.vault-kv.pending",
+    "kubernetes-control-plane.components.started",
+    "kubernetes-control-plane.cloud.pending",
+    "kubernetes-control-plane.cloud.blocked",
+    "kubernetes-control-plane.vault-kv.pending",
     "tls_client.certs.changed",
     "tls_client.ca.written",
     "upgrade.series.in-progress",
 )
-def start_master():
-    """Run the Kubernetes master components."""
-    hookenv.status_set("maintenance", "Configuring the Kubernetes master services.")
+def start_control_plane():
+    """Run the Kubernetes control-plane components."""
+    hookenv.status_set(
+        "maintenance", "Configuring the Kubernetes control plane services."
+    )
 
-    if not is_state("kubernetes-master.vault-kv.pending") and not is_state(
-        "kubernetes-master.secure-storage.created"
+    if not is_state("kubernetes-control-plane.vault-kv.pending") and not is_state(
+        "kubernetes-control-plane.secure-storage.created"
     ):
         encryption_config_path().parent.mkdir(parents=True, exist_ok=True)
         host.write_file(
@@ -1243,13 +1274,13 @@ def start_master():
             ),
         )
 
-    kubernetes_master.freeze_service_cidr()
+    kubernetes_control_plane.freeze_service_cidr()
 
     etcd = endpoint_from_flag("etcd.available")
     if not etcd.get_connection_string():
         # etcd is not returning a connection string. This happens when
-        # the master unit disconnects from etcd and is ready to terminate.
-        # No point in trying to start master services and fail. Just return.
+        # the control-plane unit disconnects from etcd and is ready to terminate.
+        # No point in trying to start control-plane services and fail. Just return.
         return
 
     # TODO: Make sure below relation is handled on change
@@ -1264,7 +1295,7 @@ def start_master():
     check_call(["systemctl", "daemon-reload"])
 
     # Add CLI options to all components
-    clear_flag("kubernetes-master.apiserver.configured")
+    clear_flag("kubernetes-control-plane.apiserver.configured")
     configure_controller_manager()
     configure_scheduler()
 
@@ -1279,36 +1310,36 @@ def start_master():
     configure_kube_proxy(configure_prefix, [local_server], cluster_cidr)
     service_restart("snap.kube-proxy.daemon")
 
-    set_state("kubernetes-master.components.started")
+    set_state("kubernetes-control-plane.components.started")
     hookenv.open_port(6443)
 
 
 @when("config.changed.proxy-extra-args")
 def proxy_args_changed():
-    clear_flag("kubernetes-master.components.started")
+    clear_flag("kubernetes-control-plane.components.started")
     clear_flag("config.changed.proxy-extra-args")
 
 
 @when("tls_client.certs.changed")
 def certs_changed():
-    clear_flag("kubernetes-master.components.started")
+    clear_flag("kubernetes-control-plane.components.started")
     clear_flag("tls_client.certs.changed")
 
 
 @when("tls_client.ca.written")
 def ca_written():
-    clear_flag("kubernetes-master.components.started")
+    clear_flag("kubernetes-control-plane.components.started")
     if is_state("leadership.is_leader"):
         if leader_get("kubernetes-master-addons-ca-in-use"):
             leader_set({"kubernetes-master-addons-restart-for-ca": True})
     clear_flag("tls_client.ca.written")
-    clear_flag("kubernetes-master.kubelet.configured")
+    clear_flag("kubernetes-control-plane.kubelet.configured")
 
 
 @when("etcd.available")
 def etcd_data_change(etcd):
-    """Etcd scale events block master reconfiguration due to the
-    kubernetes-master.components.started state. We need a way to
+    """Etcd scale events block control-plane reconfiguration due to the
+    kubernetes-control-plane.components.started state. We need a way to
     handle these events consistently only when the number of etcd
     units has actually changed"""
 
@@ -1316,14 +1347,14 @@ def etcd_data_change(etcd):
     connection_string = etcd.get_connection_string()
 
     # If the connection string changes, remove the started state to trigger
-    # handling of the master components
+    # handling of the control-plane components
     if data_changed("etcd-connect", connection_string):
-        remove_state("kubernetes-master.components.started")
+        remove_state("kubernetes-control-plane.components.started")
 
     # If the cert info changes, remove the started state to trigger
-    # handling of the master components
+    # handling of the control-plane components
     if data_changed("etcd-certs", etcd.get_client_credentials()):
-        clear_flag("kubernetes-master.components.started")
+        clear_flag("kubernetes-control-plane.components.started")
 
     # We are the leader and the auto_storage_backend is not set meaning
     # this is the first time we connect to etcd.
@@ -1364,7 +1395,7 @@ def get_dns_info():
         dns_domain = hookenv.config("dns_domain")
         dns_ip = None
         try:
-            dns_ip = kubernetes_master.get_dns_ip()
+            dns_ip = kubernetes_control_plane.get_dns_ip()
         except CalledProcessError:
             hookenv.log("DNS addon service not ready yet")
             return False, None, None, None
@@ -1382,10 +1413,10 @@ def send_cluster_dns_detail(kube_control):
 
 def create_tokens_and_sign_auth_requests():
     """Create tokens for CK users and services."""
-    clear_flag("kubernetes-master.auth-webhook-tokens.setup")
+    clear_flag("kubernetes-control-plane.auth-webhook-tokens.setup")
     # NB: This may be called before kube-apiserver is up when bootstrapping new
     # clusters with auth-webhook. In this case, setup_tokens will be a no-op.
-    # We will re-enter this function once master services are available to
+    # We will re-enter this function once control plane services are available to
     # create proper secrets.
     controller_manager_token = get_token("system:kube-controller-manager")
     if not controller_manager_token:
@@ -1444,7 +1475,7 @@ def create_tokens_and_sign_auth_requests():
             request[0], username, kubelet_token, proxy_token, client_token
         )
     if not any_failed:
-        set_flag("kubernetes-master.auth-webhook-tokens.setup")
+        set_flag("kubernetes-control-plane.auth-webhook-tokens.setup")
         return True
     else:
         return False
@@ -1457,14 +1488,16 @@ def push_service_data():
     """
     kube_api = endpoint_from_flag("kube-api-endpoint.available")
 
-    endpoints = kubernetes_master.get_endpoints_from_config()
+    endpoints = kubernetes_control_plane.get_endpoints_from_config()
     if endpoints:
         addresses = [e[0] for e in endpoints]
-        kube_api.configure(kubernetes_master.STANDARD_API_PORT, addresses, addresses)
+        kube_api.configure(
+            kubernetes_control_plane.STANDARD_API_PORT, addresses, addresses
+        )
     else:
         # no manually configured LBs, so rely on the interface layer
         # to use the ingress address for each relation
-        kube_api.configure(kubernetes_master.STANDARD_API_PORT)
+        kube_api.configure(kubernetes_control_plane.STANDARD_API_PORT)
 
 
 @when("leadership.is_leader")
@@ -1480,8 +1513,8 @@ def request_load_balancers():
             continue
         req = lb_provider.get_request("api-server-" + lb_type)
         req.protocol = req.protocols.tcp
-        ext_api_port = kubernetes_master.EXTERNAL_API_PORT
-        int_api_port = kubernetes_master.STANDARD_API_PORT
+        ext_api_port = kubernetes_control_plane.EXTERNAL_API_PORT
+        int_api_port = kubernetes_control_plane.STANDARD_API_PORT
         api_port = ext_api_port if lb_type == "external" else int_api_port
         req.port_mapping = {api_port: int_api_port}
         req.public = lb_type == "external"
@@ -1501,10 +1534,10 @@ def send_api_urls():
         # built with an old version of the kube-control interface
         # the old kube-api-endpoint relation must be used instead
         return
-    endpoints = kubernetes_master.get_internal_api_endpoints()
+    endpoints = kubernetes_control_plane.get_internal_api_endpoints()
     if not endpoints:
         return
-    kube_control.set_api_endpoints(kubernetes_master.get_api_urls(endpoints))
+    kube_control.set_api_endpoints(kubernetes_control_plane.get_api_urls(endpoints))
 
 
 def has_external_cloud_provider():
@@ -1526,7 +1559,7 @@ def send_data():
     common_name = hookenv.unit_public_ip()
 
     # Get the SDN gateways based on the service CIDRs.
-    k8s_service_ips = kubernetes_master.get_kubernetes_service_ips()
+    k8s_service_ips = kubernetes_control_plane.get_kubernetes_service_ips()
 
     cluster_cidr = kubernetes_common.cluster_cidr()
     bind_ips = kubernetes_common.get_bind_addrs(
@@ -1539,7 +1572,7 @@ def send_data():
     old_ingress_ip = get_ingress_address("kube-api-endpoint")
     new_ingress_ip = get_ingress_address("kube-control")
 
-    local_endpoint = kubernetes_master.get_local_api_endpoint()[0][0]
+    local_endpoint = kubernetes_control_plane.get_local_api_endpoint()[0][0]
 
     domain = hookenv.config("dns_domain")
     # Create SANs that the tls layer will add to the server cert.
@@ -1563,8 +1596,8 @@ def send_data():
         + bind_ips
     )
 
-    sans.extend(e[0] for e in kubernetes_master.get_internal_api_endpoints())
-    sans.extend(e[0] for e in kubernetes_master.get_external_api_endpoints())
+    sans.extend(e[0] for e in kubernetes_control_plane.get_internal_api_endpoints())
+    sans.extend(e[0] for e in kubernetes_control_plane.get_external_api_endpoints())
 
     # maybe they have extra names they want as SANs
     extra_sans = hookenv.config("extra_sans")
@@ -1610,7 +1643,7 @@ def update_certificates():
 
 
 @when(
-    "kubernetes-master.components.started",
+    "kubernetes-control-plane.components.started",
     "leadership.is_leader",
     "cdk-addons.reconfigure",
 )
@@ -1619,7 +1652,7 @@ def reconfigure_cdk_addons():
 
 
 @when(
-    "kubernetes-master.components.started",
+    "kubernetes-control-plane.components.started",
     "leadership.is_leader",
     "leadership.set.cluster_tag",
 )
@@ -1628,15 +1661,15 @@ def configure_cdk_addons():
     """Configure CDK addons"""
     remove_state("cdk-addons.reconfigure")
     remove_state("cdk-addons.configured")
-    remove_state("kubernetes-master.aws.changed")
-    remove_state("kubernetes-master.azure.changed")
-    remove_state("kubernetes-master.gcp.changed")
-    remove_state("kubernetes-master.openstack.changed")
+    remove_state("kubernetes-control-plane.aws.changed")
+    remove_state("kubernetes-control-plane.azure.changed")
+    remove_state("kubernetes-control-plane.gcp.changed")
+    remove_state("kubernetes-control-plane.openstack.changed")
     load_gpu_plugin = hookenv.config("enable-nvidia-plugin").lower()
     gpuEnable = (
         get_version("kube-apiserver") >= (1, 9)
         and load_gpu_plugin == "auto"
-        and is_state("kubernetes-master.gpu.enabled")
+        and is_state("kubernetes-control-plane.gpu.enabled")
     )
     registry = hookenv.config("image-registry")
     dbEnabled = str(hookenv.config("enable-dashboard-addons")).lower()
@@ -1655,7 +1688,7 @@ def configure_cdk_addons():
         and ceph_ep.key()
         and ceph_ep.fsid()
         and ceph_ep.mon_hosts()
-        and is_state("kubernetes-master.ceph.configured")
+        and is_state("kubernetes-control-plane.ceph.configured")
         and get_version("kube-apiserver") >= (1, 12)
     ):
         cephEnabled = "true"
@@ -1665,9 +1698,9 @@ def configure_cdk_addons():
         ceph["kubernetes_key"] = b64_ceph_key.decode("ascii")
         ceph["mon_hosts"] = ceph_ep.mon_hosts()
         default_storage = hookenv.config("default-storage")
-        if kubernetes_master.query_cephfs_enabled():
+        if kubernetes_control_plane.query_cephfs_enabled():
             cephFsEnabled = "true"
-            ceph["fsname"] = kubernetes_master.get_cephfs_fsname() or ""
+            ceph["fsname"] = kubernetes_control_plane.get_cephfs_fsname() or ""
         else:
             cephFsEnabled = "false"
     else:
@@ -1696,7 +1729,7 @@ def configure_cdk_addons():
     enable_openstack = str(is_flag_set("endpoint.openstack.ready")).lower()
     openstack = endpoint_from_flag("endpoint.openstack.ready")
 
-    if is_state("kubernetes-master.cdk-addons.unique-cluster-tag"):
+    if is_state("kubernetes-control-plane.cdk-addons.unique-cluster-tag"):
         cluster_tag = leader_get("cluster_tag")
     else:
         # allow for older upgraded charms to control when they start sending
@@ -1794,43 +1827,43 @@ def ceph_state_control():
 
     # Re-execute the rendering if the data has changed.
     if data_changed("ceph-config", ceph_relation_data):
-        remove_state("kubernetes-master.ceph.configured")
+        remove_state("kubernetes-control-plane.ceph.configured")
 
 
-@when("kubernetes-master.ceph.configured")
+@when("kubernetes-control-plane.ceph.configured")
 @when_not("ceph-storage.available")
 def ceph_storage_gone():
     # ceph has left, so clean up
-    clear_flag("kubernetes-master.apiserver.configured")
-    remove_state("kubernetes-master.ceph.configured")
+    clear_flag("kubernetes-control-plane.apiserver.configured")
+    remove_state("kubernetes-control-plane.ceph.configured")
 
 
-@when("kubernetes-master.ceph.pools.created")
+@when("kubernetes-control-plane.ceph.pools.created")
 @when_not("ceph-client.connected")
 def ceph_client_gone():
     # can't nuke pools, but we can't be certain that they
     # are still made when a new relation comes in
-    remove_state("kubernetes-master.ceph.pools.created")
+    remove_state("kubernetes-control-plane.ceph.pools.created")
 
 
 @when("etcd.available")
 @when("ceph-storage.available")
-@when_not("kubernetes-master.privileged")
-@when_not("kubernetes-master.ceph.configured")
+@when_not("kubernetes-control-plane.privileged")
+@when_not("kubernetes-control-plane.ceph.configured")
 def ceph_storage_privilege():
     """
     Before we configure Ceph, we
-    need to allow the master to
+    need to allow the control-plane to
     run privileged containers.
 
     :return: None
     """
-    clear_flag("kubernetes-master.apiserver.configured")
+    clear_flag("kubernetes-control-plane.apiserver.configured")
 
 
 @when("ceph-client.connected")
-@when("kubernetes-master.ceph.configured")
-@when_not("kubernetes-master.ceph.pool.created")
+@when("kubernetes-control-plane.ceph.configured")
+@when_not("kubernetes-control-plane.ceph.pool.created")
 def ceph_storage_pool():
     """Once Ceph relation is ready,
     we need to add storage pools.
@@ -1849,12 +1882,12 @@ def ceph_storage_pool():
         except Exception as e:
             hookenv.status_set("blocked", "Error creating {} pool: {}.".format(pool, e))
 
-    set_state("kubernetes-master.ceph.pool.created")
+    set_state("kubernetes-control-plane.ceph.pool.created")
 
 
 @when("ceph-storage.available")
-@when("kubernetes-master.privileged")
-@when_not("kubernetes-master.ceph.configured")
+@when("kubernetes-control-plane.privileged")
+@when_not("kubernetes-control-plane.ceph.configured")
 def ceph_storage():
     """Ceph on kubernetes will require a few things - namely a ceph
     configuration, and the ceph secret key file used for authentication.
@@ -1889,7 +1922,7 @@ def ceph_storage():
             cmd = ["kubectl", "apply", "-f", "/tmp/ceph-secret.yaml"]
             check_call(cmd)
             os.remove("/tmp/ceph-secret.yaml")
-            set_state("kubernetes-master.ceph.pool.created")
+            set_state("kubernetes-control-plane.ceph.pool.created")
         except:  # NOQA
             # The enlistment in kubernetes failed, return and
             # prepare for re-exec.
@@ -1899,7 +1932,7 @@ def ceph_storage():
     # backend that will allow other modules to hook into this and verify we
     # have performed the necessary pre-req steps to interface with a ceph
     # deployment.
-    set_state("kubernetes-master.ceph.configured")
+    set_state("kubernetes-control-plane.ceph.configured")
 
 
 @when("nrpe-external-master.available")
@@ -1917,18 +1950,18 @@ def switch_auth_mode(forced=False):
     if data_changed("auth-mode", mode) or forced:
         # manage flags to handle rbac related resources
         if mode and "rbac" in mode.lower():
-            remove_state("kubernetes-master.remove.rbac")
-            set_state("kubernetes-master.create.rbac")
+            remove_state("kubernetes-control-plane.remove.rbac")
+            set_state("kubernetes-control-plane.create.rbac")
         else:
-            remove_state("kubernetes-master.create.rbac")
-            set_state("kubernetes-master.remove.rbac")
+            remove_state("kubernetes-control-plane.create.rbac")
+            set_state("kubernetes-control-plane.remove.rbac")
 
         # set ourselves up to restart since auth mode has changed
-        remove_state("kubernetes-master.components.started")
+        remove_state("kubernetes-control-plane.components.started")
 
 
-@when("leadership.is_leader", "kubernetes-master.components.started")
-@when_not("kubernetes-master.pod-security-policy.applied")
+@when("leadership.is_leader", "kubernetes-control-plane.components.started")
+@when_not("kubernetes-control-plane.pod-security-policy.applied")
 def create_pod_security_policy_resources():
     pod_security_policy_path = "/root/cdk/pod-security-policy.yaml"
     pod_security_policy = hookenv.config("pod-security-policy")
@@ -1943,7 +1976,7 @@ def create_pod_security_policy_resources():
 
     hookenv.log("Creating pod security policy resources.")
     if kubectl_manifest("apply", pod_security_policy_path):
-        set_state("kubernetes-master.pod-security-policy.applied")
+        set_state("kubernetes-control-plane.pod-security-policy.applied")
     else:
         msg = "Failed to apply {}, will retry.".format(pod_security_policy_path)
         hookenv.log(msg)
@@ -1951,8 +1984,8 @@ def create_pod_security_policy_resources():
 
 @when(
     "leadership.is_leader",
-    "kubernetes-master.components.started",
-    "kubernetes-master.create.rbac",
+    "kubernetes-control-plane.components.started",
+    "kubernetes-control-plane.create.rbac",
 )
 def create_rbac_resources():
     rbac_proxy_path = "/root/cdk/rbac-proxy.yaml"
@@ -1968,21 +2001,21 @@ def create_rbac_resources():
 
     hookenv.log("Creating proxy-related RBAC resources.")
     if kubectl_manifest("apply", rbac_proxy_path):
-        remove_state("kubernetes-master.create.rbac")
+        remove_state("kubernetes-control-plane.create.rbac")
     else:
         msg = "Failed to apply {}, will retry.".format(rbac_proxy_path)
         hookenv.log(msg)
 
 
-@when("leadership.is_leader", "kubernetes-master.components.started")
-@when_not("kubernetes-master.system-monitoring-rbac-role.applied")
+@when("leadership.is_leader", "kubernetes-control-plane.components.started")
+@when_not("kubernetes-control-plane.system-monitoring-rbac-role.applied")
 def apply_system_monitoring_rbac_role():
     try:
         hookenv.status_set("maintenance", "Applying system:monitoring RBAC role")
         path = "/root/cdk/system-monitoring-rbac-role.yaml"
         render("system-monitoring-rbac-role.yaml", path, {})
         kubectl("apply", "-f", path)
-        set_state("kubernetes-master.system-monitoring-rbac-role.applied")
+        set_state("kubernetes-control-plane.system-monitoring-rbac-role.applied")
     except Exception:
         hookenv.log(traceback.format_exc())
         hookenv.log("Waiting to retry applying system:monitoring RBAC role")
@@ -1991,8 +2024,8 @@ def apply_system_monitoring_rbac_role():
 
 @when(
     "leadership.is_leader",
-    "kubernetes-master.components.started",
-    "kubernetes-master.remove.rbac",
+    "kubernetes-control-plane.components.started",
+    "kubernetes-control-plane.remove.rbac",
 )
 def remove_rbac_resources():
     rbac_proxy_path = "/root/cdk/rbac-proxy.yaml"
@@ -2000,20 +2033,20 @@ def remove_rbac_resources():
         hookenv.log("Removing proxy-related RBAC resources.")
         if kubectl_manifest("delete", rbac_proxy_path):
             os.remove(rbac_proxy_path)
-            remove_state("kubernetes-master.remove.rbac")
+            remove_state("kubernetes-control-plane.remove.rbac")
         else:
             msg = "Failed to delete {}, will retry.".format(rbac_proxy_path)
             hookenv.log(msg)
     else:
         # if we dont have the yaml, there's nothing for us to do
-        remove_state("kubernetes-master.remove.rbac")
+        remove_state("kubernetes-control-plane.remove.rbac")
 
 
-@when("kubernetes-master.components.started")
+@when("kubernetes-control-plane.components.started")
 @when("nrpe-external-master.available")
 @when_any("config.changed.nagios_context", "config.changed.nagios_servicegroups")
 def update_nrpe_config():
-    services = ["snap.{}.daemon".format(s) for s in master_services]
+    services = ["snap.{}.daemon".format(s) for s in control_plane_services]
     services += [auth_webhook_svc_name]
 
     plugin = install_nagios_plugin_from_file(
@@ -2035,11 +2068,11 @@ def update_nrpe_config():
 @when("nrpe-external-master.initial-config")
 def remove_nrpe_config():
     # List of systemd services for which the checks will be removed
-    services = ["snap.{}.daemon".format(s) for s in master_services]
+    services = ["snap.{}.daemon".format(s) for s in control_plane_services]
 
     remove_nagios_plugin("check_k8s_master.py")
 
-    # The current nrpe-external-master interface doesn't handle a lot of logic,
+    # The current nrpe-external interface doesn't handle a lot of logic,
     # use the charm-helpers code for now.
     hostname = nrpe.get_nagios_hostname()
     nrpe_setup = nrpe.NRPE(hostname=hostname)
@@ -2055,7 +2088,7 @@ def is_privileged():
     privileged = hookenv.config("allow-privileged").lower()
     if privileged == "auto":
         return (
-            is_state("kubernetes-master.gpu.enabled")
+            is_state("kubernetes-control-plane.gpu.enabled")
             or is_state("ceph-storage.available")
             or is_state("endpoint.openstack.joined")
         )
@@ -2064,10 +2097,10 @@ def is_privileged():
 
 
 @when("config.changed.allow-privileged")
-@when("kubernetes-master.components.started")
+@when("kubernetes-control-plane.components.started")
 def on_config_allow_privileged_change():
     """React to changed 'allow-privileged' config value."""
-    remove_state("kubernetes-master.components.started")
+    remove_state("kubernetes-control-plane.components.started")
     remove_state("config.changed.allow-privileged")
 
 
@@ -2078,28 +2111,28 @@ def on_config_allow_privileged_change():
     "config.changed.enable-keystone-authorization",
     "config.changed.service-cidr",
 )
-@when("kubernetes-master.components.started")
+@when("kubernetes-control-plane.components.started")
 @when("leadership.set.auto_storage_backend")
 @when("etcd.available")
 def reconfigure_apiserver():
-    clear_flag("kubernetes-master.apiserver.configured")
+    clear_flag("kubernetes-control-plane.apiserver.configured")
 
 
 @when("config.changed.controller-manager-extra-args")
-@when("kubernetes-master.components.started")
+@when("kubernetes-control-plane.components.started")
 def on_config_controller_manager_extra_args_change():
     configure_controller_manager()
 
 
 @when("config.changed.scheduler-extra-args")
-@when("kubernetes-master.components.started")
+@when("kubernetes-control-plane.components.started")
 def on_config_scheduler_extra_args_change():
     configure_scheduler()
 
 
 @when("kube-control.gpu.available")
-@when("kubernetes-master.components.started")
-@when_not("kubernetes-master.gpu.enabled")
+@when("kubernetes-control-plane.components.started")
+@when_not("kubernetes-control-plane.gpu.enabled")
 def on_gpu_available(kube_control):
     """The remote side (kubernetes-worker) is gpu-enabled.
 
@@ -2111,38 +2144,38 @@ def on_gpu_available(kube_control):
     if config["allow-privileged"].lower() == "false" and kube_version < (1, 9):
         return
 
-    remove_state("kubernetes-master.components.started")
-    set_state("kubernetes-master.gpu.enabled")
+    remove_state("kubernetes-control-plane.components.started")
+    set_state("kubernetes-control-plane.gpu.enabled")
 
 
-@when("kubernetes-master.gpu.enabled")
-@when("kubernetes-master.components.started")
-@when_not("kubernetes-master.privileged")
+@when("kubernetes-control-plane.gpu.enabled")
+@when("kubernetes-control-plane.components.started")
+@when_not("kubernetes-control-plane.privileged")
 def gpu_with_no_privileged():
     """We were in gpu mode, but the operator has set allow-privileged="false",
     so we can't run in gpu mode anymore.
 
     """
     if get_version("kube-apiserver") < (1, 9):
-        remove_state("kubernetes-master.gpu.enabled")
+        remove_state("kubernetes-control-plane.gpu.enabled")
 
 
 @when("kube-control.connected")
 @when_not("kube-control.gpu.available")
-@when("kubernetes-master.gpu.enabled")
-@when("kubernetes-master.components.started")
+@when("kubernetes-control-plane.gpu.enabled")
+@when("kubernetes-control-plane.components.started")
 def gpu_departed(kube_control):
     """We were in gpu mode, but the workers informed us there is
     no gpu support anymore.
 
     """
-    remove_state("kubernetes-master.gpu.enabled")
+    remove_state("kubernetes-control-plane.gpu.enabled")
 
 
 @hook("stop")
 def shutdown():
-    """Stop the kubernetes master services"""
-    for service in master_services:
+    """Stop the kubernetes control-plane services"""
+    for service in control_plane_services:
         service_stop("snap.%s.daemon" % service)
 
 
@@ -2154,24 +2187,25 @@ def shutdown():
 def build_kubeconfig():
     """Gather the relevant data for Kubernetes configuration objects and create
     a config object with that information."""
-    local_endpoint = kubernetes_master.get_local_api_endpoint()
-    internal_endpoints = kubernetes_master.get_internal_api_endpoints()
-    external_endpoints = kubernetes_master.get_external_api_endpoints()
+    local_endpoint = kubernetes_control_plane.get_local_api_endpoint()
+    internal_endpoints = kubernetes_control_plane.get_internal_api_endpoints()
+    external_endpoints = kubernetes_control_plane.get_external_api_endpoints()
 
     # Do we have everything we need?
     if ca_crt_path.exists() and internal_endpoints and external_endpoints:
-        local_url = kubernetes_master.get_api_url(local_endpoint)
-        internal_url = kubernetes_master.get_api_url(internal_endpoints)
-        external_url = kubernetes_master.get_api_url(external_endpoints)
+        local_url = kubernetes_control_plane.get_api_url(local_endpoint)
+        internal_url = kubernetes_control_plane.get_api_url(internal_endpoints)
+        external_url = kubernetes_control_plane.get_api_url(external_endpoints)
         client_pass = get_token("admin")
         if not client_pass:
             # If we made it this far without a password, we're bootstrapping a new
             # cluster. Create a new token so we can build an admin kubeconfig. The
             # auth-webhook service will ack this value from the kubeconfig file,
-            # allowing us to continue until the master is started and a proper
+            # allowing us to continue until the control-plane is started and a proper
             # secret can be created.
             client_pass = (
-                hookenv.config("client_password") or kubernetes_master.token_generator()
+                hookenv.config("client_password")
+                or kubernetes_control_plane.token_generator()
             )
             client_pass = "admin::{}".format(client_pass)
 
@@ -2314,39 +2348,41 @@ def remove_if_exists(path):
 
 def write_file_with_autogenerated_header(path, contents):
     with open(path, "w") as f:
-        header = "# Autogenerated by kubernetes-master charm"
+        header = "# Autogenerated by kubernetes-control-plane charm"
         f.write(header + "\n" + contents)
 
 
 @when(
-    "etcd.available", "cni.available", "kubernetes-master.auth-webhook-service.started"
+    "etcd.available",
+    "cni.available",
+    "kubernetes-control-plane.auth-webhook-service.started",
 )
-@when_not("kubernetes-master.apiserver.configured")
+@when_not("kubernetes-control-plane.apiserver.configured")
 def configure_apiserver():
     etcd_connection_string = endpoint_from_flag(
         "etcd.available"
     ).get_connection_string()
     if not etcd_connection_string:
         # etcd is not returning a connection string. This happens when
-        # the master unit disconnects from etcd and is ready to terminate.
-        # No point in trying to start master services and fail. Just return.
+        # the control-plane unit disconnects from etcd and is ready to terminate.
+        # No point in trying to start control-plane services and fail. Just return.
         return
 
     # Update unit db service-cidr
-    was_service_cidr_expanded = kubernetes_master.is_service_cidr_expansion()
-    kubernetes_master.freeze_service_cidr()
+    was_service_cidr_expanded = kubernetes_control_plane.is_service_cidr_expansion()
+    kubernetes_control_plane.freeze_service_cidr()
 
     cluster_cidr = kubernetes_common.cluster_cidr()
-    service_cidr = kubernetes_master.service_cidr()
+    service_cidr = kubernetes_control_plane.service_cidr()
 
     api_opts = {}
 
     if is_privileged():
         api_opts["allow-privileged"] = "true"
-        set_state("kubernetes-master.privileged")
+        set_state("kubernetes-control-plane.privileged")
     else:
         api_opts["allow-privileged"] = "false"
-        remove_state("kubernetes-master.privileged")
+        remove_state("kubernetes-control-plane.privileged")
 
     # Handle static options for now
     api_opts["service-cluster-ip-range"] = service_cidr
@@ -2520,23 +2556,23 @@ def configure_apiserver():
     service_restart("snap.kube-apiserver.daemon")
 
     if was_service_cidr_expanded and is_state("leadership.is_leader"):
-        set_flag("kubernetes-master.had-service-cidr-expanded")
+        set_flag("kubernetes-control-plane.had-service-cidr-expanded")
 
-    set_flag("kubernetes-master.apiserver.configured")
-    if kubernetes_master.check_service("kube-apiserver"):
-        set_flag("kubernetes-master.apiserver.running")
+    set_flag("kubernetes-control-plane.apiserver.configured")
+    if kubernetes_control_plane.check_service("kube-apiserver"):
+        set_flag("kubernetes-control-plane.apiserver.running")
 
 
-@when("kubernetes-master.apiserver.configured")
-@when_not("kubernetes-master.apiserver.running")
+@when("kubernetes-control-plane.apiserver.configured")
+@when_not("kubernetes-control-plane.apiserver.running")
 def check_apiserver():
-    if kubernetes_master.check_service("kube-apiserver"):
-        set_flag("kubernetes-master.apiserver.running")
+    if kubernetes_control_plane.check_service("kube-apiserver"):
+        set_flag("kubernetes-control-plane.apiserver.running")
 
 
 @when(
-    "kubernetes-master.had-service-cidr-expanded",
-    "kubernetes-master.apiserver.configured",
+    "kubernetes-control-plane.had-service-cidr-expanded",
+    "kubernetes-control-plane.apiserver.configured",
     "leadership.is_leader",
 )
 def update_for_service_cidr_expansion():
@@ -2560,7 +2596,7 @@ def update_for_service_cidr_expansion():
     # First network is the default, which is used for the API service's address.
     # This logic will likely need to change once dual-stack services are
     # supported: https://bit.ly/2YlbxOx
-    expected_service_ip = kubernetes_master.get_kubernetes_service_ips()[0]
+    expected_service_ip = kubernetes_control_plane.get_kubernetes_service_ips()[0]
     actual_service_ip = _wait_for_svc_ip()
     if not actual_service_ip:
         hookenv.log("service-cidr expansion: Timed out waiting for API service")
@@ -2576,7 +2612,7 @@ def update_for_service_cidr_expansion():
                     "service-cidr expansion: Timed out waiting for "
                     "the service to return; restarting API server"
                 )
-                clear_flag("kubernetes-master.apiserver.configured")
+                clear_flag("kubernetes-control-plane.apiserver.configured")
                 return
             if actual_service_ip != expected_service_ip:
                 raise ValueError(
@@ -2611,13 +2647,13 @@ def update_for_service_cidr_expansion():
         # so logging the exception is a bit superfluous
         hookenv.log("service-cidr expansion: failed to restart components")
     else:
-        clear_flag("kubernetes-master.had-service-cidr-expanded")
+        clear_flag("kubernetes-control-plane.had-service-cidr-expanded")
 
 
 def configure_controller_manager():
     controller_opts = {}
     cluster_cidr = kubernetes_common.cluster_cidr()
-    service_cidr = kubernetes_master.service_cidr()
+    service_cidr = kubernetes_control_plane.service_cidr()
 
     # Default to 3 minute resync. TODO: Make this configurable?
     controller_opts["min-resync-period"] = "3m"
@@ -2732,15 +2768,15 @@ def setup_tokens(token, username, user, groups=None):
     add an entry to the 'known_tokens.csv' file.
     """
     if not token:
-        token = kubernetes_master.token_generator()
-    if is_flag_set("kubernetes-master.token-auth.migrated"):
+        token = kubernetes_control_plane.token_generator()
+    if is_flag_set("kubernetes-control-plane.token-auth.migrated"):
         # We need the apiserver before we can create secrets.
-        if is_flag_set("kubernetes-master.apiserver.configured"):
-            kubernetes_master.create_secret(token, username, user, groups)
+        if is_flag_set("kubernetes-control-plane.apiserver.configured"):
+            kubernetes_control_plane.create_secret(token, username, user, groups)
         else:
             hookenv.log("Delaying secret creation until the apiserver is configured.")
     else:
-        kubernetes_master.create_known_token(token, username, user, groups)
+        kubernetes_control_plane.create_known_token(token, username, user, groups)
 
 
 def get_token(username):
@@ -2749,10 +2785,10 @@ def get_token(username):
     Grab a token from the given user's secret if known_tokens have been
     migrated. Otherwise, fetch it from the 'known_tokens.csv' file.
     """
-    if is_flag_set("kubernetes-master.token-auth.migrated"):
+    if is_flag_set("kubernetes-control-plane.token-auth.migrated"):
         return kubernetes_common.get_secret_password(username)
     else:
-        return kubernetes_master.get_csv_password("known_tokens.csv", username)
+        return kubernetes_control_plane.get_csv_password("known_tokens.csv", username)
 
 
 def set_token(password, save_salt):
@@ -2843,8 +2879,8 @@ def poke_network_unavailable():
     discussion about refactoring the affected code but nothing has happened
     in a while.
     """
-    internal_endpoints = kubernetes_master.get_internal_api_endpoints()
-    internal_url = kubernetes_master.get_api_url(internal_endpoints)
+    internal_endpoints = kubernetes_control_plane.get_internal_api_endpoints()
+    internal_url = kubernetes_control_plane.get_api_url(internal_endpoints)
 
     client_token = get_token("admin")
     http_header = ("Authorization", "Bearer {}".format(client_token))
@@ -2932,7 +2968,9 @@ def getStorageBackend():
 @when("leadership.is_leader")
 @when_not("leadership.set.cluster_tag")
 def create_cluster_tag():
-    cluster_tag = "kubernetes-{}".format(kubernetes_master.token_generator().lower())
+    cluster_tag = "kubernetes-{}".format(
+        kubernetes_control_plane.token_generator().lower()
+    )
     leader_set(cluster_tag=cluster_tag)
 
 
@@ -2945,7 +2983,7 @@ def send_cluster_tag():
 
 @when_not("kube-control.connected")
 def clear_cluster_tag_sent():
-    remove_state("kubernetes-master.cluster-tag-sent")
+    remove_state("kubernetes-control-plane.cluster-tag-sent")
 
 
 @when_any(
@@ -2955,7 +2993,7 @@ def clear_cluster_tag_sent():
     "endpoint.vsphere.joined",
     "endpoint.azure.joined",
 )
-@when_not("kubernetes-master.cloud.ready")
+@when_not("kubernetes-control-plane.cloud.ready")
 def set_cloud_pending():
     k8s_version = get_version("kube-apiserver")
     k8s_1_11 = k8s_version >= (1, 11)
@@ -2963,15 +3001,15 @@ def set_cloud_pending():
     vsphere_joined = is_state("endpoint.vsphere.joined")
     azure_joined = is_state("endpoint.azure.joined")
     if (vsphere_joined and not k8s_1_12) or (azure_joined and not k8s_1_11):
-        set_state("kubernetes-master.cloud.blocked")
+        set_state("kubernetes-control-plane.cloud.blocked")
     else:
-        remove_state("kubernetes-master.cloud.blocked")
-    set_state("kubernetes-master.cloud.pending")
+        remove_state("kubernetes-control-plane.cloud.blocked")
+    set_state("kubernetes-control-plane.cloud.pending")
 
 
 @when_any("endpoint.aws.joined", "endpoint.gcp.joined", "endpoint.azure.joined")
 @when("leadership.set.cluster_tag")
-@when_not("kubernetes-master.cloud.request-sent")
+@when_not("kubernetes-control-plane.cloud.request-sent")
 def request_integration():
     hookenv.status_set("maintenance", "requesting cloud integration")
     cluster_tag = leader_get("cluster_tag")
@@ -2980,7 +3018,7 @@ def request_integration():
         cloud.tag_instance(
             {
                 "kubernetes.io/cluster/{}".format(cluster_tag): "owned",
-                "k8s.io/role/master": "true",
+                "k8s.io/role/master": "true",  # wokeignore:rule=master
             }
         )
         cloud.tag_instance_security_group(
@@ -3000,7 +3038,7 @@ def request_integration():
         cloud.label_instance(
             {
                 "k8s-io-cluster-name": cluster_tag,
-                "k8s-io-role-master": "master",
+                "k8s-io-role-master": "master",  # wokeignore:rule=master
             }
         )
         cloud.enable_object_storage_management()
@@ -3010,7 +3048,7 @@ def request_integration():
         cloud.tag_instance(
             {
                 "k8s-io-cluster-name": cluster_tag,
-                "k8s-io-role-master": "master",
+                "k8s-io-role-master": "master",  # wokeignore:rule=master
             }
         )
         cloud.enable_object_storage_management()
@@ -3020,7 +3058,7 @@ def request_integration():
     cloud.enable_network_management()
     cloud.enable_dns_management()
     cloud.enable_block_storage_management()
-    set_state("kubernetes-master.cloud.request-sent")
+    set_state("kubernetes-control-plane.cloud.request-sent")
 
 
 @when_none(
@@ -3031,17 +3069,17 @@ def request_integration():
     "endpoint.azure.joined",
 )
 @when_any(
-    "kubernetes-master.cloud.pending",
-    "kubernetes-master.cloud.request-sent",
-    "kubernetes-master.cloud.blocked",
-    "kubernetes-master.cloud.ready",
+    "kubernetes-control-plane.cloud.pending",
+    "kubernetes-control-plane.cloud.request-sent",
+    "kubernetes-control-plane.cloud.blocked",
+    "kubernetes-control-plane.cloud.ready",
 )
 def clear_cloud_flags():
-    remove_state("kubernetes-master.cloud.pending")
-    remove_state("kubernetes-master.cloud.request-sent")
-    remove_state("kubernetes-master.cloud.blocked")
-    remove_state("kubernetes-master.cloud.ready")
-    clear_flag("kubernetes-master.apiserver.configured")
+    remove_state("kubernetes-control-plane.cloud.pending")
+    remove_state("kubernetes-control-plane.cloud.request-sent")
+    remove_state("kubernetes-control-plane.cloud.blocked")
+    remove_state("kubernetes-control-plane.cloud.ready")
+    clear_flag("kubernetes-control-plane.apiserver.configured")
     _kick_controller_manager()
 
 
@@ -3052,7 +3090,9 @@ def clear_cloud_flags():
     "endpoint.vsphere.ready",
     "endpoint.azure.ready",
 )
-@when_not("kubernetes-master.cloud.blocked", "kubernetes-master.cloud.ready")
+@when_not(
+    "kubernetes-control-plane.cloud.blocked", "kubernetes-control-plane.cloud.ready"
+)
 def cloud_ready():
     if is_state("endpoint.gcp.ready"):
         write_gcp_snap_config("kube-apiserver")
@@ -3063,12 +3103,12 @@ def cloud_ready():
     elif is_state("endpoint.azure.ready"):
         write_azure_snap_config("kube-apiserver")
         write_azure_snap_config("kube-controller-manager")
-    remove_state("kubernetes-master.cloud.pending")
-    set_state("kubernetes-master.cloud.ready")
-    remove_state("kubernetes-master.components.started")  # force restart
+    remove_state("kubernetes-control-plane.cloud.pending")
+    set_state("kubernetes-control-plane.cloud.ready")
+    remove_state("kubernetes-control-plane.components.started")  # force restart
 
 
-@when("kubernetes-master.cloud.ready")
+@when("kubernetes-control-plane.cloud.ready")
 @when_any(
     "endpoint.openstack.ready.changed",
     "endpoint.vsphere.ready.changed",
@@ -3083,12 +3123,12 @@ def update_cloud_config():
     """
     if is_state("endpoint.openstack.ready.changed"):
         remove_state("endpoint.openstack.ready.changed")
-        set_state("kubernetes-master.openstack.changed")
+        set_state("kubernetes-control-plane.openstack.changed")
     if is_state("endpoint.vsphere.ready.changed"):
-        remove_state("kubernetes-master.cloud.ready")
+        remove_state("kubernetes-control-plane.cloud.ready")
         remove_state("endpoint.vsphere.ready.changed")
     if is_state("endpoint.azure.ready.changed"):
-        remove_state("kubernetes-master.cloud.ready")
+        remove_state("kubernetes-control-plane.cloud.ready")
         remove_state("endpoint.azure.ready.changed")
 
 
@@ -3131,49 +3171,49 @@ def _write_vsphere_snap_config(component):
 
 
 @when("config.changed.keystone-policy")
-@when("kubernetes-master.keystone-policy-handled")
+@when("kubernetes-control-plane.keystone-policy-handled")
 def regen_keystone_policy():
-    clear_flag("kubernetes-master.keystone-policy-handled")
+    clear_flag("kubernetes-control-plane.keystone-policy-handled")
 
 
 @when(
     "keystone-credentials.available",
     "leadership.is_leader",
-    "kubernetes-master.apiserver.configured",
+    "kubernetes-control-plane.apiserver.configured",
 )
-@when_not("kubernetes-master.keystone-policy-handled")
+@when_not("kubernetes-control-plane.keystone-policy-handled")
 def generate_keystone_configmap():
     keystone_policy = hookenv.config("keystone-policy")
     if keystone_policy:
         os.makedirs(keystone_root, exist_ok=True)
         write_file_with_autogenerated_header(keystone_policy_path, keystone_policy)
         if kubectl_manifest("apply", keystone_policy_path):
-            set_flag("kubernetes-master.keystone-policy-handled")
-            clear_flag("kubernetes-master.keystone-policy-error")
+            set_flag("kubernetes-control-plane.keystone-policy-handled")
+            clear_flag("kubernetes-control-plane.keystone-policy-error")
         else:
-            set_flag("kubernetes-master.keystone-policy-error")
+            set_flag("kubernetes-control-plane.keystone-policy-error")
     else:
         # a missing policy configmap will crashloop the pods, but...
         # what do we do in this situation. We could just do nothing,
         # but that isn't cool for the user so we surface an error
         # and wait for them to fix it.
-        set_flag("kubernetes-master.keystone-policy-error")
+        set_flag("kubernetes-control-plane.keystone-policy-error")
 
     # note that information is surfaced to the user in the code above where we
     # write status. It will notify the user we are waiting on the policy file
     # to apply if the keystone-credentials.available flag is set, but
-    # kubernetes-master.keystone-policy-handled is not set.
+    # kubernetes-control-plane.keystone-policy-handled is not set.
 
 
-@when("leadership.is_leader", "kubernetes-master.keystone-policy-handled")
+@when("leadership.is_leader", "kubernetes-control-plane.keystone-policy-handled")
 @when_not("keystone-credentials.available")
 def remove_keystone():
-    clear_flag("kubernetes-master.apiserver.configured")
+    clear_flag("kubernetes-control-plane.apiserver.configured")
     if not os.path.exists(keystone_policy_path):
-        clear_flag("kubernetes-master.keystone-policy-handled")
+        clear_flag("kubernetes-control-plane.keystone-policy-handled")
     elif kubectl_manifest("delete", keystone_policy_path):
         os.remove(keystone_policy_path)
-        clear_flag("kubernetes-master.keystone-policy-handled")
+        clear_flag("kubernetes-control-plane.keystone-policy-handled")
 
 
 @when("keystone-credentials.connected")
@@ -3185,7 +3225,7 @@ def setup_keystone_user():
 
 
 def _kick_controller_manager():
-    if is_flag_set("kubernetes-master.components.started"):
+    if is_flag_set("kubernetes-control-plane.components.started"):
         configure_controller_manager()
 
 
@@ -3194,7 +3234,7 @@ def _kick_controller_manager():
 )
 @when_not("keystone.apiserver.configured")
 def keystone_kick_apiserver():
-    clear_flag("kubernetes-master.apiserver.configured")
+    clear_flag("kubernetes-control-plane.apiserver.configured")
 
 
 @when(
@@ -3216,14 +3256,14 @@ def keystone_config():
     }
     if data_changed("keystone", data):
         remove_state("keystone.credentials.configured")
-        clear_flag("kubernetes-master.apiserver.configured")
+        clear_flag("kubernetes-control-plane.apiserver.configured")
         build_kubeconfig()
         generate_keystone_configmap()
         set_state("keystone.credentials.configured")
 
 
 @when("layer.vault-kv.app-kv.set.encryption_key", "layer.vaultlocker.ready")
-@when_not("kubernetes-master.secure-storage.created")
+@when_not("kubernetes-control-plane.secure-storage.created")
 def create_secure_storage():
     encryption_conf_dir = encryption_config_path().parent
     encryption_conf_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -3237,8 +3277,8 @@ def create_secure_storage():
             "{}".format(traceback.format_exc()),
             level=hookenv.ERROR,
         )
-        set_flag("kubernetes-master.secure-storage.failed")
-        clear_flag("kubernetes-master.secure-storage.created")
+        set_flag("kubernetes-control-plane.secure-storage.failed")
+        clear_flag("kubernetes-control-plane.secure-storage.created")
     else:
         # TODO: If Vault isn't available, it's probably still better to encrypt
         # anyway and store the key in plaintext and leadership than to just
@@ -3248,33 +3288,33 @@ def create_secure_storage():
         # unit since we've already handled the change
         clear_flag("layer.vault-kv.app-kv.changed.encryption_key")
         # mark secure storage as ready
-        set_flag("kubernetes-master.secure-storage.created")
-        clear_flag("kubernetes-master.secure-storage.failed")
+        set_flag("kubernetes-control-plane.secure-storage.created")
+        clear_flag("kubernetes-control-plane.secure-storage.failed")
         # restart to regen config
-        clear_flag("kubernetes-master.apiserver.configured")
+        clear_flag("kubernetes-control-plane.apiserver.configured")
 
 
 @when_not("layer.vaultlocker.ready")
-@when("kubernetes-master.secure-storage.created")
+@when("kubernetes-control-plane.secure-storage.created")
 def revert_secure_storage():
-    clear_flag("kubernetes-master.secure-storage.created")
-    clear_flag("kubernetes-master.secure-storage.failed")
-    clear_flag("kubernetes-master.apiserver.configured")
+    clear_flag("kubernetes-control-plane.secure-storage.created")
+    clear_flag("kubernetes-control-plane.secure-storage.failed")
+    clear_flag("kubernetes-control-plane.apiserver.configured")
 
 
 @when("leadership.is_leader", "layer.vault-kv.ready")
 @when_not("layer.vault-kv.app-kv.set.encryption_key")
 def generate_encryption_key():
     app_kv = vault_kv.VaultAppKV()
-    app_kv["encryption_key"] = kubernetes_master.token_generator(32)
+    app_kv["encryption_key"] = kubernetes_control_plane.token_generator(32)
 
 
 @when(
     "layer.vault-kv.app-kv.changed.encryption_key",
-    "kubernetes-master.secure-storage.created",
+    "kubernetes-control-plane.secure-storage.created",
 )
 def restart_apiserver_for_encryption_key():
-    clear_flag("kubernetes-master.apiserver.configured")
+    clear_flag("kubernetes-control-plane.apiserver.configured")
     clear_flag("layer.vault-kv.app-kv.changed.encryption_key")
 
 
@@ -3315,7 +3355,7 @@ def _write_encryption_config():
 
 @when_any("config.changed.pod-security-policy")
 def pod_security_policy_config_changed():
-    clear_flag("kubernetes-master.pod-security-policy.applied")
+    clear_flag("kubernetes-control-plane.pod-security-policy.applied")
 
 
 @when_any("config.changed.ha-cluster-vip", "config.changed.ha-cluster-dns")
@@ -3323,7 +3363,7 @@ def haconfig_changed():
     clear_flag("hacluster-configured")
 
 
-@when("ha.connected", "kubernetes-master.components.started")
+@when("ha.connected", "kubernetes-control-plane.components.started")
 @when_not("hacluster-configured")
 def configure_hacluster():
     # get a new cert
@@ -3385,7 +3425,7 @@ def get_dns_provider():
 
 
 @when("kube-control.connected")
-@when_not("kubernetes-master.sent-registry")
+@when_not("kubernetes-control-plane.sent-registry")
 def send_registry_location():
     registry_location = hookenv.config("image-registry")
     kube_control = endpoint_from_flag("kube-control.connected")
@@ -3404,13 +3444,13 @@ def send_registry_location():
     uri = get_sandbox_image_uri(registry_location)
     runtime.set_config(sandbox_image=uri)
 
-    set_flag("kubernetes-master.sent-registry")
+    set_flag("kubernetes-control-plane.sent-registry")
 
 
 @when(
     "leadership.is_leader",
     "leadership.set.kubernetes-master-addons-restart-for-ca",
-    "kubernetes-master.components.started",
+    "kubernetes-control-plane.components.started",
 )
 def restart_addons_for_ca():
     try:
@@ -3507,7 +3547,7 @@ def add_systemd_iptables_patch():
 
 @when(
     "leadership.is_leader",
-    "kubernetes-master.components.started",
+    "kubernetes-control-plane.components.started",
     "endpoint.prometheus.joined",
     "certificates.ca.available",
 )
@@ -3517,7 +3557,7 @@ def register_prometheus_jobs():
     monitoring_token = get_token("system:monitoring")
 
     for relation in prometheus.relations:
-        endpoints = kubernetes_master.get_internal_api_endpoints(relation)
+        endpoints = kubernetes_control_plane.get_internal_api_endpoints(relation)
         if not endpoints:
             continue
         address, port = endpoints[0]
@@ -3556,7 +3596,7 @@ def detect_telegraf():
 
 @when(
     "leadership.is_leader",
-    "kubernetes-master.components.started",
+    "kubernetes-control-plane.components.started",
     "endpoint.grafana.joined",
 )
 def register_grafana_dashboards():
@@ -3579,25 +3619,25 @@ def register_grafana_dashboards():
 
 
 @when("endpoint.aws-iam.ready")
-@when_not("kubernetes-master.aws-iam.configured")
+@when_not("kubernetes-control-plane.aws-iam.configured")
 def enable_aws_iam_webhook():
     # if etcd isn't available yet, we'll set this up later
     # when we start the api server.
     if is_flag_set("etcd.available"):
         # call the other things we need to update
-        clear_flag("kubernetes-master.apiserver.configured")
+        clear_flag("kubernetes-control-plane.apiserver.configured")
         build_kubeconfig()
-    set_flag("kubernetes-master.aws-iam.configured")
+    set_flag("kubernetes-control-plane.aws-iam.configured")
 
 
-@when("kubernetes-master.components.started", "endpoint.aws-iam.available")
+@when("kubernetes-control-plane.components.started", "endpoint.aws-iam.available")
 def api_server_started():
     aws_iam = endpoint_from_flag("endpoint.aws-iam.available")
     if aws_iam:
         aws_iam.set_api_server_status(True)
 
 
-@when_not("kubernetes-master.components.started")
+@when_not("kubernetes-control-plane.components.started")
 @when("endpoint.aws-iam.available")
 def api_server_stopped():
     aws_iam = endpoint_from_flag("endpoint.aws-iam.available")
@@ -3617,15 +3657,15 @@ def send_default_cni():
 
 @when("config.changed.default-cni")
 def default_cni_changed():
-    remove_state("kubernetes-master.components.started")
+    remove_state("kubernetes-control-plane.components.started")
 
 
 @when(
-    "kubernetes-master.components.started",
-    "kubernetes-master.apiserver.configured",
+    "kubernetes-control-plane.components.started",
+    "kubernetes-control-plane.apiserver.configured",
     "endpoint.container-runtime.available",
 )
-@when_not("kubernetes-master.kubelet.configured")
+@when_not("kubernetes-control-plane.kubelet.configured")
 def configure_kubelet():
     uid = hookenv.local_unit()
     username = "system:node:{}".format(get_node_name().lower())
@@ -3642,8 +3682,8 @@ def configure_kubelet():
         return
     has_xcp = has_external_cloud_provider()
 
-    local_endpoint = kubernetes_master.get_local_api_endpoint()
-    local_url = kubernetes_master.get_api_url(local_endpoint)
+    local_endpoint = kubernetes_control_plane.get_local_api_endpoint()
+    local_url = kubernetes_control_plane.get_api_url(local_endpoint)
     create_kubeconfig(
         kubelet_kubeconfig_path, local_url, ca_crt_path, token=token, user="kubelet"
     )
@@ -3662,13 +3702,13 @@ def configure_kubelet():
     )
     service_restart("snap.kubelet.daemon")
     set_state("node.label-config-required")
-    set_flag("kubernetes-master.kubelet.configured")
+    set_flag("kubernetes-control-plane.kubelet.configured")
 
 
 @when(
     "node.label-config-required",
-    "kubernetes-master.kubelet.configured",
-    "kubernetes-master.apiserver.configured",
+    "kubernetes-control-plane.kubelet.configured",
+    "kubernetes-control-plane.apiserver.configured",
     "authentication.setup",
 )
 def apply_node_labels():
@@ -3689,10 +3729,10 @@ def reconfigure_kubelet():
     if os.path.isfile(cpu_manager_state):
         hookenv.log("Removing file: " + cpu_manager_state)
         os.remove(cpu_manager_state)
-    clear_flag("kubernetes-master.kubelet.configured")
+    clear_flag("kubernetes-control-plane.kubelet.configured")
 
 
-@when("kubernetes-master.kubelet.configured")
+@when("kubernetes-control-plane.kubelet.configured")
 def watch_dns_for_changes():
     dns_ready, dns_ip, dns_port, dns_domain = get_dns_info()
     dns_info = [dns_ip, dns_port, dns_domain]
@@ -3700,30 +3740,30 @@ def watch_dns_for_changes():
     dns_changed = dns_info != previous_dns_info
     if dns_ready and dns_changed:
         hookenv.log("DNS info has changed, will reconfigure Kubelet")
-        clear_flag("kubernetes-master.kubelet.configured")
+        clear_flag("kubernetes-control-plane.kubelet.configured")
 
 
 @when("cni.available")
-@when_not("kubernetes-master.default-cni.configured")
+@when_not("kubernetes-control-plane.default-cni.configured")
 def configure_default_cni():
     default_cni = hookenv.config("default-cni")
     kubernetes_common.configure_default_cni(default_cni)
-    set_flag("kubernetes-master.default-cni.configured")
+    set_flag("kubernetes-control-plane.default-cni.configured")
 
 
 HEAL_HANDLER = {
     "kube-apiserver": {
         "run": configure_apiserver,
         "clear_flags": [
-            "kubernetes-master.apiserver.configured",
-            "kubernetes-master.apiserver.running",
+            "kubernetes-control-plane.apiserver.configured",
+            "kubernetes-control-plane.apiserver.running",
         ],
     },
     "kube-controller-manager": {"run": configure_controller_manager, "clear_flags": []},
     "kube-scheduler": {"run": configure_scheduler, "clear_flags": []},
     "kube-proxy": {
-        "run": start_master,
-        "clear_flags": ["kubernetes-master.components.started"],
+        "run": start_control_plane,
+        "clear_flags": ["kubernetes-control-plane.components.started"],
     },
     "kubelet": {"run": reconfigure_kubelet, "clear_flags": []},
 }

@@ -28,7 +28,7 @@ def test_user_list():
 
 @mock.patch("actions.user_actions.os.chmod")
 @mock.patch("actions.user_actions.layer.kubernetes_common")
-@mock.patch("actions.user_actions.layer.kubernetes_master")
+@mock.patch("actions.user_actions.layer.kubernetes_control_plane")
 @mock.patch("actions.user_actions.action_get")
 def test_user_create(mock_get, mock_control_plane, mock_common, mock_chmod):
     """Verify expected calls are made when creating a user."""
@@ -69,7 +69,7 @@ def test_user_create(mock_get, mock_control_plane, mock_common, mock_chmod):
 
     with mock.patch("actions.user_actions.user_list", return_value=test_data):
         user_actions.user_create()
-    args, kwargs = mock_common.create_secret.call_args
+    args, kwargs = mock_control_plane.create_secret.call_args
     assert token in args
     args, kwargs = mock_common.create_kubeconfig.call_args
     assert args[0] == "/home/ubuntu/newuser-kubeconfig"
@@ -77,7 +77,7 @@ def test_user_create(mock_get, mock_control_plane, mock_common, mock_chmod):
     assert token in kwargs["token"]
 
 
-@mock.patch("actions.user_actions.layer.kubernetes_master")
+@mock.patch("actions.user_actions.layer.kubernetes_control_plane")
 @mock.patch("actions.user_actions.action_get")
 def test_user_delete(mock_get, mock_control_plane):
     """Verify expected calls are made when deleting a user."""

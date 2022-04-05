@@ -24,7 +24,7 @@ def _kubectl(args):
 
 def get_kubeconfig():
     """
-    Read the kubeconfig on the master and return it as JSON
+    Read the kubeconfig on this control-plane unit and return it as JSON
     """
     try:
         result = _kubectl(["config", "view", "-o", "json", "--raw"])

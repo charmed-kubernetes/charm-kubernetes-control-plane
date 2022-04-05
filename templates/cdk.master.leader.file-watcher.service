@@ -1,5 +1,5 @@
 [Unit]
-Description=CDK master leader file-watcher
+Description=CDK control-plane leader file-watcher
 After=network.target
 
 [Service]

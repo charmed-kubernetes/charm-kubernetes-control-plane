@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest import mock
 
 from charmhelpers.core import hookenv
-from lib.charms.layer import kubernetes_master as charmlib
+from lib.charms.layer import kubernetes_control_plane as charmlib
 
 
 @pytest.fixture
@@ -17,7 +17,7 @@ def auth_file():
 def test_deprecate_auth_file(auth_file):
     """Verify a comment is written to our auth file."""
     with mock.patch(
-        "lib.charms.layer.kubernetes_master.Path.exists", return_value=True
+        "lib.charms.layer.kubernetes_control_plane.Path.exists", return_value=True
     ):
         charmlib.deprecate_auth_file(auth_file)
     assert auth_file.read_text().startswith("#")
@@ -30,19 +30,25 @@ def test_migrate_auth_file(auth_file):
     auth_file.write_text("{},{},uid,group\n".format(password, user))
 
     # Create a known_token from basic_auth
-    with mock.patch("lib.charms.layer.kubernetes_master.AUTH_BASIC_FILE", auth_file):
-        with mock.patch("lib.charms.layer.kubernetes_master.create_known_token"):
+    with mock.patch(
+        "lib.charms.layer.kubernetes_control_plane.AUTH_BASIC_FILE", auth_file
+    ):
+        with mock.patch("lib.charms.layer.kubernetes_control_plane.create_known_token"):
             assert charmlib.migrate_auth_file(auth_file)
 
     # Create a secret from known_tokens
-    with mock.patch("lib.charms.layer.kubernetes_master.AUTH_TOKENS_FILE", auth_file):
-        with mock.patch("lib.charms.layer.kubernetes_master.create_secret"):
+    with mock.patch(
+        "lib.charms.layer.kubernetes_control_plane.AUTH_TOKENS_FILE", auth_file
+    ):
+        with mock.patch("lib.charms.layer.kubernetes_control_plane.create_secret"):
             assert charmlib.migrate_auth_file(auth_file)
 
 
-@mock.patch("lib.charms.layer.kubernetes_master.AUTH_SECRET_NS", new="kube-system")
 @mock.patch(
-    "lib.charms.layer.kubernetes_master.kubernetes_common.kubectl_success",
+    "lib.charms.layer.kubernetes_control_plane.AUTH_SECRET_NS", new="kube-system"
+)
+@mock.patch(
+    "lib.charms.layer.kubernetes_control_plane.kubernetes_common.kubectl_success",
     return_value=True,
 )
 def test_delete_secret(mock_kubectl):
@@ -62,7 +68,7 @@ def test_get_csv_password(auth_file):
 
     # Test we handle a missing file
     with mock.patch(
-        "lib.charms.layer.kubernetes_master.Path.is_file", return_value=False
+        "lib.charms.layer.kubernetes_control_plane.Path.is_file", return_value=False
     ):
         assert charmlib.get_csv_password("missing", user) is None
 
@@ -85,7 +91,7 @@ def test_get_snap_revs():
     test_data = {}
     revs = json.dumps(test_data).encode("utf-8")
     with mock.patch(
-        "lib.charms.layer.kubernetes_master.check_output", return_value=revs
+        "lib.charms.layer.kubernetes_control_plane.check_output", return_value=revs
     ):
         revs = charmlib.get_snap_revs([snap])
         assert revs[snap] is None
@@ -95,7 +101,7 @@ def test_get_snap_revs():
     revs = json.dumps(test_data).encode("utf-8")
     hookenv.config.return_value = channel
     with mock.patch(
-        "lib.charms.layer.kubernetes_master.check_output", return_value=revs
+        "lib.charms.layer.kubernetes_control_plane.check_output", return_value=revs
     ):
         revs = charmlib.get_snap_revs([snap])
         assert revs[snap] is None
@@ -105,7 +111,7 @@ def test_get_snap_revs():
     revs = json.dumps(test_data).encode("utf-8")
     hookenv.config.return_value = channel
     with mock.patch(
-        "lib.charms.layer.kubernetes_master.check_output", return_value=revs
+        "lib.charms.layer.kubernetes_control_plane.check_output", return_value=revs
     ):
         revs = charmlib.get_snap_revs([snap])
         assert revs[snap] == revision

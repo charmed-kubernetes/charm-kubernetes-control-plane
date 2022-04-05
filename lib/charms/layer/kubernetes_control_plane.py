@@ -455,7 +455,7 @@ def check_service(service, attempts=6, delay=10):
     """Check if a given service is up, giving it a bit of time to come up if needed.
 
     Returns True if the service is running, False if not, or raises a ValueError if
-    the service is unknown. Will automatically handle translating master component
+    the service is unknown. Will automatically handle translating control-plane component
     names (e.g., kube-apiserver) to service names (snap.kube-apiserver.daemon).
     """
     for pattern in ("{}", "snap.{}", "snap.{}.daemon", "snap.kube-{}.daemon"):

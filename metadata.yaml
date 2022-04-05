@@ -18,7 +18,7 @@ description: |
 tags:
   - infrastructure
   - kubernetes
-  - master
+  - master  # wokeignore:rule=master
   - control-plane
 subordinate: false
 series:
