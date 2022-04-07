@@ -2386,11 +2386,7 @@ def configure_apiserver():
 
     # Handle static options for now
     api_opts["service-cluster-ip-range"] = service_cidr
-    # Enable StreamingProxyRedirects to work around `kubectl exec` failures
-    # when passing through kubeapi-load-balancer. This feature will be removed
-    # in k8s 1.24.
-    # https://bugs.launchpad.net/bugs/1940527
-    feature_gates = ["StreamingProxyRedirects=true"]
+    feature_gates = []
     if kubernetes_common.is_dual_stack(cluster_cidr):
         feature_gates.append("IPv6DualStack=true")
     api_opts["min-request-timeout"] = "300"
@@ -2402,7 +2398,6 @@ def configure_apiserver():
     api_opts["kubelet-client-key"] = str(client_key_path)
     api_opts["logtostderr"] = "true"
     api_opts["storage-backend"] = getStorageBackend()
-    api_opts["insecure-port"] = "0"
     api_opts["profiling"] = "false"
 
     api_opts["anonymous-auth"] = "false"
