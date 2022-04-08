@@ -618,7 +618,6 @@ def storage_backend_changed():
 
 @when("leadership.is_leader")
 @when_not("authentication.setup")
-@when_not("endpoint.cni.departed")
 def setup_leader_authentication():
     """
     Setup service accounts and tokens for the cluster.
@@ -1217,7 +1216,6 @@ def register_auth_webhook():
     "authentication.setup",
 )
 @when_not("kubernetes-control-plane.auth-webhook-tokens.setup")
-@when_not("endpoint.cni.departed")
 def setup_auth_webhook_tokens():
     """Reconfigure authentication to setup auth-webhook tokens.
 
@@ -1370,11 +1368,6 @@ def etcd_data_change(etcd):
 
 
 def get_dns_info():
-    # Fail fast if our CNI is departing (we wont have valid dns details)
-    if is_flag_set("endpoint.cni.departed"):
-        hookenv.log("CNI is departing; DNS is not ready")
-        return False, None, None, None
-
     dns_provider = endpoint_from_flag("dns-provider.available")
     try:
         goal_state_rels = hookenv.goal_state().get("relations", {})
@@ -1405,8 +1398,10 @@ def get_dns_info():
             dns_ip = kubernetes_control_plane.get_dns_ip()
         except CalledProcessError:
             hookenv.log("DNS addon service not ready yet")
+        if dns_ip:
+            return True, dns_ip, 53, dns_domain
+        else:
             return False, None, None, None
-        return True, dns_ip, 53, dns_domain
 
 
 @when("kube-control.connected")
@@ -1663,8 +1658,11 @@ def reconfigure_cdk_addons():
     "leadership.is_leader",
     "leadership.set.cluster_tag",
 )
-@when_not("upgrade.series.in-progress")
-@when_not("endpoint.cni.departed")
+@when_not(
+    "upgrade.series.in-progress",
+    "endpoint.cni.departed",
+    "endpoint.container-runtime.departed",
+)
 def configure_cdk_addons():
     """Configure CDK addons"""
     remove_state("cdk-addons.reconfigure")
@@ -2192,7 +2190,6 @@ def shutdown():
     "certificates.client.cert.available",
     "authentication.setup",
 )
-@when_not("endpoint.cni.departed")
 def build_kubeconfig():
     """Gather the relevant data for Kubernetes configuration objects and create
     a config object with that information."""
