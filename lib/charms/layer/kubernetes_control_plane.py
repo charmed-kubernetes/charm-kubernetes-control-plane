@@ -26,7 +26,9 @@ EXTERNAL_API_PORT = 443
 STANDARD_API_PORT = 6443
 CEPH_CONF_DIR = Path("/etc/ceph")
 CEPH_CONF = CEPH_CONF_DIR / "ceph.conf"
-CEPH_KEYRING = CEPH_CONF_DIR / "ceph.client.admin.keyring"
+CEPH_KEYRING = CEPH_CONF_DIR / "ceph.client.{}.keyring".format(
+    hookenv.application_name()
+)
 
 db = unitdata.kv()
 
@@ -173,12 +175,11 @@ def install_ceph_common():
 
     :return: None
     """
-    ceph_admin = endpoint_from_flag("ceph-storage.available")
+    ceph_client = endpoint_from_flag("ceph-client.available")
 
     ceph_context = {
-        "mon_hosts": ceph_admin.mon_hosts(),
-        "fsid": ceph_admin.fsid(),
-        "auth_supported": ceph_admin.auth(),
+        "mon_hosts": " ".join(ceph_client.mon_hosts()),
+        "auth_supported": ceph_client.auth,
         "use_syslog": "true",
         "ceph_public_network": "",
         "ceph_cluster_network": "",
@@ -195,18 +196,24 @@ def install_ceph_common():
     # The key can rotate independently of other ceph config, so validate it.
     try:
         with open(str(CEPH_KEYRING), "w") as key_file:
-            key_file.write("[client.admin]\n\tkey = {}\n".format(ceph_admin.key()))
+            key_file.write(
+                "[client.{}]\n\tkey = {}\n".format(
+                    hookenv.application_name(), ceph_client.key
+                )
+            )
     except IOError as err:
-        hookenv.log("IOError writing admin.keyring: {}".format(err))
+        hookenv.log("IOError writing Ceph keyring: {}".format(err))
+
+
+def ceph_cli(*args, timeout=60):
+    cmd = ["ceph", "--user", hookenv.application_name()] + list(args)
+    return check_output(cmd, timeout=timeout).decode("UTF-8")
 
 
 def query_cephfs_enabled():
-    install_ceph_common()
     try:
-        out = check_output(
-            ["ceph", "mds", "versions", "-c", str(CEPH_CONF)], timeout=60
-        )
-        return bool(json.loads(out.decode()))
+        out = ceph_cli("mds", "versions", "-c", str(CEPH_CONF))
+        return bool(json.loads(out))
     except CalledProcessError:
         hookenv.log("Unable to determine if CephFS is enabled", "ERROR")
         return False
@@ -215,10 +222,20 @@ def query_cephfs_enabled():
         return False
 
 
-def get_cephfs_fsname():
-    install_ceph_common()
+def get_ceph_fsid():
     try:
-        data = json.loads(check_output(["ceph", "fs", "ls", "-f", "json"], timeout=60))
+        return ceph_cli("fsid").strip()
+    except CalledProcessError:
+        hookenv.log("Unable to get Ceph FSID", "ERROR")
+        return None
+    except TimeoutExpired:
+        hookenv.log("Timeout attempting to get Ceph FSID", "ERROR")
+        return None
+
+
+def get_cephfs_fsname():
+    try:
+        data = json.loads(ceph_cli("fs", "ls", "-f", "json"))
     except TimeoutExpired:
         hookenv.log("Timeout attempting to determine fsname", "ERROR")
         return None
