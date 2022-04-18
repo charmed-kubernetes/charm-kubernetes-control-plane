@@ -340,3 +340,15 @@ options:
       For more information, see the upstream Kubernetes documentation about
       taints:
       https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
+  kubernetes-apiserver-flags:
+    type: boolean
+    default: true
+    description: |
+      Configuring the aggregation layer allows the Kubernetes apiserver to be extended
+      with additional APIs, which are not part of the core Kubernetes APIs.
+      
+      For more information, see the upstream Kubernetes documentation about this 
+      feature:      
+      https://kubernetes.io/docs/tasks/extend-kubernetes/configure-aggregation-layer/#enable-kubernetes-apiserver-flags
+
+

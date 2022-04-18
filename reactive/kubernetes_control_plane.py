@@ -2484,7 +2484,7 @@ def configure_apiserver():
 
     kube_version = get_version("kube-apiserver")
 
-    if kube_version > (1, 6) and hookenv.config("enable-metrics"):
+    if kube_version > (1, 6) and hookenv.config("kubernetes-apiserver-flags"):
         api_opts["requestheader-client-ca-file"] = str(ca_crt_path)
         api_opts["requestheader-allowed-names"] = "system:kube-apiserver,client"
         api_opts["requestheader-extra-headers-prefix"] = "X-Remote-Extra-"
