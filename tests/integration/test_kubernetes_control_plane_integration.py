@@ -36,7 +36,7 @@ async def test_build_and_deploy(ops_test, hacluster):
     resources = await ops_test.build_resources(build_script)
     expected_resources = {"cni-amd64", "cni-arm64", "cni-s390x"}
 
-    if all(rsc.stem in expected_resources for rsc in resources):
+    if resources and all(rsc.stem in expected_resources for rsc in resources):
         resources = {rsc.stem.replace("-", "_"): rsc for rsc in resources}
     else:
         log.info("Failed to build resources, downloading from latest/edge")
