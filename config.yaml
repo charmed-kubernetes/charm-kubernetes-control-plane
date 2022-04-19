@@ -162,7 +162,9 @@ options:
     type: boolean
     default: true
     description: |
-      If true the metrics server for Kubernetes will be deployed onto the cluster.
+      If true the metrics server for Kubernetes will be deployed onto the cluster
+      managed entirely by kubernetes addons. Consider disabling this option and deploying
+      `kubernetes-metrics-server-operator` into a kubernetes model.
   snapd_refresh:
     default: "max"
     type: string
@@ -340,10 +342,12 @@ options:
       For more information, see the upstream Kubernetes documentation about
       taints:
       https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
-  kubernetes-apiserver-flags:
+  api-aggregation-extension:
     type: boolean
     default: true
     description: |
+      Note: required if 'enable-metrics' is enabled.
+      
       Configuring the aggregation layer allows the Kubernetes apiserver to be extended
       with additional APIs, which are not part of the core Kubernetes APIs.
       

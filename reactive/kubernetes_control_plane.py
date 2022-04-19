@@ -1018,6 +1018,15 @@ def set_final_status():
         hookenv.status_set("waiting", "Waiting to apply keystone policy file.")
         return
 
+    if hookenv.config("enable-metrics") and not hookenv.config(
+        "api-aggregation-extension"
+    ):
+        hookenv.status_set(
+            "blocked",
+            "metrics service will be unreachable without api-aggregation-extension.",
+        )
+        return
+
     hookenv.status_set("active", "Kubernetes control-plane running.")
 
 
@@ -2484,7 +2493,7 @@ def configure_apiserver():
 
     kube_version = get_version("kube-apiserver")
 
-    if kube_version > (1, 6) and hookenv.config("kubernetes-apiserver-flags"):
+    if kube_version > (1, 6) and hookenv.config("api-aggregation-extension"):
         api_opts["requestheader-client-ca-file"] = str(ca_crt_path)
         api_opts["requestheader-allowed-names"] = "system:kube-apiserver,client"
         api_opts["requestheader-extra-headers-prefix"] = "X-Remote-Extra-"
