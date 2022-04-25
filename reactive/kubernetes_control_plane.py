@@ -1000,6 +1000,12 @@ def set_final_status():
         hookenv.status_set("active", msg)
         return
 
+    if is_flag_set("ceph-storage.available"):
+        hookenv.status_set(
+            "blocked", "ceph-storage relation deprecated, use ceph-client instead"
+        )
+        return
+
     if is_flag_set("ceph-client.connected") and not is_flag_set(
         "ceph-client.available"
     ):
