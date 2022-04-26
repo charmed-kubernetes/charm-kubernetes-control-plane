@@ -3003,12 +3003,14 @@ def cloud_ready():
     if is_state("endpoint.gcp.ready"):
         write_gcp_snap_config("kube-apiserver")
         write_gcp_snap_config("kube-controller-manager")
+        write_gcp_snap_config("kubelet")
     elif is_state("endpoint.vsphere.ready"):
         _write_vsphere_snap_config("kube-apiserver")
         _write_vsphere_snap_config("kube-controller-manager")
     elif is_state("endpoint.azure.ready"):
         write_azure_snap_config("kube-apiserver")
         write_azure_snap_config("kube-controller-manager")
+        write_azure_snap_config("kubelet")
     remove_state("kubernetes-control-plane.cloud.pending")
     set_state("kubernetes-control-plane.cloud.ready")
     remove_state("kubernetes-control-plane.components.started")  # force restart
