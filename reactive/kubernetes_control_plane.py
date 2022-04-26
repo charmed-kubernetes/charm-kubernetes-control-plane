@@ -53,6 +53,7 @@ from charmhelpers.core.host import restart_on_change
 from charmhelpers.core.host import service_pause, service_resume, service_stop
 from charmhelpers.core.templating import render
 from charmhelpers.contrib.charmsupport import nrpe
+from charmhelpers.contrib.storage.linux.ceph import CephBrokerRq
 
 from charms.layer import kubernetes_control_plane
 from charms.layer import kubernetes_common
@@ -165,13 +166,6 @@ register_trigger(
     set_flag="kubernetes-control-plane.gcp.changed",
 )
 register_trigger(
-    when="kubernetes-control-plane.ceph.configured", set_flag="cdk-addons.reconfigure"
-)
-register_trigger(
-    when_not="kubernetes-control-plane.ceph.configured",
-    set_flag="cdk-addons.reconfigure",
-)
-register_trigger(
     when="keystone-credentials.available", set_flag="cdk-addons.reconfigure"
 )
 register_trigger(
@@ -210,6 +204,14 @@ register_trigger(
 register_trigger(
     when="config.changed.default-cni",
     clear_flag="kubernetes-control-plane.default-cni.configured",
+)
+register_trigger(
+    when_not="ceph-client.connected",
+    clear_flag="kubernetes-control-plane.ceph.pools.created",
+)
+register_trigger(
+    when_not="ceph-client.connected",
+    clear_flag="kubernetes-control-plane.ceph.permissions.requested",
 )
 
 
@@ -281,8 +283,7 @@ def check_for_upgrade_needed():
     # ceph-storage.configured flag no longer exists
     remove_state("ceph-storage.configured")
 
-    # reconfigure ceph. we need this in case we're reverting from ceph-csi back
-    # to old ceph on Kubernetes 1.10 or 1.11
+    # kubernetes-control-plane.ceph.configured flag no longer exists
     remove_state("kubernetes-control-plane.ceph.configured")
 
     maybe_install_kubelet()
@@ -351,6 +352,7 @@ def check_for_upgrade_needed():
     remove_state("kubernetes-control-plane.kubelet.configured")
     remove_state("kubernetes-control-plane.default-cni.configured")
     remove_state("kubernetes-control-plane.sent-registry")
+    remove_state("kubernetes-control-plane.ceph.permissions.requested")
 
     # Remove services from hacluster and leave to systemd while
     # hacluster is not ready to accept order and colocation constraints
@@ -359,6 +361,9 @@ def check_for_upgrade_needed():
         for service in control_plane_services:
             daemon = "snap.{}.daemon".format(service)
             hacluster.remove_systemd_service(service, daemon)
+
+    if is_flag_set("ceph-client.available"):
+        kubernetes_control_plane.install_ceph_common()
 
 
 @hook("pre-series-upgrade")
@@ -379,6 +384,12 @@ def post_series_upgrade():
 @hook("leader-elected")
 def leader_elected():
     clear_flag("authentication.setup")
+
+
+@hook("ceph-client-relation-changed")
+def ceph_client_relation_changed(ceph_client):
+    if is_flag_set("ceph-client.available"):
+        kubernetes_control_plane.install_ceph_common()
 
 
 def add_rbac_roles():
@@ -989,18 +1000,17 @@ def set_final_status():
         hookenv.status_set("active", msg)
         return
 
-    if (
-        is_state("ceph-storage.available")
-        and is_state("ceph-client.connected")
-        and is_state("kubernetes-control-plane.privileged")
-        and not is_state("kubernetes-control-plane.ceph.configured")
+    if is_flag_set("ceph-storage.available"):
+        hookenv.status_set(
+            "blocked", "ceph-storage relation deprecated, use ceph-client instead"
+        )
+        return
+
+    if is_flag_set("ceph-client.connected") and not is_flag_set(
+        "ceph-client.available"
     ):
-
-        ceph_admin = endpoint_from_flag("ceph-storage.available")
-
-        if get_version("kube-apiserver") >= (1, 12) and not ceph_admin.key():
-            hookenv.status_set("waiting", "Waiting for Ceph to provide a key.")
-            return
+        hookenv.status_set("waiting", "Waiting for Ceph to provide a key.")
+        return
 
     if (
         is_leader
@@ -1690,23 +1700,17 @@ def configure_cdk_addons():
     metricsEnabled = str(hookenv.config("enable-metrics")).lower()
     default_storage = ""
     ceph = {}
-    ceph_ep = endpoint_from_flag("ceph-storage.available")
+    ceph_ep = endpoint_from_flag("ceph-client.available")
     cephfs_mounter = hookenv.config("cephfs-mounter")
-    if (
-        ceph_ep
-        and ceph_ep.key()
-        and ceph_ep.fsid()
-        and ceph_ep.mon_hosts()
-        and is_state("kubernetes-control-plane.ceph.configured")
-        and get_version("kube-apiserver") >= (1, 12)
-    ):
+    if ceph_ep and ceph_ep.key and ceph_ep.mon_hosts():
         cephEnabled = "true"
-        b64_ceph_key = base64.b64encode(ceph_ep.key().encode("utf-8"))
+        b64_ceph_key = base64.b64encode(ceph_ep.key.encode("utf-8"))
         ceph["admin_key"] = b64_ceph_key.decode("ascii")
-        ceph["fsid"] = ceph_ep.fsid()
+        ceph["fsid"] = kubernetes_control_plane.get_ceph_fsid()
         ceph["kubernetes_key"] = b64_ceph_key.decode("ascii")
-        ceph["mon_hosts"] = ceph_ep.mon_hosts()
+        ceph["mon_hosts"] = " ".join(ceph_ep.mon_hosts())
         default_storage = hookenv.config("default-storage")
+
         if kubernetes_control_plane.query_cephfs_enabled():
             cephFsEnabled = "true"
             ceph["fsname"] = kubernetes_control_plane.get_cephfs_fsname() or ""
@@ -1761,6 +1765,7 @@ def configure_cdk_addons():
         "ceph-fsname=" + (ceph.get("fsname", "")),
         "ceph-kubernetes-key=" + (ceph.get("admin_key", "")),
         'ceph-mon-hosts="' + (ceph.get("mon_hosts", "")) + '"',
+        "ceph-user=" + hookenv.application_name(),
         "default-storage=" + default_storage,
         "enable-keystone=" + keystoneEnabled,
         "keystone-cert-file=" + keystone.get("cert", ""),
@@ -1818,60 +1823,7 @@ def addons_ready():
         return False
 
 
-@when("ceph-storage.available")
-def ceph_state_control():
-    """Determine if we should remove the state that controls the re-render
-    and execution of the ceph-relation-changed event because there
-    are changes in the relationship data, and we should re-render any
-    configs, keys, and/or service pre-reqs"""
-
-    ceph_admin = endpoint_from_flag("ceph-storage.available")
-    ceph_relation_data = {
-        "mon_hosts": ceph_admin.mon_hosts(),
-        "fsid": ceph_admin.fsid(),
-        "auth_supported": ceph_admin.auth(),
-        "hostname": socket.gethostname(),
-        "key": ceph_admin.key(),
-    }
-
-    # Re-execute the rendering if the data has changed.
-    if data_changed("ceph-config", ceph_relation_data):
-        remove_state("kubernetes-control-plane.ceph.configured")
-
-
-@when("kubernetes-control-plane.ceph.configured")
-@when_not("ceph-storage.available")
-def ceph_storage_gone():
-    # ceph has left, so clean up
-    clear_flag("kubernetes-control-plane.apiserver.configured")
-    remove_state("kubernetes-control-plane.ceph.configured")
-
-
-@when("kubernetes-control-plane.ceph.pools.created")
-@when_not("ceph-client.connected")
-def ceph_client_gone():
-    # can't nuke pools, but we can't be certain that they
-    # are still made when a new relation comes in
-    remove_state("kubernetes-control-plane.ceph.pools.created")
-
-
-@when("etcd.available")
-@when("ceph-storage.available")
-@when_not("kubernetes-control-plane.privileged")
-@when_not("kubernetes-control-plane.ceph.configured")
-def ceph_storage_privilege():
-    """
-    Before we configure Ceph, we
-    need to allow the control-plane to
-    run privileged containers.
-
-    :return: None
-    """
-    clear_flag("kubernetes-control-plane.apiserver.configured")
-
-
 @when("ceph-client.connected")
-@when("kubernetes-control-plane.ceph.configured")
 @when_not("kubernetes-control-plane.ceph.pool.created")
 def ceph_storage_pool():
     """Once Ceph relation is ready,
@@ -1892,56 +1844,6 @@ def ceph_storage_pool():
             hookenv.status_set("blocked", "Error creating {} pool: {}.".format(pool, e))
 
     set_state("kubernetes-control-plane.ceph.pool.created")
-
-
-@when("ceph-storage.available")
-@when("kubernetes-control-plane.privileged")
-@when_not("kubernetes-control-plane.ceph.configured")
-def ceph_storage():
-    """Ceph on kubernetes will require a few things - namely a ceph
-    configuration, and the ceph secret key file used for authentication.
-    This method will install the client package, and render the requisit files
-    in order to consume the ceph-storage relation."""
-    hookenv.log("Configuring Ceph.")
-
-    ceph_admin = endpoint_from_flag("ceph-storage.available")
-
-    # >=1.12 will use CSI.
-    if get_version("kube-apiserver") >= (1, 12) and not ceph_admin.key():
-        return  # Retry until Ceph gives us a key.
-
-    # Enlist the ceph-admin key as a kubernetes secret
-    if ceph_admin.key():
-        encoded_key = base64.b64encode(ceph_admin.key().encode("utf-8"))
-    else:
-        # We didn't have a key, and cannot proceed. Do not set state and
-        # allow this method to re-execute
-        return
-
-    # CSI isn't available, so we need to do it ourselves,
-    if get_version("kube-apiserver") < (1, 12):
-        try:
-            # At first glance this is deceptive. The apply stanza will
-            # create if it doesn't exist, otherwise it will update the
-            # entry, ensuring our ceph-secret is always reflective of
-            # what we have in /etc/ceph assuming we have invoked this
-            # anytime that file would change.
-            context = {"secret": encoded_key.decode("ascii")}
-            render("ceph-secret.yaml", "/tmp/ceph-secret.yaml", context)
-            cmd = ["kubectl", "apply", "-f", "/tmp/ceph-secret.yaml"]
-            check_call(cmd)
-            os.remove("/tmp/ceph-secret.yaml")
-            set_state("kubernetes-control-plane.ceph.pool.created")
-        except:  # NOQA
-            # The enlistment in kubernetes failed, return and
-            # prepare for re-exec.
-            return
-
-    # When complete, set a state relating to configuration of the storage
-    # backend that will allow other modules to hook into this and verify we
-    # have performed the necessary pre-req steps to interface with a ceph
-    # deployment.
-    set_state("kubernetes-control-plane.ceph.configured")
 
 
 @when("nrpe-external-master.available")
@@ -2098,7 +2000,7 @@ def is_privileged():
     if privileged == "auto":
         return (
             is_state("kubernetes-control-plane.gpu.enabled")
-            or is_state("ceph-storage.available")
+            or is_state("ceph-client.available")
             or is_state("endpoint.openstack.joined")
         )
     else:
@@ -3753,6 +3655,31 @@ def configure_default_cni():
     default_cni = hookenv.config("default-cni")
     kubernetes_common.configure_default_cni(default_cni)
     set_flag("kubernetes-control-plane.default-cni.configured")
+
+
+@when("ceph-client.available")
+@when_not("kubernetes-control-plane.ceph.permissions.requested")
+def request_ceph_permissions():
+    ceph_client = endpoint_from_flag("ceph-client.available")
+    request = ceph_client.get_current_request() or CephBrokerRq()
+    # Permissions needed for Ceph CSI
+    # https://github.com/ceph/ceph-csi/blob/v3.6.0/docs/capabilities.md
+    permissions = [
+        "mon",
+        "profile rbd, allow r",
+        "mds",
+        "allow rw",
+        "mgr",
+        "allow rw",
+        "osd",
+        "profile rbd, allow rw tag cephfs metadata=*",
+    ]
+    client_name = hookenv.application_name()
+    request.add_op(
+        {"op": "set-key-permissions", "permissions": permissions, "client": client_name}
+    )
+    ceph_client.send_request_if_needed(request)
+    set_flag("kubernetes-control-plane.ceph.permissions.requested")
 
 
 HEAL_HANDLER = {

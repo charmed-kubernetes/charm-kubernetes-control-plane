@@ -59,6 +59,7 @@ requires:
     # explicit loadbalancer-internal / loadbalancer-external relations.
     interface: public-address
   ceph-storage:
+    # Deprecated: Use the ceph-client relation instead.
     interface: ceph-admin
   ceph-client:
     interface: ceph-client
