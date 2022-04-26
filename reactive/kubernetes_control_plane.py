@@ -1703,6 +1703,8 @@ def configure_cdk_addons():
     ceph_ep = endpoint_from_flag("ceph-client.available")
     cephfs_mounter = hookenv.config("cephfs-mounter")
     if ceph_ep and ceph_ep.key and ceph_ep.mon_hosts():
+        kubernetes_control_plane.install_ceph_common()
+
         cephEnabled = "true"
         b64_ceph_key = base64.b64encode(ceph_ep.key.encode("utf-8"))
         ceph["admin_key"] = b64_ceph_key.decode("ascii")
@@ -2986,6 +2988,7 @@ def clear_cloud_flags():
     remove_state("kubernetes-control-plane.cloud.blocked")
     remove_state("kubernetes-control-plane.cloud.ready")
     clear_flag("kubernetes-control-plane.apiserver.configured")
+    clear_flag("kubernetes-control-plane.kubelet.configured")
     _kick_controller_manager()
 
 
