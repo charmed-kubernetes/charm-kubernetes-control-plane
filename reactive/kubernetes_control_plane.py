@@ -215,11 +215,11 @@ register_trigger(
 )
 register_trigger(
     when="ceph-client.available",
-    clear_flag="kubernetes-control-plane.apiserver.configured"
+    clear_flag="kubernetes-control-plane.apiserver.configured",
 )
 register_trigger(
     when_not="ceph-client.available",
-    clear_flag="kubernetes-control-plane.apiserver.configured"
+    clear_flag="kubernetes-control-plane.apiserver.configured",
 )
 
 
