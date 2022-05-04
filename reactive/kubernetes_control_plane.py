@@ -213,6 +213,14 @@ register_trigger(
     when_not="ceph-client.connected",
     clear_flag="kubernetes-control-plane.ceph.permissions.requested",
 )
+register_trigger(
+    when="ceph-client.available",
+    clear_flag="kubernetes-control-plane.apiserver.configured"
+)
+register_trigger(
+    when_not="ceph-client.available",
+    clear_flag="kubernetes-control-plane.apiserver.configured"
+)
 
 
 def set_upgrade_needed(forced=False):
