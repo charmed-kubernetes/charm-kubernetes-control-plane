@@ -37,7 +37,7 @@ applications:
     channel: latest/edge
   keystone:
     charm: keystone
-    channel: latest/edge
+    channel: latest/stable
     num_units: 1
     options:
       openstack-origin: distro
@@ -78,7 +78,7 @@ applications:
     - '1'
   keystone-mysql-router:
     charm: mysql-router
-    channel: latest/edge
+    channel: latest/stable
   mysql-innodb-cluster:
     charm: mysql-innodb-cluster
     channel: latest/stable
