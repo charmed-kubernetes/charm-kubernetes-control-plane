@@ -213,6 +213,14 @@ register_trigger(
     when_not="ceph-client.connected",
     clear_flag="kubernetes-control-plane.ceph.permissions.requested",
 )
+register_trigger(
+    when="ceph-client.available",
+    clear_flag="kubernetes-control-plane.apiserver.configured",
+)
+register_trigger(
+    when_not="ceph-client.available",
+    clear_flag="kubernetes-control-plane.apiserver.configured",
+)
 
 
 def set_upgrade_needed(forced=False):
@@ -362,9 +370,6 @@ def check_for_upgrade_needed():
             daemon = "snap.{}.daemon".format(service)
             hacluster.remove_systemd_service(service, daemon)
 
-    if is_flag_set("ceph-client.available"):
-        kubernetes_control_plane.install_ceph_common()
-
 
 @hook("pre-series-upgrade")
 def pre_series_upgrade():
@@ -384,12 +389,6 @@ def post_series_upgrade():
 @hook("leader-elected")
 def leader_elected():
     clear_flag("authentication.setup")
-
-
-@hook("ceph-client-relation-changed")
-def ceph_client_relation_changed(ceph_client):
-    if is_flag_set("ceph-client.available"):
-        kubernetes_control_plane.install_ceph_common()
 
 
 def add_rbac_roles():
