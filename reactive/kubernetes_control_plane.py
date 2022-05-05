@@ -1701,25 +1701,23 @@ def configure_cdk_addons():
     ceph = {}
     ceph_ep = endpoint_from_flag("ceph-client.available")
     cephfs_mounter = hookenv.config("cephfs-mounter")
+    cephEnabled = "false"
+    cephFsEnabled = "false"
     if ceph_ep and ceph_ep.key and ceph_ep.mon_hosts():
         kubernetes_control_plane.install_ceph_common()
+        ceph_fsid = kubernetes_control_plane.get_ceph_fsid()
+        if ceph_fsid:
+            cephEnabled = "true"
+            b64_ceph_key = base64.b64encode(ceph_ep.key.encode("utf-8"))
+            ceph["admin_key"] = b64_ceph_key.decode("ascii")
+            ceph["fsid"] = ceph_fsid
+            ceph["kubernetes_key"] = b64_ceph_key.decode("ascii")
+            ceph["mon_hosts"] = " ".join(ceph_ep.mon_hosts())
+            default_storage = hookenv.config("default-storage")
 
-        cephEnabled = "true"
-        b64_ceph_key = base64.b64encode(ceph_ep.key.encode("utf-8"))
-        ceph["admin_key"] = b64_ceph_key.decode("ascii")
-        ceph["fsid"] = kubernetes_control_plane.get_ceph_fsid()
-        ceph["kubernetes_key"] = b64_ceph_key.decode("ascii")
-        ceph["mon_hosts"] = " ".join(ceph_ep.mon_hosts())
-        default_storage = hookenv.config("default-storage")
-
-        if kubernetes_control_plane.query_cephfs_enabled():
-            cephFsEnabled = "true"
-            ceph["fsname"] = kubernetes_control_plane.get_cephfs_fsname() or ""
-        else:
-            cephFsEnabled = "false"
-    else:
-        cephEnabled = "false"
-        cephFsEnabled = "false"
+            if kubernetes_control_plane.query_cephfs_enabled():
+                cephFsEnabled = "true"
+                ceph["fsname"] = kubernetes_control_plane.get_cephfs_fsname() or ""
 
     keystone = {}
     ks = endpoint_from_flag("keystone-credentials.available")
