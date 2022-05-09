@@ -323,7 +323,8 @@ def test_setup_auth_webhook_tokens(kcs, ctsar):
 
 
 @mock.patch.object(kubernetes_control_plane, "get_ingress_address")
-@mock.patch("pathlib.Path.stat", mock.Mock(side_effect=ValueError))
+@mock.patch("pathlib.Path.exists", mock.Mock(return_value=False))
+@mock.patch("pathlib.Path.glob", mock.Mock(return_value=[]))
 @mock.patch("pathlib.Path.mkdir", mock.Mock(return_value=0))
 @mock.patch.object(
     kubernetes_control_plane, "any_file_changed", mock.Mock(return_value=False)
