@@ -325,7 +325,9 @@ def test_setup_auth_webhook_tokens(kcs, ctsar):
 @mock.patch.object(kubernetes_control_plane, "get_ingress_address")
 @mock.patch("pathlib.Path.stat", mock.Mock(side_effect=ValueError))
 @mock.patch("pathlib.Path.mkdir", mock.Mock(return_value=0))
-@mock.patch.object(kubernetes_control_plane, "any_file_changed", mock.Mock(return_value=False))
+@mock.patch.object(
+    kubernetes_control_plane, "any_file_changed", mock.Mock(return_value=False)
+)
 def test_ignore_vip(get_ingress_address):
     get_ingress_address.return_value = "5.6.7.8"
     hookenv.config.return_value = "1.2.3.4"
