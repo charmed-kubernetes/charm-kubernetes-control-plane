@@ -322,20 +322,16 @@ def test_setup_auth_webhook_tokens(kcs, ctsar):
     assert not is_flag_set("authentication.setup")
 
 
-@mock.patch.object(kubernetes_control_plane, "get_ingress_address")
 @mock.patch("pathlib.Path.exists", mock.Mock(return_value=False))
 @mock.patch("pathlib.Path.glob", mock.Mock(return_value=[]))
 @mock.patch("pathlib.Path.mkdir", mock.Mock(return_value=0))
-@mock.patch.object(
-    kubernetes_control_plane, "any_file_changed", mock.Mock(return_value=False)
-)
-def test_ignore_vip(get_ingress_address):
-    get_ingress_address.return_value = "5.6.7.8"
+def test_ignore_vip():
+    kubernetes_control_plane.any_file_changed.return_value = False
+    mock_gia = kubernetes_control_plane.get_ingress_address
+    mock_gia.return_value = "5.6.7.8"
     hookenv.config.return_value = "1.2.3.4"
     kubernetes_control_plane.register_auth_webhook()
-    get_ingress_address.assert_called_with(
-        "kube-api-endpoint", ignore_addresses=["1.2.3.4"]
-    )
+    mock_gia.assert_called_with("kube-api-endpoint", ignore_addresses=["1.2.3.4"])
 
 
 class TestSendClusterDNSDetail:
