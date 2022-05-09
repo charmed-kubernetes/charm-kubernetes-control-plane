@@ -28,7 +28,7 @@ def _check_status_messages(ops_test):
 
 
 @pytest.mark.abort_on_fail
-async def test_build_and_deploy(ops_test, hacluster):
+async def test_build_and_deploy(ops_test, hacluster, keystone):
     log.info("Build Charm...")
     charm = await ops_test.build_charm(".")
 
@@ -46,25 +46,30 @@ async def test_build_and_deploy(ops_test, hacluster):
 
     assert resources, "Failed to build or download charm resources."
 
+    context = dict(charm=charm, **resources)
+    overlays = [
+        ops_test.Bundle("kubernetes-core", channel="edge"),
+        Path("tests/data/charm.yaml"),
+    ]
+
     if hacluster:
-        log.info("Using hacluster bundle")
+        log.info("Using hacluster overlay")
         vips = os.getenv("OS_VIP00", "10.5.2.204 10.5.2.205")
         log.info("OS_VIP00: {}".format(vips))
-        bundle = ops_test.render_bundle(
-            "tests/data/bundle-hacluster.yaml",
-            charm=charm,
-            OS_VIP00=vips,
-            **resources,
-        )
+        context.update(dict(OS_VIP00=vips))
+        overlays.append(Path("tests/data/bundle-hacluster.yaml"))
 
-    else:
-        bundle = ops_test.render_bundle(
-            "tests/data/bundle.yaml", charm=charm, **resources
-        )
+    if keystone:
+        log.info("Using keystone overlay")
+        overlays.append(Path("tests/data/bundle-keystone.yaml"))
+
+    bundle, *overlays = await ops_test.render_overlays(*overlays, **context)
 
     log.info("Deploy Charm...")
     model = ops_test.model_full_name
-    cmd = f"juju deploy -m {model} {bundle}"
+    cmd = f"juju deploy -m {model} {bundle} " + " ".join(
+        f"--overlay={f}" for f in overlays
+    )
     rc, stdout, stderr = await ops_test.run(*shlex.split(cmd))
     assert rc == 0, f"Bundle deploy failed: {(stderr or stdout).strip()}"
 

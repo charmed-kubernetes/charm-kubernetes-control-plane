@@ -1,7 +1,11 @@
+import dataclasses
 import logging
+from pathlib import Path
+from typing import List, Union
 import pytest
 import random
 import string
+import zipfile
 
 from lightkube import KubeConfig, Client
 from lightkube.resources.core_v1 import Namespace
@@ -19,24 +23,101 @@ def pytest_addoption(parser):
         help="run hacluster tests",
     )
 
+    parser.addoption(
+        "--enable-keystone",
+        action="store_true",
+        default=False,
+        help="run keystone tests",
+    )
+
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "hacluster: mark test as hacluster to run")
+    config.addinivalue_line("markers", "keystone: mark test as keystone to run")
 
 
 def pytest_collection_modifyitems(config, items):
-    if config.getoption("--enable-hacluster"):
-        # --enable-hacluster given in cli: do not skip hacluster tests
-        return
-    skip_hacluster = pytest.mark.skip(reason="need --enable-hacluster option to run")
-    for item in items:
-        if "hacluster" in item.keywords:
-            item.add_marker(skip_hacluster)
+    skip_if_marked = {"hacluster", "keystone"}
+    for mark in skip_if_marked:
+        if not config.getoption(f"--enable-{mark}"):
+            to_skip = pytest.mark.skip(reason=f"need --enable-{mark} option to run")
+            for item in items:
+                if mark in item.keywords:
+                    item.add_marker(to_skip)
 
 
 @pytest.fixture
 def hacluster(request):
     return request.config.getoption("--enable-hacluster")
+
+
+@pytest.fixture
+def keystone(request):
+    return request.config.getoption("--enable-keystone")
+
+
+###################################
+#  vvv Move to pytest-operator vvv
+###################################
+@dataclasses.dataclass
+class Bundle:
+    name: str
+    channel: str = "stable"
+    arch: str = "all"
+    series: str = "all"
+
+    @property
+    def juju_download_args(self):
+        return [
+            f"--{field.name}={getattr(self, field.name)}"
+            for field in dataclasses.fields(Bundle)
+            if field.default is not dataclasses.MISSING
+        ]
+
+
+async def render_overlays(
+    self, *overlays: Union[Bundle, Path], **context: str
+) -> List[Path]:
+    """Render a set of templated bundles using Jinja2.
+    This can be used to populate built charm paths or config values.
+    :param overlays:  Bundle or Path to overlay file.
+    :param **context: Additional optional context as keyword args.
+    Returns the Path for the rendered bundle.
+    """
+    bundles_dst_dir = self.tmp_path / "bundles"
+    bundles_dst_dir.mkdir(exist_ok=True)
+    bundles = []
+    for overlay in overlays:
+        if isinstance(overlay, Path):
+            content = overlay.read_text()
+        elif isinstance(overlay, Bundle):
+            filepath = f"{bundles_dst_dir}/{overlay.name}.bundle"
+            await self.juju(
+                "download",
+                overlay.name,
+                *overlay.juju_download_args,
+                f"--filepath={filepath}",
+                check=True,
+                fail_msg=f"Couldn't download {overlay.name} bundle",
+            )
+            bundle_zip = zipfile.Path(filepath, "bundle.yaml")
+            content = bundle_zip.read_text()
+        bundles.append(self.render_bundle(content, context=context))
+    return bundles
+
+
+#################################################################################
+# ^^^  stop here
+# vvv remove once in pytest-operator
+#################################################################################
+@pytest.fixture(autouse=True)
+def overwrite_opstest_render_bundle(ops_test):
+    klass = type(ops_test)
+    setattr(klass, "render_overlays", render_overlays)
+    klass.Bundle = Bundle
+
+
+#################################################################################
 
 
 @pytest.fixture(scope="module")
