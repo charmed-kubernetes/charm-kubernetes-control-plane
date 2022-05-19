@@ -63,7 +63,7 @@ async def test_build_and_deploy(ops_test, hacluster, keystone):
         log.info("Using keystone overlay")
         overlays.append(Path("tests/data/bundle-keystone.yaml"))
 
-    bundle, *overlays = await ops_test.render_overlays(*overlays, **context)
+    bundle, *overlays = await ops_test.async_render_bundles(*overlays, **context)
 
     log.info("Deploy Charm...")
     model = ops_test.model_full_name
