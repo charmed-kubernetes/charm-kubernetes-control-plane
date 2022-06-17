@@ -139,6 +139,16 @@ auth_webhook_conf = os.path.join(auth_webhook_root, "auth-webhook-conf.yaml")
 auth_webhook_exe = os.path.join(auth_webhook_root, "auth-webhook.py")
 auth_webhook_svc_name = "cdk.master.auth-webhook"
 auth_webhook_svc = "/etc/systemd/system/{}.service".format(auth_webhook_svc_name)
+tls_ciphers_intermediate = [
+    # https://wiki.mozilla.org/Security/Server_Side_TLS
+    # https://ssl-config.mozilla.org/#server=go&config=intermediate
+    "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+    "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+    "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+    "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+    "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
+    "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305",
+]
 
 
 register_trigger(
@@ -2302,6 +2312,7 @@ def configure_apiserver():
     api_opts["v"] = "4"
     api_opts["tls-cert-file"] = str(server_crt_path)
     api_opts["tls-private-key-file"] = str(server_key_path)
+    api_opts["tls-cipher-suites"] = ",".join(tls_ciphers_intermediate)
     api_opts["kubelet-certificate-authority"] = str(ca_crt_path)
     api_opts["kubelet-client-certificate"] = str(client_crt_path)
     api_opts["kubelet-client-key"] = str(client_key_path)
