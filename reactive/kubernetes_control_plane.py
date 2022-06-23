@@ -50,7 +50,12 @@ from charmhelpers.core import hookenv
 from charmhelpers.core import host
 from charmhelpers.core import unitdata
 from charmhelpers.core.host import restart_on_change
-from charmhelpers.core.host import service_pause, service_resume, service_stop
+from charmhelpers.core.host import (
+    service_pause,
+    service_resume,
+    service_running,
+    service_stop,
+)
 from charmhelpers.core.templating import render
 from charmhelpers.contrib.charmsupport import nrpe
 from charmhelpers.contrib.storage.linux.ceph import CephBrokerRq
@@ -1349,6 +1354,8 @@ def proxy_args_changed():
 
 @when("tls_client.certs.changed")
 def certs_changed():
+    if service_running(auth_webhook_svc_name):
+        service_restart(auth_webhook_svc_name)
     clear_flag("kubernetes-control-plane.components.started")
     clear_flag("tls_client.certs.changed")
 
