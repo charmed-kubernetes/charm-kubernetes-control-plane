@@ -2301,6 +2301,9 @@ def configure_apiserver():
     cluster_cidr = kubernetes_common.cluster_cidr()
     service_cidr = kubernetes_control_plane.service_cidr()
 
+    # Share service_cidr with cni requirers
+    endpoint_from_flag("cni.available").set_service_cidr(service_cidr)
+
     api_opts = {}
 
     if is_privileged():

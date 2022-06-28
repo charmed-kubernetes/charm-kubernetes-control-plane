@@ -1,3 +1,4 @@
+import contextlib
 import json
 from ipaddress import ip_interface
 from unittest import mock
@@ -41,6 +42,14 @@ def test_series_upgrade():
     assert kubernetes_control_plane.service_resume.call_count == 5
 
 
+@contextlib.contextmanager
+def endpoint_from_flag_reset():
+    restore = endpoint_from_flag.side_effect
+    endpoint_from_flag.mock_reset()
+    yield endpoint_from_flag
+    endpoint_from_flag.side_effect = restore
+
+
 @mock.patch("builtins.open", mock.mock_open())
 @mock.patch("os.makedirs", mock.Mock(return_value=0))
 def configure_apiserver(service_cidr_from_db, service_cidr_from_config):
@@ -49,7 +58,17 @@ def configure_apiserver(service_cidr_from_db, service_cidr_from_config):
     db.set("kubernetes-master.service-cidr", service_cidr_from_db)
     hookenv.config.return_value = service_cidr_from_config
     get_version.return_value = (1, 18)
-    kubernetes_control_plane.configure_apiserver()
+
+    with endpoint_from_flag_reset() as mock_endpoints:
+        etcd, cni, _ = mock_endpoints.side_effect = [
+            mock.MagicMock(),  # etcd relation
+            mock.MagicMock(),  # cni relation
+            True,  # keystone relation exists
+        ]
+        kubernetes_control_plane.configure_apiserver()
+
+    etcd.get_connection_string.assert_called_once_with()
+    return cni
 
 
 def update_for_service_cidr_expansion():
@@ -76,31 +95,45 @@ def update_for_service_cidr_expansion():
 
 
 def test_service_cidr_greenfield_deploy():
-    configure_apiserver(None, "10.152.183.0/24")
+    cni = configure_apiserver(None, "10.152.183.0/24")
+    cni.set_service_cidr.assert_called_once_with("10.152.183.0/24")
     assert not is_flag_set("kubernetes-control-plane.had-service-cidr-expanded")
-    configure_apiserver(None, "10.152.183.0/24,fe80::/120")
+    cni = configure_apiserver(None, "10.152.183.0/24,fe80::/120")
+    cni.set_service_cidr.assert_called_once_with("10.152.183.0/24,fe80::/120")
     assert not is_flag_set("kubernetes-control-plane.had-service-cidr-expanded")
 
 
 def test_service_cidr_no_change():
-    configure_apiserver("10.152.183.0/24", "10.152.183.0/24")
+    cni = configure_apiserver("10.152.183.0/24", "10.152.183.0/24")
+    cni.set_service_cidr.assert_called_once_with("10.152.183.0/24")
     assert not is_flag_set("kubernetes-control-plane.had-service-cidr-expanded")
-    configure_apiserver("10.152.183.0/24,fe80::/120", "10.152.183.0/24,fe80::/120")
+    cni = configure_apiserver(
+        "10.152.183.0/24,fe80::/120", "10.152.183.0/24,fe80::/120"
+    )
+    cni.set_service_cidr.assert_called_once_with("10.152.183.0/24,fe80::/120")
     assert not is_flag_set("kubernetes-control-plane.had-service-cidr-expanded")
 
 
 def test_service_cidr_non_expansion():
-    configure_apiserver("10.152.183.0/24", "10.154.183.0/24")
+    cni = configure_apiserver("10.152.183.0/24", "10.154.183.0/24")
+    cni.set_service_cidr.assert_called_once_with("10.152.183.0/24")
     assert not is_flag_set("kubernetes-control-plane.had-service-cidr-expanded")
-    configure_apiserver("10.152.183.0/24,fe80::/120", "10.152.183.0/24,fe81::/120")
+    cni = configure_apiserver(
+        "10.152.183.0/24,fe80::/120", "10.152.183.0/24,fe81::/120"
+    )
+    cni.set_service_cidr.assert_called_once_with("10.152.183.0/24,fe80::/120")
     assert not is_flag_set("kubernetes-control-plane.had-service-cidr-expanded")
 
 
 def test_service_cidr_expansion():
-    configure_apiserver("10.152.183.0/24", "10.152.0.0/16")
+    cni = configure_apiserver("10.152.183.0/24", "10.152.0.0/16")
+    cni.set_service_cidr.assert_called_once_with("10.152.0.0/16")
     assert is_flag_set("kubernetes-control-plane.had-service-cidr-expanded")
     clear_flag("kubernetes-control-plane.had-service-cidr-expanded")
-    configure_apiserver("10.152.183.0/24,fe80::/120", "10.152.183.0/24,fe80::/112")
+    cni = configure_apiserver(
+        "10.152.183.0/24,fe80::/120", "10.152.183.0/24,fe80::/112"
+    )
+    cni.set_service_cidr.assert_called_once_with("10.152.183.0/24,fe80::/112")
     assert is_flag_set("kubernetes-control-plane.had-service-cidr-expanded")
     db = unitdata.kv()
     db.set("kubernetes-master.service-cidr", "10.152.0.0/16")
