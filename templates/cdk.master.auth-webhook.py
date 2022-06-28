@@ -23,7 +23,7 @@ routes = aiohttp.web.RouteTableDef()
 # gets inherited by worker processes where it appears to serve no useful
 # function. It also makes it impossible for workers to make subprocess calls
 # safely, so, disable it.
-# https://bugs.launchpad.net/charm-kubernetes-master/+bug/1938470
+# https://bugs.launchpad.net/charm-kubernetes-control-plane/+bug/1938470
 signal.signal(signal.SIGCHLD, signal.SIG_DFL)
 
 
