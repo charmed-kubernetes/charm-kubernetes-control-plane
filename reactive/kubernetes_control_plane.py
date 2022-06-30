@@ -3712,7 +3712,9 @@ def image_registry_changed():
     if cni:
         endpoint_from_flag("cni.available").set_image_registry(registry)
     else:
-        hookenv.log("CNI endpoint not available yet, waiting to set image registry data")
+        hookenv.log(
+            "CNI endpoint not available yet, waiting to set image registry data"
+        )
 
 
 HEAL_HANDLER = {

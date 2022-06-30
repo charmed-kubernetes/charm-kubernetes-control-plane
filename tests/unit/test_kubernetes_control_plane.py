@@ -379,8 +379,9 @@ def test_image_registry_config_changed():
     endpoint_from_flag.return_value = cni
     hookenv.log.reset_mock()
     kubernetes_control_plane.image_registry_changed()
-    hookenv.log.assert_called_once_with("CNI endpoint not available yet, waiting to "
-                                        "set image registry data")
+    hookenv.log.assert_called_once_with(
+        "CNI endpoint not available yet, waiting to " "set image registry data"
+    )
 
 
 class TestSendClusterDNSDetail:
