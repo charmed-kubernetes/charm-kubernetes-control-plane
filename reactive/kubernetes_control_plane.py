@@ -3697,6 +3697,17 @@ def request_ceph_permissions():
     set_flag("kubernetes-control-plane.ceph.permissions.requested")
 
 
+@when_any("config.changed.image-registry", "cni.available")
+def image_registry_changed():
+    registry = hookenv.config("image-registry")
+    # Share image-registry with cni requirers
+    cni = endpoint_from_flag("cni.available")
+    if cni:
+        endpoint_from_flag("cni.available").set_image_registry(registry)
+    else:
+        hookenv.log("CNI endpoint not available yet, waiting to set image registry data")
+
+
 HEAL_HANDLER = {
     "kube-apiserver": {
         "run": configure_apiserver,
