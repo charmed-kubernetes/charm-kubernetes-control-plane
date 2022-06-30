@@ -19,24 +19,37 @@ def pytest_addoption(parser):
         help="run hacluster tests",
     )
 
+    parser.addoption(
+        "--enable-keystone",
+        action="store_true",
+        default=False,
+        help="run keystone tests",
+    )
+
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "hacluster: mark test as hacluster to run")
+    config.addinivalue_line("markers", "keystone: mark test as keystone to run")
 
 
 def pytest_collection_modifyitems(config, items):
-    if config.getoption("--enable-hacluster"):
-        # --enable-hacluster given in cli: do not skip hacluster tests
-        return
-    skip_hacluster = pytest.mark.skip(reason="need --enable-hacluster option to run")
-    for item in items:
-        if "hacluster" in item.keywords:
-            item.add_marker(skip_hacluster)
+    skip_if_marked = {"hacluster", "keystone"}
+    for mark in skip_if_marked:
+        if not config.getoption(f"--enable-{mark}"):
+            to_skip = pytest.mark.skip(reason=f"need --enable-{mark} option to run")
+            for item in items:
+                if mark in item.keywords:
+                    item.add_marker(to_skip)
 
 
 @pytest.fixture
 def hacluster(request):
     return request.config.getoption("--enable-hacluster")
+
+
+@pytest.fixture
+def keystone(request):
+    return request.config.getoption("--enable-keystone")
 
 
 @pytest.fixture(scope="module")

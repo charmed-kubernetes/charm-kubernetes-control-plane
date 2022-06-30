@@ -8,34 +8,18 @@ jobs:
     with:
       fail-on-error: "true"
 
-  lint-unit-wheelhouse:
-    name: Lint, Unit, Wheelhouse
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python: 
-          - "3.6"
-          - "3.7"
-          - "3.8"
-          - "3.9"
-          - "3.10"
-    steps:
-    - name: Check out code
-      uses: actions/checkout@v2
-    - name: Setup Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python }}
-    - name: Install Dependencies
-      run: |
-        pip install tox
-        sudo snap install charm --classic
-    - name: Lint
-      run: tox -vve lint
-    - name: Unit Tests
-      run: tox -vve unit
-    - name: Validate Wheelhouse
-      run: tox -vve validate-wheelhouse
+  lint-unit:
+    name: Lint Unit
+    uses: charmed-kubernetes/workflows/.github/workflows/lint-unit.yaml@main
+    needs: 
+      - call-inclusive-naming-check
+
+  validate-wheelhouse:
+    name: Validate Wheelhouse
+    uses: charmed-kubernetes/workflows/.github/workflows/validate-wheelhouse.yaml@main
+    needs:
+      - lint-unit
+
   integration-test:
     name: Integration test with VMWare
     runs-on: self-hosted
