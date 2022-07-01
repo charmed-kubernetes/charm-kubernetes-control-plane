@@ -367,6 +367,23 @@ def test_ignore_vip():
     mock_gia.assert_called_with("kube-api-endpoint", ignore_addresses=["1.2.3.4"])
 
 
+def test_image_registry_config_changed():
+    hookenv.config.return_value = "rocks.canonical.com:443/cdk"
+    cni = mock.MagicMock()
+    endpoint_from_flag.return_value = cni
+    kubernetes_control_plane.image_registry_changed()
+    cni.set_image_registry.assert_called_once_with("rocks.canonical.com:443/cdk")
+
+    # Test when CNI is not up yet
+    cni = None
+    endpoint_from_flag.return_value = cni
+    hookenv.log.reset_mock()
+    kubernetes_control_plane.image_registry_changed()
+    hookenv.log.assert_called_once_with(
+        "CNI endpoint not available yet, waiting to " "set image registry data"
+    )
+
+
 class TestSendClusterDNSDetail:
     @pytest.fixture(autouse=True)
     def setup(self, monkeypatch):
