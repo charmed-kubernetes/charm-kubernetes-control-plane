@@ -932,7 +932,7 @@ def set_final_status():
 
     authentication_setup = is_state("authentication.setup")
     if not authentication_setup:
-        hookenv.status_set("waiting", "Waiting on crypto keys.")
+        hookenv.status_set("waiting", "Waiting for crypto keys.")
         return
 
     if not is_flag_set("kubernetes-control-plane.auth-webhook-tokens.setup"):
