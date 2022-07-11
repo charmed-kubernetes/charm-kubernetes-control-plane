@@ -23,6 +23,7 @@ tags:
   - control-plane
 subordinate: false
 series:
+  - jammy
   - focal
   - bionic
   - xenial
