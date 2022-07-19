@@ -24,11 +24,11 @@ charms to model a complete Kubernetes cluster. A Kubernetes cluster needs a
 distributed key value store such as [Etcd](https://coreos.com/etcd/) and the
 kubernetes-worker charm which delivers the Kubernetes node services. A cluster
 also requires a Software Defined Network (SDN), a Container Runtime such as
-[containerd](https://jaas.ai/u/containers/containerd), and Transport Layer
+[containerd](https://charmhub.io/containerd), and Transport Layer
 Security (TLS) so the components in a cluster communicate securely.
 
-Please take a look at the [Charmed Kubernetes](https://jaas.ai/charmed-kubernetes)
-or the [Kubernetes core](https://jaas.ai/kubernetes-core) bundles for
+Please take a look at the [Charmed Kubernetes](https://charmhub.io/charmed-kubernetes)
+or the [Kubernetes core](https://charmhub.io/kubernetes-core) bundles for
 examples of complete models of Kubernetes clusters.
 
 For full install instructions, please see the [Charmed Kubernetes documentation](https://ubuntu.com/kubernetes/docs/quickstart).
