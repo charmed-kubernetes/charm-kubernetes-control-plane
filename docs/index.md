@@ -1,22 +1,22 @@
 <!-- METADATA
-charm_name: kubernetes-master
+charm_name: kubernetes-control-plane
 charm_revision: '0'
 timestamp: 1619014557
 discourse_url: 'https://discourse.charmhub.io/t/kubernetes-master-charm/4506' 
 config: true
 actions: true
 context:
-  description: Documentation for the kubernetes-master charm
-  title: kubernetes-master charm
-keywords: kubernetes-master, charm, config
+  description: Documentation for the kubernetes-control-plane charm
+  title: kubernetes-control-plane charm
+keywords: kubernetes-master, kubernetes-control-plane, charm, config
 -->
 
-This charm is an encapsulation of the Kubernetes master processes and the
+This charm is an encapsulation of the Kubernetes control plane  processes and the
 operations to run on any cloud for the entire lifecycle of the cluster.
 
 This charm is built from other charm layers using the Juju reactive framework.
 The other layers focus on specific subset of operations making this layer
-specific to operations of Kubernetes master processes.
+specific to operations of Kubernetes control plane processes.
 
 # Deployment
 
@@ -25,52 +25,35 @@ charms to model a complete Kubernetes cluster. A Kubernetes cluster needs a
 distributed key value store such as [Etcd](https://coreos.com/etcd/) and the
 kubernetes-worker charm which delivers the Kubernetes node services. A cluster
 requires a Software Defined Network (SDN), a Container Runtime such as
-[containerd](https://jaas.ai/u/containers/containerd), and Transport Layer
+[containerd](https://charmhub.io/containerd), and Transport Layer
 Security (TLS) so the components in a cluster communicate securely.
 
-Please take a look at the [Charmed Kubernetes]( https://jaas.ai/charmed-kubernetes)
-or the [Kubernetes core](https://jaas.ai/kubernetes-core) bundles for
+Please take a look at the [Charmed Kubernetes]( https://charmhub.io/charmed-kubernetes)
+or the [Kubernetes core](https://charmhub.io/kubernetes-core) bundles for
 examples of complete models of Kubernetes clusters.
 
 # Resources
 
-The kubernetes-master charm takes advantage of the [Juju Resources](https://jaas.ai/docs/juju-resources)
+The kubernetes-control-plane charm takes advantage of the [Juju Resources](https://juju.is/docs/sdk/resources)
 feature to deliver the Kubernetes software.
 
-In deployments on public clouds the Charm Store provides the resource to the
+In deployments on public clouds Charmhub provides the resource to the
 charm automatically with no user intervention. Some environments with strict
-firewall rules may not be able to contact the Charm Store. In these network
+firewall rules may not be able to contact Charmhub. In these network
 restricted  environments the resource can be uploaded to the model by the Juju
 operator.
+
+Additionally, if the firewall rules restrict access to the Snap Store, the
+[Snap Store Proxy](https://ubuntu.com/kubernetes/docs/proxies) may be used to
+provide the snaps.
 
 #### Snap Refresh
 
 The kubernetes resources used by this charm are snap packages. When not
 specified during deployment, these resources come from the public store. By
 default, the `snapd` daemon will refresh all snaps installed from the store
-four (4) times per day. A charm configuration option is provided for operators
-to control this refresh frequency.
-
->NOTE: this is a global configuration option and will affect the refresh
-time for all snaps installed on a system.
-
-Examples:
-
-```sh
-## refresh kubernetes-master snaps every tuesday
-juju config kubernetes-master snapd_refresh="tue"
-
-## refresh snaps at 11pm on the last (5th) friday of the month
-juju config kubernetes-master snapd_refresh="fri5,23:00"
-
-## delay the refresh as long as possible
-juju config kubernetes-master snapd_refresh="max"
-
-## use the system default refresh timer
-juju config kubernetes-master snapd_refresh=""
-```
-
-For more information, see the [snap documentation](/kubernetes/docs/snap-refresh).
+four (4) times per day. If there is a desire to further control this, the
+[Snap Store Proxy](https://ubuntu.com/kubernetes/docs/proxies) should be used.
 
 ## Configuration
 
