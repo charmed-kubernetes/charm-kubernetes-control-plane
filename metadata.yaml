@@ -24,8 +24,8 @@ tags:
 subordinate: false
 series:
   - focal
+  - jammy
   - bionic
-  - xenial
 peers:
   kube-masters:
     interface: kube-masters
