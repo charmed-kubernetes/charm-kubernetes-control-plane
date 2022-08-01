@@ -50,7 +50,12 @@ from charmhelpers.core import hookenv
 from charmhelpers.core import host
 from charmhelpers.core import unitdata
 from charmhelpers.core.host import restart_on_change
-from charmhelpers.core.host import service_pause, service_resume, service_stop
+from charmhelpers.core.host import (
+    service_pause,
+    service_resume,
+    service_running,
+    service_stop,
+)
 from charmhelpers.core.templating import render
 from charmhelpers.contrib.charmsupport import nrpe
 from charmhelpers.contrib.storage.linux.ceph import CephBrokerRq
@@ -139,6 +144,16 @@ auth_webhook_conf = os.path.join(auth_webhook_root, "auth-webhook-conf.yaml")
 auth_webhook_exe = os.path.join(auth_webhook_root, "auth-webhook.py")
 auth_webhook_svc_name = "cdk.master.auth-webhook"
 auth_webhook_svc = "/etc/systemd/system/{}.service".format(auth_webhook_svc_name)
+tls_ciphers_intermediate = [
+    # https://wiki.mozilla.org/Security/Server_Side_TLS
+    # https://ssl-config.mozilla.org/#server=go&config=intermediate
+    "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+    "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+    "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+    "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+    "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
+    "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305",
+]
 
 
 register_trigger(
@@ -917,7 +932,7 @@ def set_final_status():
 
     authentication_setup = is_state("authentication.setup")
     if not authentication_setup:
-        hookenv.status_set("waiting", "Waiting on crypto keys.")
+        hookenv.status_set("waiting", "Waiting for crypto keys.")
         return
 
     if not is_flag_set("kubernetes-control-plane.auth-webhook-tokens.setup"):
@@ -1133,8 +1148,7 @@ def add_systemd_file_watcher():
 )
 def register_auth_webhook():
     """Render auth webhook templates and start the related service."""
-    os.makedirs(auth_webhook_root, exist_ok=True)
-    config = hookenv.config()
+    Path(auth_webhook_root).mkdir(exist_ok=True)
 
     # For 'api_ver', match the api version of the authentication.k8s.io TokenReview
     # that k8s-apiserver will be sending:
@@ -1182,7 +1196,7 @@ def register_auth_webhook():
                 pass
 
     context["custom_authn_endpoint"] = None
-    custom_authn = config.get("authn-webhook-endpoint")
+    custom_authn = hookenv.config("authn-webhook-endpoint")
     if custom_authn:
         context["custom_authn_endpoint"] = custom_authn
 
@@ -1340,6 +1354,8 @@ def proxy_args_changed():
 
 @when("tls_client.certs.changed")
 def certs_changed():
+    if service_running(auth_webhook_svc_name):
+        service_restart(auth_webhook_svc_name)
     clear_flag("kubernetes-control-plane.components.started")
     clear_flag("tls_client.certs.changed")
 
@@ -2303,6 +2319,7 @@ def configure_apiserver():
     api_opts["v"] = "4"
     api_opts["tls-cert-file"] = str(server_crt_path)
     api_opts["tls-private-key-file"] = str(server_key_path)
+    api_opts["tls-cipher-suites"] = ",".join(tls_ciphers_intermediate)
     api_opts["kubelet-certificate-authority"] = str(ca_crt_path)
     api_opts["kubelet-client-certificate"] = str(client_crt_path)
     api_opts["kubelet-client-key"] = str(client_key_path)
