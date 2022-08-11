@@ -109,7 +109,8 @@ async def test_kube_api_endpoint(ops_test):
 
 async def juju_run(unit, cmd):
     result = await unit.run(cmd)
-    code = result.results["Code"]
+    code = result.results.get("Code")
+    assert code, f"{cmd} failed with no exit status ({result.results})"
     stdout = result.results.get("Stdout")
     stderr = result.results.get("Stderr")
     assert code == "0", f"{cmd} failed ({code}): {stderr or stdout}"
