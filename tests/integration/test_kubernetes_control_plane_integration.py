@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from juju.unit import Unit
 from pathlib import Path
 import shlex
 
@@ -107,11 +108,12 @@ async def test_kube_api_endpoint(ops_test):
     _check_status_messages(ops_test)
 
 
-async def juju_run(unit, cmd):
-    result = await unit.run(cmd)
-    code = result.results["Code"]
-    stdout = result.results.get("Stdout")
-    stderr = result.results.get("Stderr")
+async def juju_run(unit: Unit, cmd):
+    action = await unit.run(cmd)
+    result = await action.wait()
+    code = str(result.results.get("Code") or result.results.get("return-code"))
+    stdout = result.results.get("Stdout") or result.results.get("stdout")
+    stderr = result.results.get("Stderr") or result.results.get("stderr")
     assert code == "0", f"{cmd} failed ({code}): {stderr or stdout}"
     return stdout
 
