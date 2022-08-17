@@ -1,4 +1,5 @@
 description: Overlay for attaching current charm
+series: &series {{ series }}
 applications:
   kubernetes-control-plane:
     charm: {{charm}}
@@ -14,6 +15,11 @@ applications:
       kube-scheduler: 0
       cdk-addons: 0
       kube-proxy: 0
+    options:
+      channel: {{ snap_channel }}
+  kubernetes-worker:
+    options:
+      channel: {{ snap_channel }}
   prometheus:
     charm: prometheus2
     channel: latest/stable
