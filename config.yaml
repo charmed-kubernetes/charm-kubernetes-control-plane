@@ -333,7 +333,7 @@ options:
       [1] https://github.com/kubernetes/examples/blob/master/staging/podsecuritypolicy/rbac/policies.yaml
   register-with-taints:
     type: string
-    default: "juju.is/kubernetes-control-plane=true:NoSchedule"
+    default: "node-role.kubernetes.io/control-plane=true:NoSchedule"
     description: |
       Space-separated list of taints to apply to this node at registration time.
 
@@ -356,5 +356,6 @@ options:
       For more information, see the upstream Kubernetes documentation about this 
       feature:      
       https://kubernetes.io/docs/tasks/extend-kubernetes/configure-aggregation-layer/#enable-kubernetes-apiserver-flags
-
-
+  labels:
+    # Override default from layer-kubernetes-node-base config.yaml
+    default: "node-role.kubernetes.io/control-plane=true"
