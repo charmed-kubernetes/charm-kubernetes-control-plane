@@ -29,7 +29,7 @@ def _check_status_messages(ops_test):
 
 
 @pytest.mark.abort_on_fail
-async def test_build_and_deploy(ops_test, hacluster, keystone):
+async def test_build_and_deploy(ops_test, hacluster, keystone, series, snap_channel):
     log.info("Build Charm...")
     charm = await ops_test.build_charm(".")
 
@@ -47,7 +47,7 @@ async def test_build_and_deploy(ops_test, hacluster, keystone):
 
     assert resources, "Failed to build or download charm resources."
 
-    context = dict(charm=charm, **resources)
+    context = dict(charm=charm, series=series, snap_channel=snap_channel, **resources)
     overlays = [
         ops_test.Bundle("kubernetes-core", channel="edge"),
         Path("tests/data/charm.yaml"),

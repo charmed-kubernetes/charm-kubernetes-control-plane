@@ -1,4 +1,5 @@
 description: Overlay for testing with keystone
+series: &series {{ series }}
 applications:
   keystone:
     charm: keystone
@@ -11,6 +12,11 @@ applications:
   kubernetes-control-plane:
     options:
       enable-keystone-authorization: True
+    options:
+      channel: {{ snap_channel }}
+  kubernetes-worker:
+    options:
+      channel: {{ snap_channel }}
   keystone-mysql-router:
     charm: mysql-router
     channel: latest/stable
