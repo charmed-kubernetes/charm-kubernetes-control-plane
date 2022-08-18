@@ -3369,7 +3369,7 @@ def send_registry_location():
     """Hook to update all relations when a new dependant joins."""
     kube_control = endpoint_from_flag("kube-control.connected")
     if not kube_control:
-        hookenv.log(f"kube-control relation currently unavailable, will be retried")
+        hookenv.log("kube-control relation currently unavailable, will be retried")
         return
 
     registry_location = hookenv.config("image-registry")
@@ -3381,7 +3381,7 @@ def send_registry_location():
 def set_controller_taints():
     kube_control = endpoint_from_flag("kube-control.connected")
     if not kube_control:
-        hookenv.log(f"kube-control relation currently unavailable, will be retried")
+        hookenv.log("kube-control relation currently unavailable, will be retried")
         return
 
     # Send controller taints to workers
@@ -3399,7 +3399,7 @@ def set_controller_taints():
 def set_controller_labels():
     kube_control = endpoint_from_flag("kube-control.connected")
     if not kube_control:
-        hookenv.log(f"kube-control relation currently unavailable, will be retried")
+        hookenv.log("kube-control relation currently unavailable, will be retried")
         return
 
     # Send controller labels to workers

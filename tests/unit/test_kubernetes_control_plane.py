@@ -393,7 +393,9 @@ def test_image_registry_config_changed_on_container_runtime():
     endpoint_from_flag.return_value = runtime = mock.MagicMock()
     kubernetes_control_plane.configure_registry_location()
     endpoint_from_flag.assert_called_once_with("endpoint.container-runtime.available")
-    kubernetes_common.get_sandbox_image_uri.assert_called_once_with("rocks.canonical.com:443/cdk")
+    kubernetes_common.get_sandbox_image_uri.assert_called_once_with(
+        "rocks.canonical.com:443/cdk"
+    )
     uri = kubernetes_common.get_sandbox_image_uri.return_value
     runtime.set_config.assert_called_once_with(sandbox_image=uri)
     set_flag.assert_called_once_with("kubernetes-control-plane.sent-registry")
@@ -405,7 +407,9 @@ def test_image_registry_config_changed_on_kube_control():
     endpoint_from_flag.return_value = kube_control = mock.MagicMock()
     kubernetes_control_plane.send_registry_location()
     endpoint_from_flag.assert_called_once_with("kube-control.connected")
-    kube_control.set_registry_location.assert_called_once_with("rocks.canonical.com:443/cdk")
+    kube_control.set_registry_location.assert_called_once_with(
+        "rocks.canonical.com:443/cdk"
+    )
 
     # Test when kube-control is not connected yet
     endpoint_from_flag.reset_mock()
