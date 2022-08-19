@@ -169,7 +169,7 @@ async def test_pod_security_policy(pytestconfig, ops_test, kubernetes):
     """Test the pod-security-policy config option"""
     channel = pytestconfig.getoption("--snap-channel")
     track, risk = channel.split("/", 1)
-    if float(track) >= 1.25:
+    if tuple(int(x) for x in track.split('.')) >= (1, 25):
         pytest.skip("PodSecurityPolicy not supported in 1.25+")
 
     test_psp = {
