@@ -7,8 +7,8 @@ import pytest
 
 from reactive import kubernetes_control_plane
 from charms.layer import kubernetes_common
-from charms.layer.kubernetes_common import get_version, kubectl
-from charms.reactive import endpoint_from_flag, endpoint_from_name
+from charms.layer.kubernetes_common import get_version, kubectl, configure_kubernetes_service
+from charms.reactive import endpoint_from_flag, endpoint_from_name, set_state
 from charms.reactive import set_flag, is_flag_set, clear_flag
 from charmhelpers.core import hookenv, host, unitdata
 
@@ -52,12 +52,12 @@ def endpoint_from_flag_reset():
 
 @mock.patch("builtins.open", mock.mock_open())
 @mock.patch("os.makedirs", mock.Mock(return_value=0))
-def configure_apiserver(service_cidr_from_db, service_cidr_from_config):
+def configure_apiserver(service_cidr_from_db, service_cidr_from_config, version=(1, 18)):
     set_flag("leadership.is_leader")
     db = unitdata.kv()
     db.set("kubernetes-master.service-cidr", service_cidr_from_db)
     hookenv.config.return_value = service_cidr_from_config
-    get_version.return_value = (1, 18)
+    get_version.return_value = version
 
     with endpoint_from_flag_reset() as mock_endpoints:
         etcd, cni, _ = mock_endpoints.side_effect = [
@@ -382,6 +382,40 @@ def test_image_registry_config_changed():
     hookenv.log.assert_called_once_with(
         "CNI endpoint not available yet, waiting to " "set image registry data"
     )
+
+
+def test_psp_arg_removed_in_1_25():
+    configure_kubernetes_service.reset_mock()
+    configure_apiserver("10.152.183.0/24", "10.152.183.0/24", (1, 24))
+    args = configure_kubernetes_service.call_args[0][2]
+    assert args['enable-admission-plugins'] == 'PersistentVolumeLabel,PodSecurityPolicy,NodeRestriction'
+
+    configure_kubernetes_service.reset_mock()
+    configure_apiserver("10.152.183.0/24", "10.152.183.0/24", (1, 25))
+    args = configure_kubernetes_service.call_args[0][2]
+    assert args['enable-admission-plugins'] ==  'PersistentVolumeLabel,NodeRestriction'
+
+    configure_kubernetes_service.reset_mock()
+    configure_apiserver("10.152.183.0/24", "10.152.183.0/24", (1, 26))
+    args = configure_kubernetes_service.call_args[0][2]
+    assert args['enable-admission-plugins'] == 'PersistentVolumeLabel,NodeRestriction'
+
+
+def test_psp_config_1_25():
+    # With a non-empty psp config in 1.25+ we should be blocked
+    get_version.return_value = (1, 25)
+    hookenv.config.return_value = "some-psp"
+    kubernetes_control_plane.create_pod_security_policy_resources()
+    hookenv.status_set.assert_called_with(
+        "blocked",
+        "PodSecurityPolicy not available in 1.25+,"
+        " please remove pod-security-policy config"
+    )
+
+    # With an empty psp config we should be ok
+    hookenv.config.return_value = ""
+    kubernetes_control_plane.create_pod_security_policy_resources()
+    set_state.assert_called_with("kubernetes-control-plane.pod-security-policy.applied")
 
 
 class TestSendClusterDNSDetail:
