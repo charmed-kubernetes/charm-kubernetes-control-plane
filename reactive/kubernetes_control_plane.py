@@ -1910,8 +1910,11 @@ def create_pod_security_policy_resources():
     else:
         pod_security_policy = hookenv.config("pod-security-policy")
         if pod_security_policy:
-            hookenv.status_set("blocked", "PodSecurityPolicy not available in 1.25+,"
-                                          " please remove pod-security-policy config")
+            hookenv.status_set(
+                "blocked",
+                "PodSecurityPolicy not available in 1.25+,"
+                " please remove pod-security-policy config",
+            )
         else:
             set_state("kubernetes-control-plane.pod-security-policy.applied")
 

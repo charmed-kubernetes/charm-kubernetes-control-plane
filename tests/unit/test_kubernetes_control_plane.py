@@ -7,7 +7,11 @@ import pytest
 
 from reactive import kubernetes_control_plane
 from charms.layer import kubernetes_common
-from charms.layer.kubernetes_common import get_version, kubectl, configure_kubernetes_service
+from charms.layer.kubernetes_common import (
+    get_version,
+    kubectl,
+    configure_kubernetes_service,
+)
 from charms.reactive import endpoint_from_flag, endpoint_from_name, set_state
 from charms.reactive import set_flag, is_flag_set, clear_flag
 from charmhelpers.core import hookenv, host, unitdata
@@ -52,7 +56,9 @@ def endpoint_from_flag_reset():
 
 @mock.patch("builtins.open", mock.mock_open())
 @mock.patch("os.makedirs", mock.Mock(return_value=0))
-def configure_apiserver(service_cidr_from_db, service_cidr_from_config, version=(1, 18)):
+def configure_apiserver(
+    service_cidr_from_db, service_cidr_from_config, version=(1, 18)
+):
     set_flag("leadership.is_leader")
     db = unitdata.kv()
     db.set("kubernetes-master.service-cidr", service_cidr_from_db)
@@ -388,17 +394,20 @@ def test_psp_arg_removed_in_1_25():
     configure_kubernetes_service.reset_mock()
     configure_apiserver("10.152.183.0/24", "10.152.183.0/24", (1, 24))
     args = configure_kubernetes_service.call_args[0][2]
-    assert args['enable-admission-plugins'] == 'PersistentVolumeLabel,PodSecurityPolicy,NodeRestriction'
+    assert (
+        args["enable-admission-plugins"]
+        == "PersistentVolumeLabel,PodSecurityPolicy,NodeRestriction"
+    )
 
     configure_kubernetes_service.reset_mock()
     configure_apiserver("10.152.183.0/24", "10.152.183.0/24", (1, 25))
     args = configure_kubernetes_service.call_args[0][2]
-    assert args['enable-admission-plugins'] ==  'PersistentVolumeLabel,NodeRestriction'
+    assert args["enable-admission-plugins"] == "PersistentVolumeLabel,NodeRestriction"
 
     configure_kubernetes_service.reset_mock()
     configure_apiserver("10.152.183.0/24", "10.152.183.0/24", (1, 26))
     args = configure_kubernetes_service.call_args[0][2]
-    assert args['enable-admission-plugins'] == 'PersistentVolumeLabel,NodeRestriction'
+    assert args["enable-admission-plugins"] == "PersistentVolumeLabel,NodeRestriction"
 
 
 def test_psp_config_1_25():
@@ -409,7 +418,7 @@ def test_psp_config_1_25():
     hookenv.status_set.assert_called_with(
         "blocked",
         "PodSecurityPolicy not available in 1.25+,"
-        " please remove pod-security-policy config"
+        " please remove pod-security-policy config",
     )
 
     # With an empty psp config we should be ok
