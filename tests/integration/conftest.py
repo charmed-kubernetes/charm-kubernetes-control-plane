@@ -62,8 +62,7 @@ async def series(k8s_core_yaml, request):
     if series:
         return series
     else:
-        contents = await k8s_core_yaml
-        return contents["series"]
+        return k8s_core_yaml["series"]
 
 
 @pytest.mark.asyncio
@@ -73,8 +72,7 @@ async def snap_channel(k8s_core_yaml, request):
     if channel:
         return channel
     else:
-        contents = await k8s_core_yaml
-        kcp = contents["applications"]["kubernetes-control-plane"]
+        kcp = k8s_core_yaml["applications"]["kubernetes-control-plane"]
         return kcp["options"]["channel"]
 
 
