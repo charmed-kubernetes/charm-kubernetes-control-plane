@@ -56,8 +56,7 @@ async def k8s_core_yaml(ops_test, k8s_core_bundle):
 
 
 @pytest.fixture(scope="module")
-@pytest.mark.asyncio
-async def series(k8s_core_yaml, request):
+def series(k8s_core_yaml, request):
     series = request.config.getoption("--series")
     if series:
         return series
@@ -65,9 +64,8 @@ async def series(k8s_core_yaml, request):
         return k8s_core_yaml["series"]
 
 
-@pytest.mark.asyncio
 @pytest.fixture(scope="module")
-async def snap_channel(k8s_core_yaml, request):
+def snap_channel(k8s_core_yaml, request):
     channel = request.config.getoption("--snap-channel")
     if channel:
         return channel

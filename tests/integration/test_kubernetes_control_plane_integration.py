@@ -167,10 +167,9 @@ async def test_auth_load(ops_test):
     assert not any(await asyncio.gather(*tasks))
 
 
-async def test_pod_security_policy(pytestconfig, ops_test, kubernetes):
+async def test_pod_security_policy(ops_test, kubernetes, snap_channel):
     """Test the pod-security-policy config option"""
-    channel = pytestconfig.getoption("--snap-channel")
-    track, risk = channel.split("/", 1)
+    track, risk = snap_channel.split("/", 1)
     if tuple(int(x) for x in track.split(".")) >= (1, 25):
         pytest.skip("PodSecurityPolicy not supported in 1.25+")
 
