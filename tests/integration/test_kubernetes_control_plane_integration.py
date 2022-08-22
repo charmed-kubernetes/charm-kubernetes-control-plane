@@ -29,7 +29,10 @@ def _check_status_messages(ops_test):
 
 
 @pytest.mark.abort_on_fail
-async def test_build_and_deploy(ops_test, hacluster, keystone, series, snap_channel):
+@pytest.mark.skip_if_deployed
+async def test_build_and_deploy(
+    ops_test, hacluster, keystone, k8s_core_bundle, series, snap_channel
+):
     charm = next(Path.cwd().glob("kubernetes-control-plane*.charm"), None)
     if not charm:
         log.info("Build Charm...")
@@ -51,7 +54,7 @@ async def test_build_and_deploy(ops_test, hacluster, keystone, series, snap_chan
 
     context = dict(charm=charm, series=series, snap_channel=snap_channel, **resources)
     overlays = [
-        ops_test.Bundle("kubernetes-core", channel="edge"),
+        k8s_core_bundle,
         Path("tests/data/charm.yaml"),
     ]
 
@@ -166,8 +169,12 @@ async def test_auth_load(ops_test):
     assert not any(await asyncio.gather(*tasks))
 
 
-async def test_pod_security_policy(ops_test, kubernetes):
+async def test_pod_security_policy(ops_test, kubernetes, snap_channel):
     """Test the pod-security-policy config option"""
+    track, risk = snap_channel.split("/", 1)
+    if tuple(int(x) for x in track.split(".")) >= (1, 25):
+        pytest.skip("PodSecurityPolicy not supported in 1.25+")
+
     test_psp = {
         "apiVersion": "policy/v1beta1",
         "kind": "PodSecurityPolicy",
