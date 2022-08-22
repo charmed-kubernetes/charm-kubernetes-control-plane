@@ -50,28 +50,22 @@ def k8s_core_bundle(ops_test):
 @pytest.fixture(scope="module")
 @pytest.mark.asyncio
 async def k8s_core_yaml(ops_test, k8s_core_bundle):
-    bundle_paths = await ops_test.async_render_bundles(k8s_core_bundle)
-    with open(bundle_paths[0], "r") as f:
-        return yaml.safe_load(f)
+    """Download and render the kubernetes-core bundle, return it's full yaml`
+    bundle_path,  = await ops_test.async_render_bundles(k8s_core_bundle)
+    return yaml.safe_load(bundle_path.read_text())
 
 
 @pytest.fixture(scope="module")
 def series(k8s_core_yaml, request):
     series = request.config.getoption("--series")
-    if series:
-        return series
-    else:
-        return k8s_core_yaml["series"]
+     return series if series else k8s_core_yaml["series"]
 
 
 @pytest.fixture(scope="module")
 def snap_channel(k8s_core_yaml, request):
     channel = request.config.getoption("--snap-channel")
-    if channel:
-        return channel
-    else:
-        kcp = k8s_core_yaml["applications"]["kubernetes-control-plane"]
-        return kcp["options"]["channel"]
+    kcp = k8s_core_yaml["applications"]["kubernetes-control-plane"]
+    return channel if channel else kcp["options"]["channel"]
 
 
 def pytest_configure(config):
