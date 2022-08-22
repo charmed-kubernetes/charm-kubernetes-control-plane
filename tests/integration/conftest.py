@@ -49,7 +49,7 @@ def k8s_core_bundle(ops_test):
 
 @pytest.fixture(scope="module")
 @pytest.mark.asyncio
-def series(ops_test, k8s_core_bundle, request):
+async def series(ops_test, k8s_core_bundle, request):
     series = request.config.getoption("--series")
     if series:
         return series
