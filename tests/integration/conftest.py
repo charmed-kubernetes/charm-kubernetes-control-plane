@@ -2,6 +2,7 @@ import logging
 import pytest
 import random
 import string
+import yaml
 
 from lightkube import KubeConfig, Client
 from lightkube.resources.core_v1 import Namespace
@@ -29,26 +30,48 @@ def pytest_addoption(parser):
     parser.addoption(
         "--series",
         type=str,
-        default="focal",
+        default="",
         help="Set series for the machine units",
     )
 
     parser.addoption(
         "--snap-channel",
         type=str,
-        default="1.25/candidate",
+        default="",
         help="Set snap channel for the control-plane & worker units",
     )
 
 
-@pytest.fixture()
-def series(request):
-    return request.config.getoption("--series")
+@pytest.fixture(scope="module")
+def k8s_core_bundle(ops_test):
+    return ops_test.Bundle("kubernetes-core", channel="edge")
 
 
-@pytest.fixture()
-def snap_channel(request):
-    return request.config.getoption("--snap-channel")
+@pytest.fixture(scope="module")
+@pytest.mark.asyncio
+def series(ops_test, k8s_core_bundle, request):
+    series = request.config.getoption("--series")
+    if series:
+        return series
+    else:
+        bundle_paths = await ops_test.async_render_bundles(k8s_core_bundle)
+        with open(bundle_paths[0], "r") as f:
+            contents = yaml.safe_load(f)
+            return contents["series"]
+
+
+@pytest.mark.asyncio
+@pytest.fixture(scope="module")
+async def snap_channel(ops_test, k8s_core_bundle, request):
+    channel = request.config.getoption("--snap-channel")
+    if channel:
+        return channel
+    else:
+        bundle_paths = await ops_test.async_render_bundles(k8s_core_bundle)
+        with open(bundle_paths[0], "r") as f:
+            contents = yaml.safe_load(f)
+            kcp = contents["applications"]["kubernetes-control-plane"]
+            return kcp["options"]["channel"]
 
 
 def pytest_configure(config):

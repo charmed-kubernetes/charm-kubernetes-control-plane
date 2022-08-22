@@ -30,7 +30,9 @@ def _check_status_messages(ops_test):
 
 @pytest.mark.abort_on_fail
 @pytest.mark.skip_if_deployed
-async def test_build_and_deploy(ops_test, hacluster, keystone, series, snap_channel):
+async def test_build_and_deploy(
+    ops_test, hacluster, keystone, k8s_core_bundle, series, snap_channel
+):
     log.info("Build Charm...")
     charm = await ops_test.build_charm(".")
 
@@ -50,7 +52,7 @@ async def test_build_and_deploy(ops_test, hacluster, keystone, series, snap_chan
 
     context = dict(charm=charm, series=series, snap_channel=snap_channel, **resources)
     overlays = [
-        ops_test.Bundle("kubernetes-core", channel="edge"),
+        k8s_core_bundle,
         Path("tests/data/charm.yaml"),
     ]
 
