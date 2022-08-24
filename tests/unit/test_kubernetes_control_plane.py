@@ -11,6 +11,7 @@ from charms.layer.kubernetes_common import (
     get_version,
     kubectl,
     configure_kubernetes_service,
+    kubectl_manifest,
 )
 from charms.reactive import endpoint_from_flag, endpoint_from_name, set_state
 from charms.reactive import set_flag, is_flag_set, clear_flag
@@ -392,7 +393,7 @@ def test_image_registry_config_changed():
 
 def test_psp_arg_removed_in_1_25():
     configure_kubernetes_service.reset_mock()
-    configure_apiserver("10.152.183.0/24", "10.152.183.0/24", (1, 24))
+    configure_apiserver("10.152.183.0/24", "10.152.183.0/24", (1, 24, 4))
     args = configure_kubernetes_service.call_args[0][2]
     assert (
         args["enable-admission-plugins"]
@@ -400,21 +401,33 @@ def test_psp_arg_removed_in_1_25():
     )
 
     configure_kubernetes_service.reset_mock()
-    configure_apiserver("10.152.183.0/24", "10.152.183.0/24", (1, 25))
+    configure_apiserver("10.152.183.0/24", "10.152.183.0/24", (1, 25, 0))
     args = configure_kubernetes_service.call_args[0][2]
     assert args["enable-admission-plugins"] == "PersistentVolumeLabel,NodeRestriction"
 
     configure_kubernetes_service.reset_mock()
-    configure_apiserver("10.152.183.0/24", "10.152.183.0/24", (1, 26))
+    configure_apiserver("10.152.183.0/24", "10.152.183.0/24", (1, 26, 0))
     args = configure_kubernetes_service.call_args[0][2]
     assert args["enable-admission-plugins"] == "PersistentVolumeLabel,NodeRestriction"
 
 
 def test_psp_config_1_25():
     # With a non-empty psp config in 1.25+ we should be blocked
+    get_version.return_value = (1, 25, 0)
+    hookenv.config.return_value = "some-psp"
+    kubernetes_control_plane.create_pod_security_policy_resources()
+    kubectl_manifest.assert_not_called()
+    hookenv.status_set.assert_called_with(
+        "blocked",
+        "PodSecurityPolicy not available in 1.25+,"
+        " please remove pod-security-policy config",
+    )
+
+    # Try a 2 length tuple
     get_version.return_value = (1, 25)
     hookenv.config.return_value = "some-psp"
     kubernetes_control_plane.create_pod_security_policy_resources()
+    kubectl_manifest.assert_not_called()
     hookenv.status_set.assert_called_with(
         "blocked",
         "PodSecurityPolicy not available in 1.25+,"
@@ -424,7 +437,15 @@ def test_psp_config_1_25():
     # With an empty psp config we should be ok
     hookenv.config.return_value = ""
     kubernetes_control_plane.create_pod_security_policy_resources()
+    kubectl_manifest.assert_not_called()
     set_state.assert_called_with("kubernetes-control-plane.pod-security-policy.applied")
+
+    # Test the 1.24 path
+    get_version.return_value = (1, 24, 4)
+    kubectl_manifest.return_value = True
+    hookenv.config.return_value = ""
+    kubernetes_control_plane.create_pod_security_policy_resources()
+    hookenv.log.assert_called_with("Creating pod security policy resources.")
 
 
 class TestSendClusterDNSDetail:
