@@ -1889,7 +1889,7 @@ def switch_auth_mode(forced=False):
 @when("leadership.is_leader", "kubernetes-control-plane.components.started")
 @when_not("kubernetes-control-plane.pod-security-policy.applied")
 def create_pod_security_policy_resources():
-    if get_version("kube-apiserver") < (1, 25, 0):
+    if get_version("kube-apiserver")[:2] < (1, 25):
         pod_security_policy_path = "/root/cdk/pod-security-policy.yaml"
         pod_security_policy = hookenv.config("pod-security-policy")
         if pod_security_policy:

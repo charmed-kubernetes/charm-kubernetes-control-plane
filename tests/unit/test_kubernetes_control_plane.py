@@ -423,6 +423,17 @@ def test_psp_config_1_25():
         " please remove pod-security-policy config",
     )
 
+    # Try a 2 length tuple
+    get_version.return_value = (1, 25)
+    hookenv.config.return_value = "some-psp"
+    kubernetes_control_plane.create_pod_security_policy_resources()
+    kubectl_manifest.assert_not_called()
+    hookenv.status_set.assert_called_with(
+        "blocked",
+        "PodSecurityPolicy not available in 1.25+,"
+        " please remove pod-security-policy config",
+    )
+
     # With an empty psp config we should be ok
     hookenv.config.return_value = ""
     kubernetes_control_plane.create_pod_security_policy_resources()
