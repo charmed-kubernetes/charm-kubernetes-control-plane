@@ -33,8 +33,10 @@ def _check_status_messages(ops_test):
 async def test_build_and_deploy(
     ops_test, hacluster, keystone, k8s_core_bundle, series, snap_channel
 ):
-    log.info("Build Charm...")
-    charm = await ops_test.build_charm(".")
+    charm = next(Path.cwd().glob("kubernetes-control-plane*.charm"), None)
+    if not charm:
+        log.info("Build Charm...")
+        charm = await ops_test.build_charm(".")
 
     build_script = Path.cwd() / "build-cni-resources.sh"
     resources = await ops_test.build_resources(build_script)

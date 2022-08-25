@@ -374,20 +374,58 @@ def test_ignore_vip():
     mock_gia.assert_called_with("kube-api-endpoint", ignore_addresses=["1.2.3.4"])
 
 
-def test_image_registry_config_changed():
+def test_image_registry_config_changed_on_cni():
     hookenv.config.return_value = "rocks.canonical.com:443/cdk"
-    cni = mock.MagicMock()
-    endpoint_from_flag.return_value = cni
+    endpoint_from_flag.reset_mock()
+    endpoint_from_flag.return_value = cni = mock.MagicMock()
     kubernetes_control_plane.image_registry_changed()
+    endpoint_from_flag.assert_called_once_with("cni.available")
     cni.set_image_registry.assert_called_once_with("rocks.canonical.com:443/cdk")
 
     # Test when CNI is not up yet
-    cni = None
-    endpoint_from_flag.return_value = cni
+    endpoint_from_flag.reset_mock()
+    endpoint_from_flag.return_value = cni = None
     hookenv.log.reset_mock()
     kubernetes_control_plane.image_registry_changed()
+    endpoint_from_flag.assert_called_once_with("cni.available")
     hookenv.log.assert_called_once_with(
-        "CNI endpoint not available yet, waiting to " "set image registry data"
+        "CNI endpoint not available yet, waiting to set image registry data"
+    )
+
+
+def test_image_registry_config_changed_on_container_runtime():
+    set_flag.reset_mock()
+    hookenv.config.return_value = "rocks.canonical.com:443/cdk"
+    endpoint_from_flag.reset_mock()
+    endpoint_from_flag.return_value = runtime = mock.MagicMock()
+    kubernetes_control_plane.configure_registry_location()
+    endpoint_from_flag.assert_called_once_with("endpoint.container-runtime.available")
+    kubernetes_common.get_sandbox_image_uri.assert_called_once_with(
+        "rocks.canonical.com:443/cdk"
+    )
+    uri = kubernetes_common.get_sandbox_image_uri.return_value
+    runtime.set_config.assert_called_once_with(sandbox_image=uri)
+    set_flag.assert_called_once_with("kubernetes-control-plane.sent-registry")
+
+
+def test_image_registry_config_changed_on_kube_control():
+    hookenv.config.return_value = "rocks.canonical.com:443/cdk"
+    endpoint_from_flag.reset_mock()
+    endpoint_from_flag.return_value = kube_control = mock.MagicMock()
+    kubernetes_control_plane.send_registry_location()
+    endpoint_from_flag.assert_called_once_with("kube-control.connected")
+    kube_control.set_registry_location.assert_called_once_with(
+        "rocks.canonical.com:443/cdk"
+    )
+
+    # Test when kube-control is not connected yet
+    endpoint_from_flag.reset_mock()
+    endpoint_from_flag.return_value = kube_control = None
+    hookenv.log.reset_mock()
+    kubernetes_control_plane.send_registry_location()
+    endpoint_from_flag.assert_called_once_with("kube-control.connected")
+    hookenv.log.assert_called_once_with(
+        "kube-control relation currently unavailable, will be retried"
     )
 
 

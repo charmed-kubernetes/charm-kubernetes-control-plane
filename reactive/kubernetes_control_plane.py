@@ -3370,27 +3370,65 @@ def get_dns_provider():
     return dns_provider
 
 
-@when("kube-control.connected")
+@when("endpoint.container-runtime.available")
 @when_not("kubernetes-control-plane.sent-registry")
-def send_registry_location():
+def configure_registry_location():
     registry_location = hookenv.config("image-registry")
-    kube_control = endpoint_from_flag("kube-control.connected")
 
+    # Construct and send the sandbox image (pause container) to our runtime
+    uri = get_sandbox_image_uri(registry_location)
+    runtime = endpoint_from_flag("endpoint.container-runtime.available")
+    runtime.set_config(sandbox_image=uri)
+    set_flag("kubernetes-control-plane.sent-registry")
+
+
+@when_any("kube-control.connected", "config.changed.image-registry")
+def send_registry_location():
+    """Hook to update all relations when a new dependant joins."""
+    kube_control = endpoint_from_flag("kube-control.connected")
+    if not kube_control:
+        hookenv.log("kube-control relation currently unavailable, will be retried")
+        return
+
+    registry_location = hookenv.config("image-registry")
     # Send registry to workers
     kube_control.set_registry_location(registry_location)
 
-    # Construct and send the sandbox image (pause container) to our runtime
-    runtime = endpoint_from_flag("endpoint.container-runtime.available")
-    if not runtime:
-        hookenv.log(
-            "Container runtime not yet available, will retry setting sandbox image"
-        )
+
+@when_any("kube-control.connected", "config.changed.register-with-taints")
+def set_controller_taints():
+    kube_control = endpoint_from_flag("kube-control.connected")
+    if not kube_control:
+        hookenv.log("kube-control relation currently unavailable, will be retried")
         return
 
-    uri = get_sandbox_image_uri(registry_location)
-    runtime.set_config(sandbox_image=uri)
+    # Send controller taints to workers
+    taints = hookenv.config("register-with-taints").split()
+    try:
+        kube_control.set_controller_taints(taints)
+    except kube_control.DecodeError as e:
+        msg = "Incorrect taint format in register-with-taints"
+        hookenv.log(f"{msg}: {e}")
+        hookenv.status_set("blocked", msg)
+        return
 
-    set_flag("kubernetes-control-plane.sent-registry")
+
+@when_any("kube-control.connected", "config.changed.labels")
+def set_controller_labels():
+    kube_control = endpoint_from_flag("kube-control.connected")
+    if not kube_control:
+        hookenv.log("kube-control relation currently unavailable, will be retried")
+        return
+
+    # Send controller labels to workers
+    labels = hookenv.config("labels").split()
+    try:
+        kube_control.set_controller_labels(labels)
+    except kube_control.DecodeError as e:
+        msg = "Incorrect label format in labels"
+        hookenv.log(f"{msg}: {e}")
+        hookenv.status_set("blocked", msg)
+        return
 
 
 @when(
@@ -3728,7 +3766,7 @@ def image_registry_changed():
     # Share image-registry with cni requirers
     cni = endpoint_from_flag("cni.available")
     if cni:
-        endpoint_from_flag("cni.available").set_image_registry(registry)
+        cni.set_image_registry(registry)
     else:
         hookenv.log(
             "CNI endpoint not available yet, waiting to set image registry data"
