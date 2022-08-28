@@ -107,7 +107,7 @@ options:
       will not be loaded.
   channel:
     type: string
-    default: "1.23/edge"
+    default: "1.25/stable"
     description: |
       Snap channel to install Kubernetes control plane services from
   client_password:
