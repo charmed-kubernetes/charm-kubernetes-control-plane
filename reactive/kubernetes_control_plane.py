@@ -2448,11 +2448,13 @@ def configure_apiserver():
         api_opts["cloud-provider"] = "external"
     elif is_state("endpoint.aws.ready"):
         api_opts["cloud-provider"] = "aws"
-        feature_gates.append("CSIMigrationAWS=false")
+        if get_version("kube-apiserver") < (1, 25, 0):
+            feature_gates.append("CSIMigrationAWS=false")
     elif is_state("endpoint.gcp.ready"):
         api_opts["cloud-provider"] = "gce"
         api_opts["cloud-config"] = str(api_cloud_config_path)
-        feature_gates.append("CSIMigrationGCE=false")
+        if get_version("kube-apiserver") < (1, 25, 0):
+            feature_gates.append("CSIMigrationGCE=false")
     elif is_state("endpoint.vsphere.ready") and get_version("kube-apiserver") >= (
         1,
         12,
@@ -2628,11 +2630,13 @@ def configure_controller_manager():
         controller_opts["cloud-provider"] = "external"
     elif is_state("endpoint.aws.ready"):
         controller_opts["cloud-provider"] = "aws"
-        feature_gates.append("CSIMigrationAWS=false")
+        if get_version("kube-apiserver") < (1, 25, 0):
+            feature_gates.append("CSIMigrationAWS=false")
     elif is_state("endpoint.gcp.ready"):
         controller_opts["cloud-provider"] = "gce"
         controller_opts["cloud-config"] = str(cm_cloud_config_path)
-        feature_gates.append("CSIMigrationGCE=false")
+        if get_version("kube-apiserver") < (1, 25, 0):
+            feature_gates.append("CSIMigrationGCE=false")
     elif is_state("endpoint.vsphere.ready") and get_version("kube-apiserver") >= (
         1,
         12,
@@ -2669,9 +2673,11 @@ def configure_scheduler():
     feature_gates = []
 
     if is_state("endpoint.aws.ready"):
-        feature_gates.append("CSIMigrationAWS=false")
+        if get_version("kube-apiserver") < (1, 25, 0):
+            feature_gates.append("CSIMigrationAWS=false")
     elif is_state("endpoint.gcp.ready"):
-        feature_gates.append("CSIMigrationGCE=false")
+        if get_version("kube-apiserver") < (1, 25, 0):
+            feature_gates.append("CSIMigrationGCE=false")
     elif is_state("endpoint.azure.ready"):
         feature_gates.append("CSIMigrationAzureDisk=false")
     elif is_state("endpoint.vsphere.ready") and get_version("kube-apiserver") >= (
