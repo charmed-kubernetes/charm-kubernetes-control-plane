@@ -2858,9 +2858,14 @@ def poke_network_unavailable():
         try:
             node_info = json.loads(body)
             conditions = node_info["status"]["conditions"]
-            i = [c["type"] for c in conditions].index("NetworkUnavailable")
-            if conditions[i]["status"] == "True":
+            network_unavail_idx = [
+                idx
+                for idx, c in enumerate(conditions)
+                if c["type"] == "NetworkUnavailable" and c["status"] == "True"
+            ]
+            if network_unavail_idx:
                 hookenv.log("Clearing NetworkUnavailable from {}".format(node_name))
+                i, *_ = network_unavail_idx
                 conditions[i] = {
                     "type": "NetworkUnavailable",
                     "status": "False",
