@@ -37,6 +37,7 @@ jobs:
           provider: vsphere
           credentials-yaml: ${{ secrets.CREDENTIALS_YAML }}
           clouds-yaml: ${{ secrets.CLOUDS_YAML }}
-          bootstrap-options: "--model-default datastore=vsanDatastore --model-default primary-network=VLAN_2763"
+          bootstrap-constraints: "arch=amd64 cores=2 mem=4G"
+          bootstrap-options: "${{ secrets.FOCAL_BOOTSTRAP_OPTIONS }} --model-default datastore=vsanDatastore --model-default primary-network=VLAN_2763"
       - name: Run test
         run: tox -e integration
