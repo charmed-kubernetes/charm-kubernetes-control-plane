@@ -2,3 +2,8 @@ aiohttp>=3.7.4,<3.8.0
 gunicorn>=20.0.0,<21.0.0
 loadbalancer-interface
 typing_extensions<4.0
+
+# idna>=3.4 and beyond (needed by aiohttp and hvac)
+# requires flit-core for building its wheel.
+# it's not just included for fun
+flit-core<4
