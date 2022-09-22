@@ -2327,7 +2327,7 @@ def configure_apiserver():
     # Handle static options for now
     api_opts["service-cluster-ip-range"] = service_cidr
     feature_gates = []
-    if kubernetes_common.is_dual_stack(cluster_cidr):
+    if kubernetes_common.is_dual_stack(cluster_cidr) and get_version("kube-apiserver") < (1, 25, 0):
         feature_gates.append("IPv6DualStack=true")
     api_opts["min-request-timeout"] = "300"
     api_opts["v"] = "4"
@@ -2619,7 +2619,7 @@ def configure_controller_manager():
     controller_opts["service-cluster-ip-range"] = service_cidr
     controller_opts["cluster-cidr"] = cluster_cidr
     feature_gates = ["RotateKubeletServerCertificate=true"]
-    if kubernetes_common.is_dual_stack(cluster_cidr):
+    if kubernetes_common.is_dual_stack(cluster_cidr) and get_version("kube-apiserver") < (1, 25, 0):
         feature_gates.append("IPv6DualStack=true")
     net_ipv6 = kubernetes_common.get_ipv6_network(cluster_cidr)
     if net_ipv6:
