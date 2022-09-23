@@ -2463,7 +2463,8 @@ def configure_apiserver():
     elif is_state("endpoint.azure.ready"):
         api_opts["cloud-provider"] = "azure"
         api_opts["cloud-config"] = str(api_cloud_config_path)
-        feature_gates.append("CSIMigrationAzureDisk=false")
+        if get_version("kube-apiserver") < (1, 25, 0):
+            feature_gates.append("CSIMigrationAzureDisk=false")
 
     api_opts["feature-gates"] = ",".join(feature_gates)
 
