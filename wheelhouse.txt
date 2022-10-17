@@ -5,5 +5,9 @@ typing_extensions<4.0
 
 # idna>=3.4 and beyond (needed by aiohttp and hvac)
 # requires flit-core for building its wheel.
-# it's not just included for fun
+# flit-core can run on python3.6, but requires pip 
+# to be upgrade to at least 20.0.2 (same as on focal)
+#
+# These are not just included for fun.
 flit-core<4
+pip>=20.0.2
