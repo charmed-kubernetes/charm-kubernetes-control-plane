@@ -2335,7 +2335,8 @@ def configure_apiserver():
     api_opts["kubelet-certificate-authority"] = str(ca_crt_path)
     api_opts["kubelet-client-certificate"] = str(client_crt_path)
     api_opts["kubelet-client-key"] = str(client_key_path)
-    api_opts["logtostderr"] = "true"
+    if get_version("kube-apiserver") < (1, 26, 0):
+        api_opts["logtostderr"] = "true"
     api_opts["storage-backend"] = getStorageBackend()
     api_opts["profiling"] = "false"
 
@@ -2604,7 +2605,8 @@ def configure_controller_manager():
     controller_opts["min-resync-period"] = "3m"
     controller_opts["v"] = "2"
     controller_opts["root-ca-file"] = str(ca_crt_path)
-    controller_opts["logtostderr"] = "true"
+    if get_version("kube-controller-manager") < (1, 26, 0):
+        controller_opts["logtostderr"] = "true"
     controller_opts["kubeconfig"] = kubecontrollermanagerconfig_path
     controller_opts["authorization-kubeconfig"] = kubecontrollermanagerconfig_path
     controller_opts["authentication-kubeconfig"] = kubecontrollermanagerconfig_path
@@ -2664,7 +2666,8 @@ def configure_scheduler():
     scheduler_opts = {}
 
     scheduler_opts["v"] = "2"
-    scheduler_opts["logtostderr"] = "true"
+    if get_version("kube-scheduler") < (1, 26, 0):
+        scheduler_opts["logtostderr"] = "true"
     scheduler_opts["profiling"] = "false"
     scheduler_opts["config"] = kube_scheduler_config_path
 
