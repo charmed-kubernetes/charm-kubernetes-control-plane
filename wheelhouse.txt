@@ -3,18 +3,18 @@ gunicorn>=20.0.0,<21.0.0
 loadbalancer-interface
 typing_extensions<4.0
 
-# psutil 5.9.3 starts requirement of setuptools>=43
-# either we use this
-# psutil<5.9.3
-# or we use the default install in focal
-# setuptools>=45.2.0
-setuptools>=45.2.0
-
 # idna>=3.4 and beyond (needed by aiohttp and hvac)
 # requires flit-core for building its wheel.
+# 
 # flit-core can run on python3.6, but requires pip 
-# to be upgrade to at least 20.0.2 (same as on focal)
+# be upgraded to at least 20.0.2 (same as on focal)
 #
-# These are not just included for fun.
+# psutil 5.9.3 added requirement of setuptools>=43
+# setuptools 45.2.0 is the focal default
+# 
+# layer-basic pins-back pip and setuptools
+# for full compatability in bionic, but we can push
+# those packages forward if testing shows it operates
 flit-core<4
 pip>=20.0.2
+setuptools>=45.2.0
