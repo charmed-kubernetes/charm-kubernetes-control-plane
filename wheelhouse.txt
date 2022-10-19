@@ -3,6 +3,13 @@ gunicorn>=20.0.0,<21.0.0
 loadbalancer-interface
 typing_extensions<4.0
 
+# psutil 5.9.3 starts requirement of setuptools>=43
+# either we use this
+# psutil<5.9.3
+# or we use the default install in focal
+# setuptools>=45.2.0
+setuptools>=45.2.0
+
 # idna>=3.4 and beyond (needed by aiohttp and hvac)
 # requires flit-core for building its wheel.
 # flit-core can run on python3.6, but requires pip 
