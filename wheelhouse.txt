@@ -9,12 +9,11 @@ typing_extensions<4.0
 # flit-core can run on python3.6, but requires pip 
 # be upgraded to at least 20.0.2 (same as on focal)
 #
-# psutil 5.9.3 added requirement of setuptools>=43
-# setuptools 45.2.0 is the focal default
+flit-core<4
+pip==20.0.2  # necessary for bionic
+
+# psutil>=5.9.3 added requirement of setuptools>=43
 # 
 # layer-basic pins-back pip and setuptools
-# for full compatability in bionic, but we can push
-# those packages forward if testing shows it operates
-flit-core<4
-pip>=20.0.2
-setuptools>=45.2.0
+# for full compatability with bionic
+psutil==5.9.2
