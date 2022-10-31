@@ -616,20 +616,6 @@ def send_cohorts():
     set_flag("kubernetes-control-plane.cohorts.sent")
 
 
-@when("etcd.available")
-@when("config.changed.enable-metrics")
-def enable_metric_changed():
-    """
-    Trigger an api server update.
-
-    :return: None
-    """
-    clear_flag("kubernetes-control-plane.apiserver.configured")
-
-    if is_state("leadership.is_leader"):
-        configure_cdk_addons()
-
-
 @when("config.changed.client_password", "leadership.is_leader")
 def password_changed():
     """Handle password change by reconfiguring authentication."""
