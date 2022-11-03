@@ -228,14 +228,12 @@ related to kubernetes-master, in which case token auth is used.
 <a id="dns-provider-description"> </a>
 **Description:**
 
-DNS provider addon to use. Can be "auto", "core-dns", "kube-dns", or
-"none".
+DNS provider addon to use. Can be "auto", "core-dns", or "none".
 
 CoreDNS is only supported on Kubernetes 1.14+.
 
 When set to "auto", the behavior is as follows:
 -   New deployments of Kubernetes 1.14+ will use CoreDNS
--   New deployments of Kubernetes 1.13 or older will use KubeDNS
 -   Upgraded deployments will continue to use whichever provider was
 previously used.
 

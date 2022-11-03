@@ -362,11 +362,7 @@ def check_for_upgrade_needed():
         leader_set(auto_storage_backend="etcd2")
 
     if is_leader and not leader_get("auto_dns_provider"):
-        was_kube_dns = hookenv.config().previous("enable-kube-dns")
-        if was_kube_dns is True:
-            leader_set(auto_dns_provider="kube-dns")
-        elif was_kube_dns is False:
-            leader_set(auto_dns_provider="none")
+        leader_set(auto_dns_provider="core-dns")
 
     if is_flag_set("nrpe-external-master.available"):
         update_nrpe_config()
@@ -1790,11 +1786,7 @@ def configure_cdk_addons():
                 "openstack-endpoint-ca=" + (openstack.endpoint_tls_ca or ""),
             ]
         )
-    if get_version("kube-apiserver") >= (1, 14):
-        args.append("dns-provider=" + dnsProvider)
-    else:
-        enableKubeDNS = dnsProvider == "kube-dns"
-        args.append("enable-kube-dns=" + str(enableKubeDNS).lower())
+    args.append("dns-provider=" + dnsProvider)
     check_call(["snap", "set", "cdk-addons"] + args)
     if not addons_ready():
         remove_state("cdk-addons.configured")
@@ -3351,9 +3343,7 @@ class InvalidDnsProvider(Exception):
 
 
 def get_dns_provider():
-    valid_dns_providers = ["auto", "core-dns", "kube-dns", "none"]
-    if get_version("kube-apiserver") < (1, 14):
-        valid_dns_providers.remove("core-dns")
+    valid_dns_providers = ["auto", "core-dns", "none"]
 
     dns_provider = hookenv.config("dns-provider").lower()
     if dns_provider not in valid_dns_providers:
@@ -3366,8 +3356,6 @@ def get_dns_provider():
         if not dns_provider:
             if "core-dns" in valid_dns_providers:
                 dns_provider = "core-dns"
-            else:
-                dns_provider = "kube-dns"
 
     # LP: 1833089. Followers end up here when setting final status; ensure only
     # leaders call leader_set.
