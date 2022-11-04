@@ -3354,8 +3354,7 @@ def get_dns_provider():
         # On new deployments, the first time this is called, auto_dns_provider
         # hasn't been set yet. We need to make a choice now.
         if not dns_provider:
-            if "core-dns" in valid_dns_providers:
-                dns_provider = "core-dns"
+            dns_provider = "core-dns"
 
     # LP: 1833089. Followers end up here when setting final status; ensure only
     # leaders call leader_set.
