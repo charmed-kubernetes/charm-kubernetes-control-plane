@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 360
     steps:
       - name: Check out code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
       - name: Setup Python
         uses: actions/setup-python@v2
         with:
@@ -52,7 +52,7 @@ jobs:
           mv juju-crashdump-* tmp/ | true
       - name: Upload debug artifacts
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v2
         with:
           name: test-run-artifacts
           path: tmp
