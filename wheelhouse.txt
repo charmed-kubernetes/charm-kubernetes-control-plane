@@ -11,6 +11,7 @@ typing_extensions<4.0
 #
 flit-core<4
 pip==20.0.2  # necessary for bionic
+setuptools<46.0.0;python_version == '3.8'
 
 # psutil>=5.9.3 added requirement of setuptools>=43
 # 
