@@ -11,7 +11,9 @@ typing_extensions<4.0
 #
 flit-core<4
 pip==20.0.2  # necessary for bionic
-setuptools<46.0.0;python_version == '3.8'
+# pin setuptools to circumvent the build/run bug in >= focal
+# https://discourse.charmhub.io/t/cannot-install-dependencies-modulenotfounderror-no-module-named-setuptools-command-build/7374
+setuptools==45.2.0;python_version >= '3.8'
 
 # psutil>=5.9.3 added requirement of setuptools>=43
 # 
