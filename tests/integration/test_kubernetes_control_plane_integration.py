@@ -85,7 +85,7 @@ async def test_build_and_deploy(
     )
 
     try:
-        await ops_test.model.wait_for_idle(wait_for_active=True, timeout=60 * 60)
+        await ops_test.model.wait_for_idle(status="active", timeout=60 * 60)
     except asyncio.TimeoutError:
         if "kubernetes-control-plane" not in ops_test.model.applications:
             raise
@@ -109,7 +109,7 @@ async def test_kube_api_endpoint(ops_test):
         "kubernetes-control-plane:kube-api-endpoint",
         "kubernetes-worker:kube-api-endpoint",
     )
-    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=10 * 60)
+    await ops_test.model.wait_for_idle(status="active", timeout=10 * 60)
     _check_status_messages(ops_test)
 
 
@@ -144,7 +144,7 @@ async def test_auth_load(ops_test):
     await app.set_config({"authn-webhook-endpoint": url})
 
     log.info("Waiting for model to settle")
-    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=10 * 60)
+    await ops_test.model.wait_for_idle(status="active", timeout=10 * 60)
 
     async def _auth_req(token, timeout=30):
         url = f"https://{unit.public_address}:5000/v1beta1"
@@ -202,11 +202,11 @@ async def test_pod_security_policy(ops_test, kubernetes, snap_channel):
     app = ops_test.model.applications["kubernetes-control-plane"]
 
     await app.set_config({"pod-security-policy": yaml.dump(test_psp)})
-    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=120)
+    await ops_test.model.wait_for_idle(status="active", timeout=120)
     await wait_for_psp(privileged=False)
 
     await app.set_config({"pod-security-policy": ""})
-    await ops_test.model.wait_for_idle(wait_for_active=True, timeout=120)
+    await ops_test.model.wait_for_idle(status="active", timeout=120)
     await wait_for_psp(privileged=True)
 
 
