@@ -23,9 +23,8 @@ tags:
   - control-plane
 subordinate: false
 series:
-  - focal
   - jammy
-  - bionic
+  - focal
 peers:
   kube-masters:
     interface: kube-masters
