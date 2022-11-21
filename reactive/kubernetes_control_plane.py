@@ -2587,7 +2587,9 @@ def configure_controller_manager():
         controller_opts["logtostderr"] = "true"
     if get_version("kube-controller-manager") >= (1, 26):
         controller_opts["requestheader-client-ca-file"] = str(ca_crt_path)
-        controller_opts["requestheader-allowed-names"] = "system:kube-controller-manager,client"
+        controller_opts[
+            "requestheader-allowed-names"
+        ] = "system:kube-controller-manager,client"
     controller_opts["kubeconfig"] = kubecontrollermanagerconfig_path
     controller_opts["authorization-kubeconfig"] = kubecontrollermanagerconfig_path
     controller_opts["authentication-kubeconfig"] = kubecontrollermanagerconfig_path
