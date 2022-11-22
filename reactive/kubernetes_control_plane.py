@@ -1733,9 +1733,13 @@ def configure_cdk_addons():
     else:
         keystoneEnabled = "false"
 
-    enable_aws = str(is_flag_set("endpoint.aws.ready")).lower()
-    enable_azure = str(is_flag_set("endpoint.azure.ready")).lower()
-    enable_gcp = str(is_flag_set("endpoint.gcp.ready")).lower()
+    # cdk-addons storage classes
+    if get_version("kube-apiserver") < (1, 25, 0):
+        enable_aws = str(is_flag_set("endpoint.aws.ready")).lower()
+        enable_azure = str(is_flag_set("endpoint.azure.ready")).lower()
+        enable_gcp = str(is_flag_set("endpoint.gcp.ready")).lower()
+    else:
+        enable_aws = enable_azure = enable_gcp = "false"
     enable_openstack = str(is_flag_set("endpoint.openstack.ready")).lower()
     openstack = endpoint_from_flag("endpoint.openstack.ready")
 
