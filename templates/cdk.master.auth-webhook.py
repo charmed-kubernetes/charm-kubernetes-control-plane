@@ -348,9 +348,13 @@ async def refresh_secrets(app):
         'get', 'secrets', '-n', 'kube-system', '-o', 'json'
     )
     # See note in run() docstring above about exit 255.
-    if retcode not in (0, 255) or stderr:
-        app.logger.warning('Unable to load secrets ({}): {}'.format(retcode, stderr))
+    if retcode not in (0, 255):
+        app.logger.error('Unable to load secrets ({}): {}'.format(retcode, stderr))
         return
+    elif stderr:
+        # kubectl can present with errors, but still yield 
+        # valid secrets, let's try at least to parse stdout
+        app.logger.warning('Errors loading secrets ({}): {}'.format(retcode, stderr))
 
     try:
         secrets = json.loads(stdout)
