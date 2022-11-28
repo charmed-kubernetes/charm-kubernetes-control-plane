@@ -1821,7 +1821,7 @@ def addons_ready():
 
 
 @when("ceph-client.connected")
-@when_not("kubernetes-control-plane.ceph.pool.created")
+@when_not("kubernetes-control-plane.ceph.pools.created")
 def ceph_storage_pool():
     """Once Ceph relation is ready,
     we need to add storage pools.
@@ -1840,7 +1840,7 @@ def ceph_storage_pool():
         except Exception as e:
             hookenv.status_set("blocked", "Error creating {} pool: {}.".format(pool, e))
 
-    set_state("kubernetes-control-plane.ceph.pool.created")
+    set_state("kubernetes-control-plane.ceph.pools.created")
 
 
 @when("nrpe-external-master.available")
