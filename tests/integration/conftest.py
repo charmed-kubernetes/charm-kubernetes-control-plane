@@ -44,7 +44,7 @@ def pytest_addoption(parser):
 
 @pytest.fixture(scope="module")
 def k8s_core_bundle(ops_test):
-    return ops_test.Bundle("kubernetes-core", channel="edge")
+    return ops_test.Bundle("kubernetes-core", channel="1.26/stable")
 
 
 @pytest.fixture(scope="module")
