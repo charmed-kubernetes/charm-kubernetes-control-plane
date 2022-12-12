@@ -95,6 +95,7 @@ from charms.layer.kubernetes_common import _get_vmware_uuid
 from charms.layer.kubernetes_common import get_node_name
 from charms.layer.kubernetes_common import get_sandbox_image_uri
 from charms.layer.kubernetes_common import kubelet_kubeconfig_path
+from charms.layer.kubernetes_common import add_systemd_restart_always
 
 from charms.layer.kubernetes_node_base import LabelMaker
 
@@ -1058,33 +1059,6 @@ def add_systemd_file_limit():
             f.write("LimitNOFILE=65535")
 
 
-def add_systemd_restart_always():
-    template = "templates/service-always-restart.systemd-latest.conf"
-
-    try:
-        # Get the systemd version
-        cmd = ["systemd", "--version"]
-        output = check_output(cmd).decode("UTF-8")
-        line = output.splitlines()[0]
-        words = line.split()
-        assert words[0] == "systemd"
-        systemd_version = int(words[1])
-
-        # Check for old version (for xenial support)
-        if systemd_version < 230:
-            template = "templates/service-always-restart.systemd-229.conf"
-    except Exception:
-        traceback.print_exc()
-        hookenv.log(
-            "Failed to detect systemd version, using latest template", level="ERROR"
-        )
-
-    for service in control_plane_services:
-        dest_dir = "/etc/systemd/system/snap.{}.daemon.service.d".format(service)
-        os.makedirs(dest_dir, exist_ok=True)
-        copyfile(template, "{}/always-restart.conf".format(dest_dir))
-
-
 def add_systemd_file_watcher():
     """Setup systemd file-watcher service.
 
@@ -1302,7 +1276,7 @@ def start_control_plane():
     handle_etcd_relation(etcd)
 
     # Set up additional systemd services
-    add_systemd_restart_always()
+    add_systemd_restart_always(control_plane_services)
     add_systemd_file_limit()
     add_systemd_file_watcher()
     add_systemd_iptables_patch()
