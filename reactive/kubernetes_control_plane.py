@@ -1647,7 +1647,8 @@ def apply_default_storage(storage_class):
         def_storage_class = "ceph-xfs"
 
     storage_class_annotation = "storageclass.kubernetes.io/is-default-class"
-    name, is_default = storage_class["metadata"]["name"], name == def_storage_class
+    name = storage_class["metadata"]["name"]
+    is_default = name == def_storage_class
     new_annotations = storage_class["metadata"]["annotations"].copy()
     if is_default:
         new_annotations.update(**{storage_class_annotation: "true"})
@@ -1657,7 +1658,7 @@ def apply_default_storage(storage_class):
     if new_annotations != storage_class["metadata"]["annotations"]:
         hookenv.log(
             f"{'S' if is_default else 'Uns'}etting default storage-class {name}.",
-            hookenv.INFO
+            hookenv.INFO,
         )
         patch_set = json.dumps(dict(metadata=new_annotations))
         kubectl("patch", "storageclass", name, "-p", patch_set)
@@ -1725,7 +1726,6 @@ def configure_cdk_addons():
             if kubernetes_control_plane.query_cephfs_enabled():
                 cephFsEnabled = "true"
                 ceph["fsname"] = kubernetes_control_plane.get_cephfs_fsname() or ""
-    
 
     keystone = {}
     ks = endpoint_from_flag("keystone-credentials.available")
