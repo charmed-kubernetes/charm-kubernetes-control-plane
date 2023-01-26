@@ -1663,7 +1663,7 @@ def apply_default_storage(storage_class, def_storage_class):
 def storage_classes():
     try:
         storage_classes = json.loads(kubectl("get", "storageclass", "-o=json").decode())
-    except CalledProcessError:
+    except (CalledProcessError, FileNotFoundError):
         hookenv.log("Failed to get the current storage classes.", hookenv.WARNING)
         hookenv.log(traceback.format_exc())
         storage_classes = dict(items=[])
