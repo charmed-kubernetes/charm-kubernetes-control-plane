@@ -95,6 +95,7 @@ from charms.layer.kubernetes_common import _get_vmware_uuid
 from charms.layer.kubernetes_common import get_node_name
 from charms.layer.kubernetes_common import get_sandbox_image_uri
 from charms.layer.kubernetes_common import kubelet_kubeconfig_path
+from charms.layer.kubernetes_common import add_systemd_restart_always
 
 from charms.layer.kubernetes_node_base import LabelMaker
 
@@ -1058,33 +1059,6 @@ def add_systemd_file_limit():
             f.write("LimitNOFILE=65535")
 
 
-def add_systemd_restart_always():
-    template = "templates/service-always-restart.systemd-latest.conf"
-
-    try:
-        # Get the systemd version
-        cmd = ["systemd", "--version"]
-        output = check_output(cmd).decode("UTF-8")
-        line = output.splitlines()[0]
-        words = line.split()
-        assert words[0] == "systemd"
-        systemd_version = int(words[1])
-
-        # Check for old version (for xenial support)
-        if systemd_version < 230:
-            template = "templates/service-always-restart.systemd-229.conf"
-    except Exception:
-        traceback.print_exc()
-        hookenv.log(
-            "Failed to detect systemd version, using latest template", level="ERROR"
-        )
-
-    for service in control_plane_services:
-        dest_dir = "/etc/systemd/system/snap.{}.daemon.service.d".format(service)
-        os.makedirs(dest_dir, exist_ok=True)
-        copyfile(template, "{}/always-restart.conf".format(dest_dir))
-
-
 def add_systemd_file_watcher():
     """Setup systemd file-watcher service.
 
@@ -1302,7 +1276,7 @@ def start_control_plane():
     handle_etcd_relation(etcd)
 
     # Set up additional systemd services
-    add_systemd_restart_always()
+    add_systemd_restart_always(control_plane_services)
     add_systemd_file_limit()
     add_systemd_file_watcher()
     add_systemd_iptables_patch()
@@ -1716,8 +1690,9 @@ def configure_cdk_addons():
     remove_state("kubernetes-control-plane.gcp.changed")
     remove_state("kubernetes-control-plane.openstack.changed")
     load_gpu_plugin = hookenv.config("enable-nvidia-plugin").lower()
+    kube_version = get_version("kube-apiserver")
     gpuEnable = (
-        get_version("kube-apiserver") >= (1, 9)
+        kube_version >= (1, 9)
         and load_gpu_plugin == "auto"
         and is_state("kubernetes-control-plane.gpu.enabled")
     )
@@ -1769,7 +1744,7 @@ def configure_cdk_addons():
         keystoneEnabled = "false"
 
     # cdk-addons storage classes
-    if get_version("kube-apiserver") < (1, 25, 0):
+    if kube_version < (1, 25, 0):
         enable_aws = str(is_flag_set("endpoint.aws.ready")).lower()
         enable_azure = str(is_flag_set("endpoint.azure.ready")).lower()
         enable_gcp = str(is_flag_set("endpoint.gcp.ready")).lower()
@@ -2333,6 +2308,7 @@ def configure_apiserver():
     endpoint_from_flag("cni.available").set_service_cidr(service_cidr)
 
     api_opts = {}
+    kube_version = get_version("kube-apiserver")
 
     if is_privileged():
         api_opts["allow-privileged"] = "true"
@@ -2352,7 +2328,7 @@ def configure_apiserver():
     api_opts["kubelet-certificate-authority"] = str(ca_crt_path)
     api_opts["kubelet-client-certificate"] = str(client_crt_path)
     api_opts["kubelet-client-key"] = str(client_key_path)
-    if get_version("kube-apiserver") < (1, 26, 0):
+    if kube_version < (1, 26, 0):
         api_opts["logtostderr"] = "true"
     api_opts["storage-backend"] = getStorageBackend()
     api_opts["profiling"] = "false"
@@ -2393,7 +2369,7 @@ def configure_apiserver():
     # in addition to the defaults.
 
     # PodSecurityPolicy was removed in 1.25
-    if get_version("kube-apiserver") >= (1, 25):
+    if kube_version >= (1, 25):
         admission_plugins = [
             "PersistentVolumeLabel",
             "NodeRestriction",
@@ -2446,8 +2422,6 @@ def configure_apiserver():
     api_opts["authorization-mode"] = auth_mode
     api_opts["enable-admission-plugins"] = ",".join(admission_plugins)
 
-    kube_version = get_version("kube-apiserver")
-
     if kube_version > (1, 6) and hookenv.config("api-aggregation-extension"):
         api_opts["requestheader-client-ca-file"] = str(ca_crt_path)
         api_opts["requestheader-allowed-names"] = "system:kube-apiserver,client"
@@ -2464,24 +2438,25 @@ def configure_apiserver():
         api_opts["cloud-provider"] = "external"
     elif is_state("endpoint.aws.ready"):
         api_opts["cloud-provider"] = "aws"
-        if get_version("kube-apiserver") < (1, 25, 0):
+        if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationAWS=false")
     elif is_state("endpoint.gcp.ready"):
         api_opts["cloud-provider"] = "gce"
         api_opts["cloud-config"] = str(api_cloud_config_path)
-        if get_version("kube-apiserver") < (1, 25, 0):
+        if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationGCE=false")
-    elif is_state("endpoint.vsphere.ready") and get_version("kube-apiserver") >= (
+    elif is_state("endpoint.vsphere.ready") and kube_version >= (
         1,
         12,
     ):
         api_opts["cloud-provider"] = "vsphere"
         api_opts["cloud-config"] = str(api_cloud_config_path)
-        feature_gates.append("CSIMigrationvSphere=false")
+        if kube_version < (1, 26, 0):
+            feature_gates.append("CSIMigrationvSphere=false")
     elif is_state("endpoint.azure.ready"):
         api_opts["cloud-provider"] = "azure"
         api_opts["cloud-config"] = str(api_cloud_config_path)
-        if get_version("kube-apiserver") < (1, 25, 0):
+        if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationAzureDisk=false")
 
     api_opts["feature-gates"] = ",".join(feature_gates)
@@ -2617,12 +2592,13 @@ def configure_controller_manager():
     controller_opts = {}
     cluster_cidr = kubernetes_common.cluster_cidr()
     service_cidr = kubernetes_control_plane.service_cidr()
+    kube_version = get_version("kube-controller-manager")
 
     # Default to 3 minute resync. TODO: Make this configurable?
     controller_opts["min-resync-period"] = "3m"
     controller_opts["v"] = "2"
     controller_opts["root-ca-file"] = str(ca_crt_path)
-    if get_version("kube-controller-manager") < (1, 26, 0):
+    if kube_version < (1, 26, 0):
         controller_opts["logtostderr"] = "true"
     controller_opts["kubeconfig"] = kubecontrollermanagerconfig_path
     controller_opts["authorization-kubeconfig"] = kubecontrollermanagerconfig_path
@@ -2646,24 +2622,25 @@ def configure_controller_manager():
         controller_opts["cloud-provider"] = "external"
     elif is_state("endpoint.aws.ready"):
         controller_opts["cloud-provider"] = "aws"
-        if get_version("kube-apiserver") < (1, 25, 0):
+        if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationAWS=false")
     elif is_state("endpoint.gcp.ready"):
         controller_opts["cloud-provider"] = "gce"
         controller_opts["cloud-config"] = str(cm_cloud_config_path)
-        if get_version("kube-apiserver") < (1, 25, 0):
+        if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationGCE=false")
-    elif is_state("endpoint.vsphere.ready") and get_version("kube-apiserver") >= (
+    elif is_state("endpoint.vsphere.ready") and kube_version >= (
         1,
         12,
     ):
         controller_opts["cloud-provider"] = "vsphere"
         controller_opts["cloud-config"] = str(cm_cloud_config_path)
-        feature_gates.append("CSIMigrationvSphere=false")
+        if kube_version < (1, 26, 0):
+            feature_gates.append("CSIMigrationvSphere=false")
     elif is_state("endpoint.azure.ready"):
         controller_opts["cloud-provider"] = "azure"
         controller_opts["cloud-config"] = str(cm_cloud_config_path)
-        if get_version("kube-apiserver") < (1, 25, 0):
+        if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationAzureDisk=false")
 
     controller_opts["feature-gates"] = ",".join(feature_gates)
@@ -2679,11 +2656,11 @@ def configure_controller_manager():
 
 def configure_scheduler():
     kube_scheduler_config_path = "/root/cdk/kube-scheduler-config.yaml"
-
+    kube_version = get_version("kube-scheduler")
     scheduler_opts = {}
 
     scheduler_opts["v"] = "2"
-    if get_version("kube-scheduler") < (1, 26, 0):
+    if kube_version < (1, 26, 0):
         scheduler_opts["logtostderr"] = "true"
     scheduler_opts["profiling"] = "false"
     scheduler_opts["config"] = kube_scheduler_config_path
@@ -2691,28 +2668,25 @@ def configure_scheduler():
     feature_gates = []
 
     if is_state("endpoint.aws.ready"):
-        if get_version("kube-apiserver") < (1, 25, 0):
+        if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationAWS=false")
     elif is_state("endpoint.gcp.ready"):
-        if get_version("kube-apiserver") < (1, 25, 0):
+        if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationGCE=false")
     elif is_state("endpoint.azure.ready"):
-        if get_version("kube-apiserver") < (1, 25, 0):
+        if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationAzureDisk=false")
-    elif is_state("endpoint.vsphere.ready") and get_version("kube-apiserver") >= (
-        1,
-        12,
-    ):
-        feature_gates.append("CSIMigrationvSphere=false")
+    elif is_state("endpoint.vsphere.ready"):
+        if (1, 12) <= kube_version < (1, 26, 0):
+            feature_gates.append("CSIMigrationvSphere=false")
 
     scheduler_opts["feature-gates"] = ",".join(feature_gates)
 
-    scheduler_ver = get_version("kube-scheduler")
-    if scheduler_ver >= (1, 23):
+    if kube_version >= (1, 23):
         api_ver = "v1beta2"
-    elif scheduler_ver >= (1, 19):
+    elif kube_version >= (1, 19):
         api_ver = "v1beta1"
-    elif scheduler_ver >= (1, 18):
+    elif kube_version >= (1, 18):
         api_ver = "v1alpha2"
     else:
         api_ver = "v1alpha1"

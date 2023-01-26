@@ -8,10 +8,8 @@ import aiohttp
 import json
 import os
 import pytest
-import time
 import yaml
 
-from lightkube.resources.policy_v1beta1 import PodSecurityPolicy
 from lightkube.resources.core_v1 import Node
 
 log = logging.getLogger(__name__)
@@ -167,47 +165,6 @@ async def test_auth_load(ops_test):
 
     log.info("Waiting for slow auth requests to complete")
     assert not any(await asyncio.gather(*tasks))
-
-
-async def test_pod_security_policy(ops_test, kubernetes, snap_channel):
-    """Test the pod-security-policy config option"""
-    track, risk = snap_channel.split("/", 1)
-    if tuple(int(x) for x in track.split(".")) >= (1, 25):
-        pytest.skip("PodSecurityPolicy not supported in 1.25+")
-
-    test_psp = {
-        "apiVersion": "policy/v1beta1",
-        "kind": "PodSecurityPolicy",
-        "metadata": {"name": "privileged"},
-        "spec": {
-            "privileged": False,
-            "fsGroup": {"rule": "RunAsAny"},
-            "runAsUser": {"rule": "RunAsAny"},
-            "seLinux": {"rule": "RunAsAny"},
-            "supplementalGroups": {"rule": "RunAsAny"},
-            "volumes": ["*"],
-        },
-    }
-
-    async def wait_for_psp(privileged):
-        deadline = time.time() + 60 * 10
-        while time.time() < deadline:
-            psp = kubernetes.get(PodSecurityPolicy, name="privileged")
-            if bool(psp.spec.privileged) == privileged:
-                break
-            await asyncio.sleep(10)
-        else:
-            pytest.fail("Timed out waiting for PodSecurityPolicy update")
-
-    app = ops_test.model.applications["kubernetes-control-plane"]
-
-    await app.set_config({"pod-security-policy": yaml.dump(test_psp)})
-    await ops_test.model.wait_for_idle(status="active", timeout=120)
-    await wait_for_psp(privileged=False)
-
-    await app.set_config({"pod-security-policy": ""})
-    await ops_test.model.wait_for_idle(status="active", timeout=120)
-    await wait_for_psp(privileged=True)
 
 
 @pytest.mark.hacluster
