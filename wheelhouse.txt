@@ -4,7 +4,6 @@ loadbalancer-interface
 typing_extensions<4.0
 git+https://github.com/juju/charm-helpers.git#egg=charmhelpers
 
-
 # idna>=3.4 and beyond (needed by aiohttp and hvac)
 # requires flit-core for building its wheel.
 # 
