@@ -35,6 +35,7 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: vsphere
+          juju-channel: 2.9/stable
           credentials-yaml: ${{ secrets.CREDENTIALS_YAML }}
           clouds-yaml: ${{ secrets.CLOUDS_YAML }}
           bootstrap-constraints: "arch=amd64 cores=2 mem=4G"
