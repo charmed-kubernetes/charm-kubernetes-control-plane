@@ -4,8 +4,9 @@ After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=-/usr/bin/juju-exec {{ unit }} /usr/local/sbin/cdk.master.leader.file-watcher.sh
-ExecStart=-/usr/bin/juju-run {{ unit }} /usr/local/sbin/cdk.master.leader.file-watcher.sh
+ExecStart=/bin/bash -c \
+    '/usr/bin/juju-exec {{ unit }} /usr/local/sbin/cdk.master.leader.file-watcher.sh || \
+    /usr/bin/juju-run {{ unit }} /usr/local/sbin/cdk.master.leader.file-watcher.sh'
 
 [Install]
 WantedBy=multi-user.target
