@@ -1,8 +1,7 @@
 #!/bin/bash
 
 # This script is invoked by cdk.master.leader.file-watcher.service
-
-if [ is-leader ]; then
+if [ $("is-leader") = "False" ];
   leader-set \
     "/root/cdk/basic_auth.csv=$(cat /root/cdk/basic_auth.csv)" \
     "/root/cdk/known_tokens.csv=$(cat /root/cdk/known_tokens.csv)" \
