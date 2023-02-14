@@ -20,8 +20,8 @@ jobs:
     needs:
       - lint-unit
 
-  resources-build:
-    name: Build Resources with docker
+  build-dependencies:
+    name: Build Charm and Resources
     runs-on: ubuntu-22.04
     needs:
       - lint-unit
@@ -31,7 +31,7 @@ jobs:
       - name: Install Docker
         run:  sudo snap install docker --channel=stable
       - name: Install Charm
-        run:  sudo snap install charm --channel=3.x/stable
+        run:  sudo snap install charm --channel=3.x/stable --classic
       - name: Build Charm
         run:  charm build . -F
       - name: Build Resources
@@ -52,7 +52,7 @@ jobs:
     runs-on: self-hosted
     timeout-minutes: 360
     needs:
-      - resources-build
+      - build-dependencies
     steps:
       - name: Check out code
         uses: actions/checkout@v3
