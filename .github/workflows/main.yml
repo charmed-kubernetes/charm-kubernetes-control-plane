@@ -53,6 +53,9 @@ jobs:
     timeout-minutes: 360
     needs:
       - build-dependencies
+    strategy:
+      matrix:
+        juju: ['2.9', '3.0']
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -66,10 +69,11 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: vsphere
+          juju-channel: ${{ matrix.juju }}/stable
           credentials-yaml: ${{ secrets.CREDENTIALS_YAML }}
           clouds-yaml: ${{ secrets.CLOUDS_YAML }}
           bootstrap-constraints: "arch=amd64 cores=2 mem=4G"
-          bootstrap-options: "${{ secrets.FOCAL_BOOTSTRAP_OPTIONS }} --model-default datastore=vsanDatastore --model-default primary-network=VLAN_2763"
+          bootstrap-options: "${{ secrets.JAMMY_BOOTSTRAP_OPTIONS }} --model-default datastore=vsanDatastore --model-default primary-network=VLAN_2763"
 
       - name: Download charm artifacts
         uses: actions/download-artifact@v3
