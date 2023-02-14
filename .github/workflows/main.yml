@@ -22,25 +22,32 @@ jobs:
 
   build-dependencies:
     name: Build Charm and Resources
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     needs:
       - lint-unit
     steps:
       - name: Check out code
         uses: actions/checkout@v3
-      - name: Install Docker
-        run:  sudo snap install docker --channel=stable
-      - name: Install Charm
-        run:  sudo snap install charm --channel=3.x/stable --classic
+
+      - name: Install Snaps
+        run: |
+          sudo apt update
+          sudo apt install python3-virtualenv -y
+          sudo snap install docker --channel=stable
+          sudo snap install charm --channel=2.x/stable --classic
+
       - name: Build Charm
         run:  charm build . -F
+
       - name: Build Resources
         run:  sudo ./build-cni-resources.sh
+
       - name: Upload charm artifact
         uses: actions/upload-artifact@v3
         with:
           name: charm
           path: ./*.charm
+
       - name: Upload resource artifact
         uses: actions/upload-artifact@v3
         with:
