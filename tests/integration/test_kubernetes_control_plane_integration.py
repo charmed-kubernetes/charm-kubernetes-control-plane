@@ -36,8 +36,11 @@ async def test_build_and_deploy(
         log.info("Build Charm...")
         charm = await ops_test.build_charm(".")
 
-    build_script = Path.cwd() / "build-cni-resources.sh"
-    resources = await ops_test.build_resources(build_script)
+    resources = list(Path.cwd().glob("cni*.tgz"))
+    if not resources:
+        log.info("Building Resources...")
+        build_script = Path.cwd() / "build-cni-resources.sh"
+        resources = await ops_test.build_resources(build_script, with_sudo=False)
     expected_resources = {"cni-amd64", "cni-arm64", "cni-s390x"}
 
     if resources and all(rsc.stem in expected_resources for rsc in resources):
@@ -111,8 +114,10 @@ async def test_kube_api_endpoint(ops_test):
     _check_status_messages(ops_test)
 
 
-async def juju_run(unit: Unit, cmd):
-    action = await unit.run(cmd)
+async def juju_run(unit: Unit, cmd: str, timeout=60) -> str:
+    """run a command on a juju unit, expecting it to complete successfully in 60s."""
+
+    action = await unit.run(cmd, timeout=timeout)
     result = await action.wait()
     code = str(result.results.get("Code") or result.results.get("return-code"))
     stdout = result.results.get("Stdout") or result.results.get("stdout")
