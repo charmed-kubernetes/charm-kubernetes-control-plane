@@ -1,1 +1,4 @@
 docs/
+
+# wokeignore:rule=master
+templates/cdk.master.leader.file-watcher.*
