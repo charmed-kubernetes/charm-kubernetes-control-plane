@@ -29,9 +29,18 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
       - name: Install Docker
-        run:  sudo snap install docker
+        run:  sudo snap install docker --channel=stable
+      - name: Install Charm
+        run:  sudo snap install charm --channel=3.x/stable
+      - name: Build Charm
+        run:  charm build . -F
       - name: Build Resources
         run:  sudo ./build-cni-resources.sh
+      - name: Upload charm artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: charm
+          path: ./*.charm
       - name: Upload resource artifact
         uses: actions/upload-artifact@v3
         with:
@@ -61,6 +70,11 @@ jobs:
           clouds-yaml: ${{ secrets.CLOUDS_YAML }}
           bootstrap-constraints: "arch=amd64 cores=2 mem=4G"
           bootstrap-options: "${{ secrets.FOCAL_BOOTSTRAP_OPTIONS }} --model-default datastore=vsanDatastore --model-default primary-network=VLAN_2763"
+
+      - name: Download charm artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: charm
 
       - name: Download resource artifacts
         uses: actions/download-artifact@v3
