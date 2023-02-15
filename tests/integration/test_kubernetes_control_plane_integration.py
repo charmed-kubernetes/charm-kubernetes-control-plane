@@ -2,7 +2,9 @@ import asyncio
 import logging
 from juju.unit import Unit
 from pathlib import Path
+from typing import List
 import shlex
+import shutil
 
 import aiohttp
 import json
@@ -26,6 +28,13 @@ def _check_status_messages(ops_test):
             assert unit.workload_status_message == message
 
 
+def copy_files(file_set: List[Path], destination: Path) -> List[Path]:
+    """Copy a set of file from one location to another"""
+    for src in file_set:
+        shutil.copy2(src, destination)
+    return [(destination / _.name) for _ in file_set]
+
+
 @pytest.mark.abort_on_fail
 @pytest.mark.skip_if_deployed
 async def test_build_and_deploy(
@@ -35,12 +44,16 @@ async def test_build_and_deploy(
     if not charm:
         log.info("Build Charm...")
         charm = await ops_test.build_charm(".")
+    else:
+        (charm,) = copy_files([charm], ops_test.tmp_path)
 
     resources = list(Path.cwd().glob("cni*.tgz"))
     if not resources:
         log.info("Building Resources...")
         build_script = Path.cwd() / "build-cni-resources.sh"
         resources = await ops_test.build_resources(build_script, with_sudo=False)
+    else:
+        resources = copy_files(resources, ops_test.tmp_path)
     expected_resources = {"cni-amd64", "cni-arm64", "cni-s390x"}
 
     if resources and all(rsc.stem in expected_resources for rsc in resources):

@@ -93,7 +93,7 @@ jobs:
           name: cni-resources
 
       - name: Run test
-        run: tox -e integration
+        run: tox -e integration -- --basetemp=/home/ubuntu/pytest
 
       - name: Setup Debug Artifact Collection
         if: ${{ failure() }}
