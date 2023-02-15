@@ -162,6 +162,45 @@ def test_update_certificates_with_missing_relations(mock_send_data):
     mock_send_data.assert_not_called()
 
 
+@mock.patch("reactive.kubernetes_control_plane.get_pods")
+def test_get_kube_system_pods_not_running(mock_get_pods):
+    """Test that get_kube_system_pods_not_running only takes into account pods
+    whose phases are not in the allowed list."""
+    pods = json.loads(
+        """{
+  "items": [
+    {
+      "metadata": {
+        "name": "failed-pod"
+      },
+      "status": {
+        "phase": "Failed"
+      }
+    },
+    {
+      "metadata": {
+        "name": "succeeded-pod"
+      },
+      "status": {
+        "phase": "Succeeded"
+      }
+    },
+    {
+      "metadata": {
+        "name": "pending-pod"
+      },
+      "status": {
+        "phase": "Pending"
+      }
+    }
+  ]
+}"""
+    )
+    mock_get_pods.return_value = pods
+    not_ready = kubernetes_control_plane.get_kube_system_pods_not_running()
+    assert "pending-pod" in [pod["metadata"]["name"] for pod in not_ready]
+
+
 def test_status_set_on_missing_ca():
     """Test that set_final_status() will set blocked state if CA is missing"""
     set_flag("certificates.available")
