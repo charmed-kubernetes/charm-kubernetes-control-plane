@@ -2761,12 +2761,16 @@ def get_kube_system_pods_not_running():
         )
     )
 
+    # Pods in phases such as ['Running', 'Succeeded', 'Failed']
+    # should not be considered as pending Pods.
+    valid_phases = ["Running", "Succeeded", "Failed"]
+
     # Pods that are Running or Evicted (which should re-spawn) are
     # considered running
     not_running = [
         pod
         for pod in result["items"]
-        if pod["status"]["phase"] != "Running"
+        if pod["status"]["phase"] not in valid_phases
         and pod["status"].get("reason", "") != "Evicted"
     ]
 
