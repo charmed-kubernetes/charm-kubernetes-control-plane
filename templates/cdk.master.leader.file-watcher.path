@@ -1,6 +1,4 @@
 [Path]
-PathChanged=/root/cdk/basic_auth.csv
-PathChanged=/root/cdk/known_tokens.csv
 PathChanged=/root/cdk/serviceaccount.key
 
 [Install]
