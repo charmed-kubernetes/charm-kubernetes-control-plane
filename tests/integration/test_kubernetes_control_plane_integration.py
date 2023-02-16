@@ -28,11 +28,12 @@ def _check_status_messages(ops_test):
             assert unit.workload_status_message == message
 
 
-def copy_files(file_set: List[Path], destination: Path) -> List[Path]:
+def copy_files(file_set: List[Path], dst_dir: Path) -> List[Path]:
     """Copy a set of file from one location to another"""
+    dst_dir.mkdir(exist_ok=True)
     for src in file_set:
-        shutil.copy2(src, destination)
-    return [(destination / _.name) for _ in file_set]
+        shutil.copy2(src, dst_dir)
+    return [(dst_dir / _.name) for _ in file_set]
 
 
 @pytest.mark.abort_on_fail
@@ -45,7 +46,7 @@ async def test_build_and_deploy(
         log.info("Build Charm...")
         charm = await ops_test.build_charm(".")
     else:
-        (charm,) = copy_files([charm], ops_test.tmp_path)
+        (charm,) = copy_files([charm], ops_test.tmp_path / "charm")
 
     resources = list(Path.cwd().glob("cni*.tgz"))
     if not resources:
@@ -53,7 +54,7 @@ async def test_build_and_deploy(
         build_script = Path.cwd() / "build-cni-resources.sh"
         resources = await ops_test.build_resources(build_script, with_sudo=False)
     else:
-        resources = copy_files(resources, ops_test.tmp_path)
+        resources = copy_files(resources, ops_test.tmp_path / "resources")
     expected_resources = {"cni-amd64", "cni-arm64", "cni-s390x"}
 
     if resources and all(rsc.stem in expected_resources for rsc in resources):
