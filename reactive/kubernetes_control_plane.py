@@ -1077,7 +1077,7 @@ def add_systemd_file_watcher():
         "cdk.master.leader.file-watcher.sh",
         "/usr/local/sbin/cdk.master.leader.file-watcher.sh",
         {},
-        perms=0o777,
+        perms=0o755,
     )
     render(
         "cdk.master.leader.file-watcher.service",
