@@ -20,37 +20,92 @@ jobs:
     needs:
       - lint-unit
 
+  build-dependencies:
+    name: Build Charm and Resources
+    runs-on: ubuntu-20.04
+    needs:
+      - lint-unit
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Install Snaps
+        run: |
+          sudo apt update
+          sudo apt install python3-virtualenv -y
+          sudo snap install docker --channel=stable
+          sudo snap install charm --channel=2.x/stable --classic
+
+      - name: Build Charm
+        run:  charm build . -F
+
+      - name: Build Resources
+        run:  sudo ./build-cni-resources.sh
+
+      - name: Upload charm artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: charm
+          path: ./*.charm
+
+      - name: Upload resource artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: cni-resources
+          path: ./cni*.tgz
+
   integration-test:
     name: Integration test with VMWare
     runs-on: self-hosted
     timeout-minutes: 360
+    needs:
+      - build-dependencies
+    strategy:
+      matrix:
+        juju: ['2.9', '3.0']
     steps:
       - name: Check out code
         uses: actions/checkout@v3
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: 3.8
+
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: vsphere
-          juju-channel: 2.9/stable
+          juju-channel: ${{ matrix.juju }}/stable
           credentials-yaml: ${{ secrets.CREDENTIALS_YAML }}
           clouds-yaml: ${{ secrets.CLOUDS_YAML }}
           bootstrap-constraints: "arch=amd64 cores=2 mem=4G"
-          bootstrap-options: "${{ secrets.FOCAL_BOOTSTRAP_OPTIONS }} --model-default datastore=vsanDatastore --model-default primary-network=VLAN_2763"
+          bootstrap-options: "${{ secrets.JAMMY_BOOTSTRAP_OPTIONS }} --model-default datastore=vsanDatastore --model-default primary-network=VLAN_2763"
+
+      - name: Download charm artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: charm
+
+      - name: Download resource artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: cni-resources
+
       - name: Run test
-        run: tox -e integration
+        run: tox -e integration -- --basetemp=/home/ubuntu/pytest
+
       - name: Setup Debug Artifact Collection
         if: ${{ failure() }}
         run: mkdir tmp
+
       - name: Collect Juju Status
         if: ${{ failure() }}
         run: |
           juju status 2>&1 | tee tmp/juju-status.txt
           juju-crashdump -s -m controller -a debug-layer -a config -o tmp/
           mv juju-crashdump-* tmp/ | true
+
       - name: Upload debug artifacts
         if: ${{ failure() }}
         uses: actions/upload-artifact@v3

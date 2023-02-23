@@ -96,20 +96,24 @@ def keystone(request):
 @pytest.fixture(scope="module")
 @pytest.mark.asyncio
 async def kubernetes(ops_test):
-    kubeconfig_path = ops_test.tmp_path / "kubeconfig"
-    retcode, stdout, stderr = await ops_test.run(
-        "juju",
-        "scp",
-        "-m",
-        ops_test.model_full_name,
-        "kubernetes-control-plane/leader:config",
-        kubeconfig_path,
+    k_c_p = ops_test.model.applications["kubernetes-control-plane"]
+    (leader,) = [u for u in k_c_p.units if (await u.is_leader_from_status())]
+    action = await leader.run_action("get-kubeconfig")
+    action = await action.wait()
+    success = (
+        action.status == "completed"
+        and action.results["return-code"] == 0
+        and "kubeconfig" in action.results
     )
-    if retcode != 0:
-        log.error(f"retcode: {retcode}")
-        log.error(f"stdout:\n{stdout.strip()}")
-        log.error(f"stderr:\n{stderr.strip()}")
+
+    if not success:
+        log.error(f"status: {action.status}")
+        log.error(f"results:\n{yaml.safe_dump(action.results, indent=2)}")
         pytest.fail("Failed to copy kubeconfig from kubernetes-control-plane")
+
+    kubeconfig_path = ops_test.tmp_path / "kubeconfig"
+    with kubeconfig_path.open("w") as f:
+        f.write(action.results["kubeconfig"])
 
     namespace = (
         "test-kubernetes-control-plane-integration-"

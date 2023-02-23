@@ -2,7 +2,9 @@ import asyncio
 import logging
 from juju.unit import Unit
 from pathlib import Path
+from typing import List
 import shlex
+import shutil
 
 import aiohttp
 import json
@@ -26,6 +28,14 @@ def _check_status_messages(ops_test):
             assert unit.workload_status_message == message
 
 
+def copy_files(file_set: List[Path], dst_dir: Path) -> List[Path]:
+    """Copy a set of file from one location to another"""
+    dst_dir.mkdir(exist_ok=True)
+    for src in file_set:
+        shutil.copy2(src, dst_dir)
+    return [(dst_dir / _.name) for _ in file_set]
+
+
 @pytest.mark.abort_on_fail
 @pytest.mark.skip_if_deployed
 async def test_build_and_deploy(
@@ -35,9 +45,16 @@ async def test_build_and_deploy(
     if not charm:
         log.info("Build Charm...")
         charm = await ops_test.build_charm(".")
+    else:
+        (charm,) = copy_files([charm], ops_test.tmp_path / "charm")
 
-    build_script = Path.cwd() / "build-cni-resources.sh"
-    resources = await ops_test.build_resources(build_script)
+    resources = list(Path.cwd().glob("cni*.tgz"))
+    if not resources:
+        log.info("Building Resources...")
+        build_script = Path.cwd() / "build-cni-resources.sh"
+        resources = await ops_test.build_resources(build_script, with_sudo=False)
+    else:
+        resources = copy_files(resources, ops_test.tmp_path / "resources")
     expected_resources = {"cni-amd64", "cni-arm64", "cni-s390x"}
 
     if resources and all(rsc.stem in expected_resources for rsc in resources):
@@ -111,8 +128,10 @@ async def test_kube_api_endpoint(ops_test):
     _check_status_messages(ops_test)
 
 
-async def juju_run(unit: Unit, cmd):
-    action = await unit.run(cmd)
+async def juju_run(unit: Unit, cmd: str, timeout=60) -> str:
+    """run a command on a juju unit, expecting it to complete successfully in 60s."""
+
+    action = await unit.run(cmd, timeout=timeout)
     result = await action.wait()
     code = str(result.results.get("Code") or result.results.get("return-code"))
     stdout = result.results.get("Stdout") or result.results.get("stdout")
