@@ -608,7 +608,8 @@ class TestSendClusterDNSDetail:
         db = unitdata.kv()
         db.set(
             # wokeignore:rule=master
-            "kubernetes-master.service-cidr", "10.152.183.0/24"
+            "kubernetes-master.service-cidr",
+            "10.152.183.0/24",
         )  # Force the service cidr provided by the 3rd hookenv.config call to match
         endpoint_from_name.return_value.has_response = True
 
