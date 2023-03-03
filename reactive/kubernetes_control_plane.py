@@ -843,14 +843,6 @@ def set_final_status():
                 hookenv.status_set("waiting", "Waiting for " + lb_endpoint)
                 return
 
-    if not is_state("kube-control.connected"):
-        if "kube-control" in goal_state.get("relations", {}):
-            status = "waiting"
-        else:
-            status = "blocked"
-        hookenv.status_set(status, "Waiting for workers.")
-        return
-
     ks = endpoint_from_flag("keystone-credentials.available")
     if ks and ks.api_version() == "2":
         msg = "Keystone auth v2 detected. v3 is required."
