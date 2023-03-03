@@ -18,3 +18,6 @@ pip==20.0.2  # necessary for bionic
 # layer-basic pins-back pip and setuptools
 # for full compatability with bionic
 psutil==5.9.2
+
+# avoid ops 2.1.0 which had a broken setup that kills pip
+ops!=2.1.0
