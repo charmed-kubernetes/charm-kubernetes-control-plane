@@ -890,7 +890,7 @@ def set_final_status():
         if "cni" in goal_state.get("relations", {}):
             hookenv.status_set("waiting", "Waiting for CNI plugins to become available")
             return
-        elif not cni_config_exists():
+        elif not cni_config_exists() and (not hookenv.config("ignore-missing-cni")):
             hookenv.status_set("blocked", "Missing CNI relation or config")
             return
 
