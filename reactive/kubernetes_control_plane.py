@@ -3205,15 +3205,19 @@ def create_secure_storage():
         # TODO: If Vault isn't available, it's probably still better to encrypt
         # anyway and store the key in plaintext and leadership than to just
         # give up on encryption entirely.
-        _write_encryption_config()
-        # prevent an unnecessary service restart on this
-        # unit since we've already handled the change
-        clear_flag("layer.vault-kv.app-kv.changed.encryption_key")
-        # mark secure storage as ready
-        set_flag("kubernetes-control-plane.secure-storage.created")
-        clear_flag("kubernetes-control-plane.secure-storage.failed")
-        # restart to regen config
-        clear_flag("kubernetes-control-plane.apiserver.configured")
+        if _write_encryption_config():
+            # prevent an unnecessary service restart on this
+            # unit since we've already handled the change
+            clear_flag("layer.vault-kv.app-kv.changed.encryption_key")
+            # mark secure storage as ready
+            set_flag("kubernetes-control-plane.secure-storage.created")
+            clear_flag("kubernetes-control-plane.secure-storage.failed")
+            # restart to regen config
+            clear_flag("kubernetes-control-plane.apiserver.configured")
+        else:
+            # encountered a failure setting up secure-storage
+            set_flag("kubernetes-control-plane.secure-storage.failed")
+            clear_flag("kubernetes-control-plane.secure-storage.created")
 
 
 @when_not("layer.vaultlocker.ready")
@@ -3227,8 +3231,15 @@ def revert_secure_storage():
 @when("leadership.is_leader", "layer.vault-kv.ready")
 @when_not("layer.vault-kv.app-kv.set.encryption_key")
 def generate_encryption_key():
-    app_kv = vault_kv.VaultAppKV()
-    app_kv["encryption_key"] = kubernetes_control_plane.token_generator(32)
+    try:
+        app_kv = vault_kv.VaultAppKV()
+        app_kv["encryption_key"] = kubernetes_control_plane.token_generator(32)
+    except vault_kv.VaultNotReady:
+        # will be retried because the flag layer.vault-kv.app-kv.set.encryption_key remains unset
+        hookenv.log(
+            "Failed to store application encryption_key.\n" + traceback.format_exc(),
+            level=hookenv.ERROR,
+        )
 
 
 @when(
@@ -3241,10 +3252,17 @@ def restart_apiserver_for_encryption_key():
 
 
 def _write_encryption_config():
-    app_kv = vault_kv.VaultAppKV()
-    encryption_config_path().parent.mkdir(parents=True, exist_ok=True)
-    secret = app_kv["encryption_key"]
+    try:
+        app_kv = vault_kv.VaultAppKV()
+        secret = app_kv["encryption_key"]
+    except vault_kv.VaultNotReady:
+        hookenv.log(
+            "Failed to retrieve application encryption_key.\n" + traceback.format_exc(),
+            level=hookenv.ERROR,
+        )
+        return False
     secret = base64.b64encode(secret.encode("utf8")).decode("utf8")
+    encryption_config_path().parent.mkdir(parents=True, exist_ok=True)
     host.write_file(
         path=str(encryption_config_path()),
         perms=0o600,
@@ -3273,6 +3291,7 @@ def _write_encryption_config():
             }
         ),
     )
+    return True
 
 
 @when_any("config.changed.pod-security-policy")
