@@ -5,3 +5,5 @@ placeholders/
 *.charm
 interfaces
 layers
+.coverage
+htmlcov/
