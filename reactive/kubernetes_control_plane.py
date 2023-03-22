@@ -2393,7 +2393,11 @@ def configure_apiserver():
     if has_external_cloud_provider():
         api_opts["cloud-provider"] = "external"
     elif is_state("endpoint.aws.ready"):
-        api_opts["cloud-provider"] = "aws"
+        if kube_version < (1, 27, 0):
+            api_opts["cloud-provider"] = "aws"
+        else:
+            # 1.27.0 drops aws cloud-provider, must use external provider
+            api_opts["cloud-provider"] = "external"
         if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationAWS=false")
     elif is_state("endpoint.gcp.ready"):
@@ -2575,7 +2579,11 @@ def configure_controller_manager():
     if has_external_cloud_provider():
         controller_opts["cloud-provider"] = "external"
     elif is_state("endpoint.aws.ready"):
-        controller_opts["cloud-provider"] = "aws"
+        if kube_version < (1, 27, 0):
+            controller_opts["cloud-provider"] = "aws"
+        else:
+            # 1.27.0 drops aws cloud-provider, must use external provider
+            controller_opts["cloud-provider"] = "external"
         if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationAWS=false")
     elif is_state("endpoint.gcp.ready"):
