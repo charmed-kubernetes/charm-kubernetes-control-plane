@@ -2396,8 +2396,11 @@ def configure_apiserver():
         if kube_version < (1, 27, 0):
             api_opts["cloud-provider"] = "aws"
         else:
-            # 1.27.0 drops aws cloud-provider, must use external provider
-            api_opts["cloud-provider"] = "external"
+            hookenv.log(
+                "AWS cloud-provider is no longer available in-tree. "
+                "the out-of-tree provider is necessary",
+                level="WARNING",
+            )
         if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationAWS=false")
     elif is_state("endpoint.gcp.ready"):
@@ -2405,12 +2408,10 @@ def configure_apiserver():
         api_opts["cloud-config"] = str(api_cloud_config_path)
         if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationGCE=false")
-    elif is_state("endpoint.vsphere.ready") and kube_version >= (
-        1,
-        12,
-    ):
-        api_opts["cloud-provider"] = "vsphere"
-        api_opts["cloud-config"] = str(api_cloud_config_path)
+    elif is_state("endpoint.vsphere.ready"):
+        if (1, 12) <= kube_version:
+            api_opts["cloud-provider"] = "vsphere"
+            api_opts["cloud-config"] = str(api_cloud_config_path)
         if kube_version < (1, 26, 0):
             feature_gates.append("CSIMigrationvSphere=false")
     elif is_state("endpoint.azure.ready"):
@@ -2582,8 +2583,11 @@ def configure_controller_manager():
         if kube_version < (1, 27, 0):
             controller_opts["cloud-provider"] = "aws"
         else:
-            # 1.27.0 drops aws cloud-provider, must use external provider
-            controller_opts["cloud-provider"] = "external"
+            hookenv.log(
+                "AWS cloud-provider is no longer available in-tree. "
+                "the out-of-tree provider is necessary",
+                level="WARNING",
+            )
         if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationAWS=false")
     elif is_state("endpoint.gcp.ready"):
@@ -2591,12 +2595,10 @@ def configure_controller_manager():
         controller_opts["cloud-config"] = str(cm_cloud_config_path)
         if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationGCE=false")
-    elif is_state("endpoint.vsphere.ready") and kube_version >= (
-        1,
-        12,
-    ):
-        controller_opts["cloud-provider"] = "vsphere"
-        controller_opts["cloud-config"] = str(cm_cloud_config_path)
+    elif is_state("endpoint.vsphere.ready"):
+        if (1, 12) <= kube_version:
+            controller_opts["cloud-provider"] = "vsphere"
+            controller_opts["cloud-config"] = str(cm_cloud_config_path)
         if kube_version < (1, 26, 0):
             feature_gates.append("CSIMigrationvSphere=false")
     elif is_state("endpoint.azure.ready"):
