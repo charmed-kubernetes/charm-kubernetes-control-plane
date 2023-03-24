@@ -22,6 +22,7 @@ import socket
 import traceback
 import yaml
 
+from ipaddress import ip_network
 from itertools import filterfalse
 from shutil import move, copyfile
 from pathlib import Path
@@ -378,6 +379,7 @@ def check_for_upgrade_needed():
     remove_state("kubernetes-control-plane.default-cni.configured")
     remove_state("kubernetes-control-plane.sent-registry")
     remove_state("kubernetes-control-plane.ceph.permissions.requested")
+    remove_state("kubernetes-control-plane.shared-cluster-cidr")
 
     # Remove services from hacluster and leave to systemd while
     # hacluster is not ready to accept order and colocation constraints
@@ -3739,6 +3741,22 @@ def configure_default_cni():
     default_cni = hookenv.config("default-cni")
     kubernetes_common.configure_default_cni(default_cni)
     set_flag("kubernetes-control-plane.default-cni.configured")
+
+
+@when_any("cni.available", "kube-control.connected")
+@when_not("kubernetes-control-plane.shared-cluster-cidr")
+def share_cluster_cidr():
+    if not (cni_cluster_cidr := kubernetes_common.cluster_cidr()):
+        hookenv.log("cluster-cidr is not yet available", level="WARNING")
+        return
+    try:
+        cluster_cidr = ip_network(cni_cluster_cidr)
+    except ValueError as e:
+        hookenv.log(f"cluster-cidr ({cni_cluster_cidr}) is invalid: {e}", level="ERROR")
+    else:
+        kube_control = endpoint_from_flag("kube-control.connected")
+        kube_control.share_cluster_cidr(cluster_cidr)
+        set_flag("kubernetes-control-plane.shared-cluster-cidr")
 
 
 @when("ceph-client.available")
