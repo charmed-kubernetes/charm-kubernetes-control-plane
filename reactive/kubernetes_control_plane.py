@@ -2970,6 +2970,11 @@ def request_integration():
         )
         cloud.enable_object_storage_management(["kubernetes-*"])
         cloud.enable_load_balancer_management()
+
+        # Necessary for cloud-provider-aws
+        cloud.enable_autoscaling_readonly()
+        cloud.enable_instance_modification()
+        cloud.enable_region_readonly()
     elif is_state("endpoint.gcp.joined"):
         cloud = endpoint_from_flag("endpoint.gcp.joined")
         cloud.label_instance(
