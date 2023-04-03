@@ -2393,7 +2393,14 @@ def configure_apiserver():
     if has_external_cloud_provider():
         api_opts["cloud-provider"] = "external"
     elif is_state("endpoint.aws.ready"):
-        api_opts["cloud-provider"] = "aws"
+        if kube_version < (1, 27, 0):
+            api_opts["cloud-provider"] = "aws"
+        else:
+            hookenv.log(
+                "AWS cloud-provider is no longer available in-tree. "
+                "the out-of-tree provider is necessary",
+                level="WARNING",
+            )
         if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationAWS=false")
     elif is_state("endpoint.gcp.ready"):
@@ -2401,12 +2408,10 @@ def configure_apiserver():
         api_opts["cloud-config"] = str(api_cloud_config_path)
         if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationGCE=false")
-    elif is_state("endpoint.vsphere.ready") and kube_version >= (
-        1,
-        12,
-    ):
-        api_opts["cloud-provider"] = "vsphere"
-        api_opts["cloud-config"] = str(api_cloud_config_path)
+    elif is_state("endpoint.vsphere.ready"):
+        if (1, 12) <= kube_version:
+            api_opts["cloud-provider"] = "vsphere"
+            api_opts["cloud-config"] = str(api_cloud_config_path)
         if kube_version < (1, 26, 0):
             feature_gates.append("CSIMigrationvSphere=false")
     elif is_state("endpoint.azure.ready"):
@@ -2575,7 +2580,14 @@ def configure_controller_manager():
     if has_external_cloud_provider():
         controller_opts["cloud-provider"] = "external"
     elif is_state("endpoint.aws.ready"):
-        controller_opts["cloud-provider"] = "aws"
+        if kube_version < (1, 27, 0):
+            controller_opts["cloud-provider"] = "aws"
+        else:
+            hookenv.log(
+                "AWS cloud-provider is no longer available in-tree. "
+                "the out-of-tree provider is necessary",
+                level="WARNING",
+            )
         if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationAWS=false")
     elif is_state("endpoint.gcp.ready"):
@@ -2583,12 +2595,10 @@ def configure_controller_manager():
         controller_opts["cloud-config"] = str(cm_cloud_config_path)
         if kube_version < (1, 25, 0):
             feature_gates.append("CSIMigrationGCE=false")
-    elif is_state("endpoint.vsphere.ready") and kube_version >= (
-        1,
-        12,
-    ):
-        controller_opts["cloud-provider"] = "vsphere"
-        controller_opts["cloud-config"] = str(cm_cloud_config_path)
+    elif is_state("endpoint.vsphere.ready"):
+        if (1, 12) <= kube_version:
+            controller_opts["cloud-provider"] = "vsphere"
+            controller_opts["cloud-config"] = str(cm_cloud_config_path)
         if kube_version < (1, 26, 0):
             feature_gates.append("CSIMigrationvSphere=false")
     elif is_state("endpoint.azure.ready"):
@@ -2958,6 +2968,11 @@ def request_integration():
         )
         cloud.enable_object_storage_management(["kubernetes-*"])
         cloud.enable_load_balancer_management()
+
+        # Necessary for cloud-provider-aws
+        cloud.enable_autoscaling_readonly()
+        cloud.enable_instance_modification()
+        cloud.enable_region_readonly()
     elif is_state("endpoint.gcp.joined"):
         cloud = endpoint_from_flag("endpoint.gcp.joined")
         cloud.label_instance(
