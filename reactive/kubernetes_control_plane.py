@@ -243,11 +243,6 @@ register_trigger(
     when="cni.available", clear_flag="kubernetes-control-plane.components.started"
 )
 
-register_trigger(
-    when="endpoint.external-cloud-provider.joined",
-    clear_flag="kubernetes-control-plane.kubelet.configured",
-)
-
 
 def set_upgrade_needed(forced=False):
     set_state("kubernetes-control-plane.upgrade-needed")
