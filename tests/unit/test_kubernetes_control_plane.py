@@ -1,4 +1,5 @@
 import contextlib
+import copy
 import json
 from ipaddress import ip_interface
 from unittest import mock
@@ -167,7 +168,6 @@ def test_get_kube_system_pods_not_running(mock_get_pods):
     """Test that get_kube_system_pods_not_running only takes into account pods
     whose phases are not in the allowed list and whose names do not start with names in the
     ignore-kube-system-pods config option."""
-    hookenv.config.return_value = "ignored-pending-pod"
     pods = json.loads(
         """{
   "items": [
@@ -210,17 +210,39 @@ def test_get_kube_system_pods_not_running(mock_get_pods):
       "status": {
         "phase": "Pending"
       }
+    },
+    {
+      "metadata": {
+        "name": "other-ignored-pod"
+      },
+      "status": {
+        "phase": "Pending"
+      }
     }
   ]
 }"""
     )
-    mock_get_pods.return_value = pods
+
+    # test case when ignore option is not empty
+    # copy pods so that we don't mutate the original
+    mock_get_pods.return_value = copy.deepcopy(pods)
+    hookenv.config.return_value = "ignored-pending-pod other-ignored-pod"
     not_ready = kubernetes_control_plane.get_kube_system_pods_not_running()
     assert "pending-pod" in [pod["metadata"]["name"] for pod in not_ready]
     assert "ignored-pending-pod" not in [pod["metadata"]["name"] for pod in not_ready]
-    assert "other-pending-pod-fb5vt" not in [
+    assert "ignored-pending-pod-fb5vt" not in [
         pod["metadata"]["name"] for pod in not_ready
     ]
+    assert "other-ignored-pod" not in [pod["metadata"]["name"] for pod in not_ready]
+
+    # test case when ignore option is empty
+    mock_get_pods.return_value = copy.deepcopy(pods)
+    hookenv.config.return_value = ""
+    not_ready = kubernetes_control_plane.get_kube_system_pods_not_running()
+    assert "pending-pod" in [pod["metadata"]["name"] for pod in not_ready]
+    assert "ignored-pending-pod" in [pod["metadata"]["name"] for pod in not_ready]
+    assert "ignored-pending-pod-fb5vt" in [pod["metadata"]["name"] for pod in not_ready]
+    assert "other-ignored-pod" in [pod["metadata"]["name"] for pod in not_ready]
 
 
 def test_status_set_on_missing_ca():

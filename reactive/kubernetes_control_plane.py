@@ -2775,7 +2775,7 @@ def get_kube_system_pods_not_running():
 
     # Remove pods whose names start with ones provided in the ignore list
     pod_names_space_separated = hookenv.config("ignore-kube-system-pods")
-    ignore_list = pod_names_space_separated.split(" ")
+    ignore_list = pod_names_space_separated.strip().split()
     result["items"] = [
         pod
         for pod in result["items"]
