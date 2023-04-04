@@ -363,3 +363,10 @@ options:
   labels:
     # Override default from layer-kubernetes-node-base config.yaml
     default: "node-role.kubernetes.io/control-plane="
+  ignore-kube-system-pods:
+    type: string
+    default: ""
+    description: |
+      Space separated list of pod names in the kube-system namespace to ignore
+      when checking for running pods. Any non-Running Pod whose name is on
+      this list, will be ignored during the check.
