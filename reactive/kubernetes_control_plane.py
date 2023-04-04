@@ -3676,6 +3676,8 @@ def configure_kubelet():
         )
         return
     has_xcp = has_external_cloud_provider()
+    # keep track of xcp; we'll need to reconfigure kubelet if it changes later
+    data_changed("kubelet-has-xcp", has_xcp)
 
     local_endpoint = kubernetes_control_plane.get_local_api_endpoint()
     local_url = kubernetes_control_plane.get_api_url(local_endpoint)
@@ -3725,6 +3727,14 @@ def reconfigure_kubelet():
         hookenv.log("Removing file: " + cpu_manager_state)
         os.remove(cpu_manager_state)
     clear_flag("kubernetes-control-plane.kubelet.configured")
+
+
+@when("kubernetes-control-plane.kubelet.configured")
+def watch_xcp_for_changes():
+    has_xcp = has_external_cloud_provider()
+    if data_changed("kubelet-has-xcp", has_xcp)
+        hookenv.log("External cloud provider info has changed, will reconfigure Kubelet")
+        clear_flag("kubernetes-control-plane.kubelet.configured")
 
 
 @when("kubernetes-control-plane.kubelet.configured")
