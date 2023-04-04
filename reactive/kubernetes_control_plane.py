@@ -1526,8 +1526,11 @@ def send_api_urls():
     kube_control.set_api_endpoints(kubernetes_control_plane.get_api_urls(endpoints))
 
 
-def has_external_cloud_provider():
-    return bool(hookenv.relations().get("external-cloud-provider"))
+def has_external_cloud_provider() -> bool:
+    has_xcp = bool(hookenv.relations().get("external-cloud-provider"))
+    if data_changed("has-xcp", has_xcp):
+        set_flag("external-cloud-provider.changed")
+    return has_xcp
 
 
 @when("kube-control.connected")
@@ -3676,9 +3679,6 @@ def configure_kubelet():
         )
         return
     has_xcp = has_external_cloud_provider()
-    # keep track of xcp; we'll need to reconfigure kubelet if it changes later
-    data_changed("kubelet-has-xcp", has_xcp)
-
     local_endpoint = kubernetes_control_plane.get_local_api_endpoint()
     local_url = kubernetes_control_plane.get_api_url(local_endpoint)
     create_kubeconfig(
@@ -3729,14 +3729,14 @@ def reconfigure_kubelet():
     clear_flag("kubernetes-control-plane.kubelet.configured")
 
 
-@when("kubernetes-control-plane.kubelet.configured")
-def watch_xcp_for_changes():
-    has_xcp = has_external_cloud_provider()
-    if data_changed("kubelet-has-xcp", has_xcp):
-        hookenv.log(
-            "External cloud provider info has changed, will reconfigure Kubelet"
-        )
-        clear_flag("kubernetes-control-plane.kubelet.configured")
+@when("external-cloud-provider.changed")
+def handle_xcp_changes():
+    """If xcp changes, reconfigure all necessary services."""
+    hookenv.log("External cloud provider info has changed, reconfiguring...")
+    clear_flag("kubernetes-control-plane.kubelet.configured")
+    clear_flag("kubernetes-control-plane.apiserver.configured")
+    _kick_controller_manager()
+    clear_flag("external-cloud-provider.changed")
 
 
 @when("kubernetes-control-plane.kubelet.configured")
