@@ -3733,7 +3733,9 @@ def reconfigure_kubelet():
 def watch_xcp_for_changes():
     has_xcp = has_external_cloud_provider()
     if data_changed("kubelet-has-xcp", has_xcp):
-        hookenv.log("External cloud provider info has changed, will reconfigure Kubelet")
+        hookenv.log(
+            "External cloud provider info has changed, will reconfigure Kubelet"
+        )
         clear_flag("kubernetes-control-plane.kubelet.configured")
 
 
