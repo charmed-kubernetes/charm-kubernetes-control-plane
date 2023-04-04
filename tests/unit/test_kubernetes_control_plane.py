@@ -525,6 +525,30 @@ def test_psp_config_1_25():
     hookenv.log.assert_called_with("Creating pod security policy resources.")
 
 
+def test_has_external_cloud_provider():
+    clear_flag("external-cloud-provider.changed")
+
+    # Test no external cloud provider
+    hookenv.relations.return_value = {"external-cloud-provider": None}
+    assert not kubernetes_control_plane.has_external_cloud_provider()
+
+    # Test best external cloud provider
+    hookenv.relations.return_value = {"external-cloud-provider": 42}
+    assert kubernetes_control_plane.has_external_cloud_provider()
+    assert is_flag_set("external-cloud-provider.changed")
+
+
+def test_handle_xcp_changes():
+    # An external-cloud-provider change should set the stage for service re-config
+    set_flag("external-cloud-provider.changed")
+    set_flag("kubernetes-control-plane.apiserver.configured")
+    set_flag("kubernetes-control-plane.kubelet.configured")
+    kubernetes_control_plane.handle_xcp_changes()
+    assert not is_flag_set("kubernetes-control-plane.kubelet.configured")
+    assert not is_flag_set("kubernetes-control-plane.apiserver.configured")
+    assert not is_flag_set("external-cloud-provider.changed")
+
+
 class TestSendClusterDNSDetail:
     @pytest.fixture(autouse=True)
     def setup(self, monkeypatch):
