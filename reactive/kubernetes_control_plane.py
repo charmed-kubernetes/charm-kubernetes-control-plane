@@ -1639,14 +1639,15 @@ def reconfigure_cdk_addons():
 def apply_default_storage(storage_class, def_storage_class):
     name = storage_class["metadata"]["name"]
     is_default = name == def_storage_class
-    new_annotations = storage_class["metadata"]["annotations"].copy()
+    cur_annotations = storage_class["metadata"].get("annotations") or {}
+    new_annotations = cur_annotations.copy()
     storage_class_annotation = "storageclass.kubernetes.io/is-default-class"
     if is_default:
         new_annotations.update(**{storage_class_annotation: "true"})
     elif not is_default and storage_class_annotation in new_annotations:
         new_annotations.pop(storage_class_annotation)
 
-    if new_annotations != storage_class["metadata"]["annotations"]:
+    if new_annotations != cur_annotations:
         hookenv.log(
             f"{'S' if is_default else 'Uns'}etting default storage-class {name}.",
             hookenv.INFO,
