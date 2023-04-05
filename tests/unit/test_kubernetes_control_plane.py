@@ -1,4 +1,5 @@
 import contextlib
+import copy
 import json
 from ipaddress import ip_interface
 from unittest import mock
@@ -165,7 +166,8 @@ def test_update_certificates_with_missing_relations(mock_send_data):
 @mock.patch("reactive.kubernetes_control_plane.get_pods")
 def test_get_kube_system_pods_not_running(mock_get_pods):
     """Test that get_kube_system_pods_not_running only takes into account pods
-    whose phases are not in the allowed list."""
+    whose phases are not in the allowed list and whose names do not start with names in the
+    ignore-kube-system-pods config option."""
     pods = json.loads(
         """{
   "items": [
@@ -192,13 +194,55 @@ def test_get_kube_system_pods_not_running(mock_get_pods):
       "status": {
         "phase": "Pending"
       }
+    },
+    {
+      "metadata": {
+        "name": "ignored-pending-pod"
+      },
+      "status": {
+        "phase": "Pending"
+      }
+    },
+    {
+      "metadata": {
+        "name": "ignored-pending-pod-fb5vt"
+      },
+      "status": {
+        "phase": "Pending"
+      }
+    },
+    {
+      "metadata": {
+        "name": "other-ignored-pod"
+      },
+      "status": {
+        "phase": "Pending"
+      }
     }
   ]
 }"""
     )
-    mock_get_pods.return_value = pods
+
+    # test case when ignore option is not empty
+    # copy pods so that we don't mutate the original
+    mock_get_pods.return_value = copy.deepcopy(pods)
+    hookenv.config.return_value = "ignored-pending-pod other-ignored-pod"
     not_ready = kubernetes_control_plane.get_kube_system_pods_not_running()
     assert "pending-pod" in [pod["metadata"]["name"] for pod in not_ready]
+    assert "ignored-pending-pod" not in [pod["metadata"]["name"] for pod in not_ready]
+    assert "ignored-pending-pod-fb5vt" not in [
+        pod["metadata"]["name"] for pod in not_ready
+    ]
+    assert "other-ignored-pod" not in [pod["metadata"]["name"] for pod in not_ready]
+
+    # test case when ignore option is empty
+    mock_get_pods.return_value = copy.deepcopy(pods)
+    hookenv.config.return_value = ""
+    not_ready = kubernetes_control_plane.get_kube_system_pods_not_running()
+    assert "pending-pod" in [pod["metadata"]["name"] for pod in not_ready]
+    assert "ignored-pending-pod" in [pod["metadata"]["name"] for pod in not_ready]
+    assert "ignored-pending-pod-fb5vt" in [pod["metadata"]["name"] for pod in not_ready]
+    assert "other-ignored-pod" in [pod["metadata"]["name"] for pod in not_ready]
 
 
 def test_status_set_on_missing_ca():
@@ -549,6 +593,74 @@ def test_handle_xcp_changes():
     assert not is_flag_set("external-cloud-provider.changed")
 
 
+# get_kube_system_pods_not_running and get_dns_provider are mocked since they contain hookenv.config calls
+@mock.patch(
+    "reactive.kubernetes_control_plane.get_kube_system_pods_not_running",
+    return_value=[],
+)
+@mock.patch("reactive.kubernetes_control_plane.get_dns_provider")
+@mock.patch(
+    "reactive.kubernetes_control_plane.hookenv.config",
+    side_effect=[False, True, "10.152.183.0/24", False],
+)
+def test_ignore_missing_cni(mock_config, mock_dns_provider, mock_get_pods):
+    """Test that set_final_status() will block appropriately according to the value of ignore-missing-cni config option"""
+    set_flag("certificates.available")
+    clear_flag("kubernetes-control-plane.secure-storage.failed")
+    set_flag("kube-control.connected")
+    set_flag("etcd.available")
+    set_flag("tls_client.certs.saved")
+    set_flag("kubernetes-control-plane.auth-webhook-service.started")
+    set_flag("kubernetes-control-plane.apiserver.configured")
+    set_flag("kubernetes-control-plane.apiserver.running")
+    set_flag("authentication.setup")
+    set_flag("kubernetes-control-plane.auth-webhook-tokens.setup")
+    set_flag("kubernetes-control-plane.components.started")
+    set_flag("cdk-addons.configured")
+    set_flag("kubernetes.cni-plugins.installed")
+    set_flag("kubernetes-control-plane.system-monitoring-rbac-role.applied")
+    set_flag("kube-api-endpoint.available")
+    db = unitdata.kv()
+    db.set(
+        # wokeignore:rule=master
+        "kubernetes-master.service-cidr",
+        "10.152.183.0/24",
+    )  # Force the service cidr provided by the 3rd hookenv.config call to match
+    endpoint_from_name.return_value.has_response = True
+
+    clear_flag("cni.available")
+
+    # Test case when cni is not available but relation is present
+    hookenv.goal_state.return_value = {
+        "relations": {"loadbalancer-internal": None, "cni": None}
+    }
+    kubernetes_control_plane.set_final_status()
+    hookenv.status_set.assert_called_with(
+        "waiting",
+        "Waiting for CNI plugins to become available",
+    )
+
+    # Test case when cni is not available, relation is not present, cni_config does not exist, and ignore-missing-cni config option is False
+    # This uses the first hookenv.config side effect
+    kubernetes_common.cni_config_exists.return_value = False
+    hookenv.goal_state.return_value = {"relations": {"loadbalancer-internal": None}}
+    kubernetes_control_plane.set_final_status()
+    hookenv.status_set.assert_called_with(
+        "blocked",
+        "Missing CNI relation or config",
+    )
+
+    # Test case when cni is not available, relation is not present, cni_config does not exist, and ignore-missing-cni config option is True
+    # This uses the 2nd hookenv.call side effect, and the 3rd and 4th side effecs allow it to fall through to active status
+    # This should get us to active status since we provide values for the other 2 config checks that happen in the set_final_status method
+    # hookenv.config("service-cidr") followed by hookenv.config("enable-metrics")
+    kubernetes_control_plane.set_final_status()
+    hookenv.status_set.assert_called_with(
+        "active",
+        "Kubernetes control-plane running.",
+    )
+
+
 class TestSendClusterDNSDetail:
     @pytest.fixture(autouse=True)
     def setup(self, monkeypatch):
@@ -607,64 +719,3 @@ class TestSendClusterDNSDetail:
         hookenv.goal_state.return_value = {}
         kubernetes_control_plane.send_cluster_dns_detail(self.kube_control)
         assert self.kube_control.set_dns.call_args == mock.call(None, None, None, False)
-
-    @mock.patch(
-        "reactive.kubernetes_control_plane.hookenv.config",
-        side_effect=[False, True, "10.152.183.0/24", False],
-    )
-    def test_ignore_missing_cni(self, mock_config):
-        """Test that set_final_status() will block appropriately according to the value of ignore-missing-cni config option"""
-        set_flag("certificates.available")
-        clear_flag("kubernetes-control-plane.secure-storage.failed")
-        set_flag("kube-control.connected")
-        set_flag("etcd.available")
-        set_flag("tls_client.certs.saved")
-        set_flag("kubernetes-control-plane.auth-webhook-service.started")
-        set_flag("kubernetes-control-plane.apiserver.configured")
-        set_flag("kubernetes-control-plane.apiserver.running")
-        set_flag("authentication.setup")
-        set_flag("kubernetes-control-plane.auth-webhook-tokens.setup")
-        set_flag("kubernetes-control-plane.components.started")
-        set_flag("cdk-addons.configured")
-        set_flag("kubernetes.cni-plugins.installed")
-        set_flag("kubernetes-control-plane.system-monitoring-rbac-role.applied")
-        set_flag("kube-api-endpoint.available")
-        db = unitdata.kv()
-        db.set(
-            # wokeignore:rule=master
-            "kubernetes-master.service-cidr",
-            "10.152.183.0/24",
-        )  # Force the service cidr provided by the 3rd hookenv.config call to match
-        endpoint_from_name.return_value.has_response = True
-
-        clear_flag("cni.available")
-
-        # Test case when cni is not available but relation is present
-        hookenv.goal_state.return_value = {
-            "relations": {"loadbalancer-internal": None, "cni": None}
-        }
-        kubernetes_control_plane.set_final_status()
-        hookenv.status_set.assert_called_with(
-            "waiting",
-            "Waiting for CNI plugins to become available",
-        )
-
-        # Test case when cni is not available, relation is not present, cni_config does not exist, and ignore-missing-cni config option is False
-        # This uses the first hookenv.config side effect
-        kubernetes_common.cni_config_exists.return_value = False
-        hookenv.goal_state.return_value = {"relations": {"loadbalancer-internal": None}}
-        kubernetes_control_plane.set_final_status()
-        hookenv.status_set.assert_called_with(
-            "blocked",
-            "Missing CNI relation or config",
-        )
-
-        # Test case when cni is not available, relation is not present, cni_config does not exist, and ignore-missing-cni config option is True
-        # This uses the 2nd hookenv.call side effect, and the 3rd and 4th side effecs allow it to fall through to active status
-        # This should get us to active status since we provide values for the other 2 config checks that happen in the set_final_status method
-        # hookenv.config("service-cidr") followed by hookenv.config("enable-metrics")
-        kubernetes_control_plane.set_final_status()
-        hookenv.status_set.assert_called_with(
-            "active",
-            "Kubernetes control-plane running.",
-        )
