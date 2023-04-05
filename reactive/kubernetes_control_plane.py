@@ -1636,6 +1636,46 @@ def reconfigure_cdk_addons():
     configure_cdk_addons()
 
 
+def apply_default_storage(storage_class, def_storage_class):
+    name = storage_class["metadata"]["name"]
+    is_default = name == def_storage_class
+    new_annotations = storage_class["metadata"]["annotations"].copy()
+    storage_class_annotation = "storageclass.kubernetes.io/is-default-class"
+    if is_default:
+        new_annotations.update(**{storage_class_annotation: "true"})
+    elif not is_default and storage_class_annotation in new_annotations:
+        new_annotations.pop(storage_class_annotation)
+
+    if new_annotations != storage_class["metadata"]["annotations"]:
+        hookenv.log(
+            f"{'S' if is_default else 'Uns'}etting default storage-class {name}.",
+            hookenv.INFO,
+        )
+        patch_set = json.dumps(dict(metadata=new_annotations))
+        kubectl("patch", "storageclass", name, "-p", patch_set)
+
+
+def storage_classes():
+    try:
+        storage_classes = json.loads(kubectl("get", "storageclass", "-o=json").decode())
+    except (CalledProcessError, FileNotFoundError):
+        hookenv.log("Failed to get the current storage classes.", hookenv.WARNING)
+        hookenv.log(traceback.format_exc())
+        storage_classes = dict(items=[])
+    for storage_class in storage_classes["items"]:
+        yield storage_class
+
+
+@when("config.changed.default-storage")
+def configure_default_storage_class():
+    def_storage_class = hookenv.config("default-storage")
+    if def_storage_class == "auto":
+        def_storage_class = "ceph-xfs"
+    for storage_class in storage_classes():
+        apply_default_storage(storage_class, def_storage_class)
+    return def_storage_class
+
+
 @when(
     "kubernetes-control-plane.components.started",
     "leadership.is_leader",
@@ -1665,7 +1705,7 @@ def configure_cdk_addons():
         hookenv.log(traceback.format_exc())
         return
     metricsEnabled = str(hookenv.config("enable-metrics")).lower()
-    default_storage = ""
+    default_storage = configure_default_storage_class()
     ceph = {}
     ceph_ep = endpoint_from_flag("ceph-client.available")
     cephfs_mounter = hookenv.config("cephfs-mounter")
@@ -1681,7 +1721,6 @@ def configure_cdk_addons():
             ceph["fsid"] = ceph_fsid
             ceph["kubernetes_key"] = b64_ceph_key.decode("ascii")
             ceph["mon_hosts"] = " ".join(ceph_ep.mon_hosts())
-            default_storage = hookenv.config("default-storage")
 
             if kubernetes_control_plane.query_cephfs_enabled():
                 cephFsEnabled = "true"

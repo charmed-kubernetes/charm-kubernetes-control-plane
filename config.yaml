@@ -180,9 +180,13 @@ options:
   default-storage:
     type: string
     default: "auto"
-    description: |
-      The storage class to make the default storage class. Allowed values are "auto",
-      "none", "ceph-xfs", "ceph-ext4", "cephfs". Note: Only works in Kubernetes >= 1.10
+    description: |-
+      The storage class to make the default storage class.
+
+      Setting to "auto" is the same as setting "ceph-xfs"
+
+      Any value is allowed, if it matches the name of a storage class,
+      it alone will be selected as the default storage class for the cluster.
   cephfs-mounter:
     type: string
     default: "default"
