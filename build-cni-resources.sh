@@ -5,7 +5,7 @@ set -eux
 # When changing CNI_VERSION, it should be updated in both
 # charm-kubernetes-control-plane/build-cni-resources.sh and
 # charm-kubernetes-worker/build-cni-resources.sh
-CNI_VERSION="${CNI_VERSION:-v0.7.5}"
+CNI_VERSION="${CNI_VERSION:-v1.2.0}"
 ARCH="${ARCH:-amd64 arm64 s390x}"
 
 build_script_commit="$(git show --oneline -q)"
