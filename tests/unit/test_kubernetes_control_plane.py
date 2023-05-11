@@ -7,7 +7,7 @@ from unittest import mock
 import pytest
 
 from reactive import kubernetes_control_plane
-from charms.layer import kubernetes_common
+from charms.layer import kubernetes_common, vault_kv
 from charms.layer.kubernetes_common import (
     get_version,
     kubectl,
@@ -719,3 +719,119 @@ class TestSendClusterDNSDetail:
         hookenv.goal_state.return_value = {}
         kubernetes_control_plane.send_cluster_dns_detail(self.kube_control)
         assert self.kube_control.set_dns.call_args == mock.call(None, None, None, False)
+
+
+class TestHealVaultKV:
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        set_flag("kubernetes-control-plane.secure-storage.created")
+        set_flag("leadership.is_leader")
+        vault = endpoint_from_flag.return_value = mock.MagicMock()
+        vault.relations = [mock.MagicMock()]
+        vault.relations[0].to_publish = {"secret_backend": "abcd"}
+
+        vault_kv._get_secret_backend.return_value = "abcd"
+        clear_flag.reset_mock()
+        set_flag.reset_mock()
+        hookenv.log.reset_mock()
+
+    def test_no_secure_storage(self):
+        clear_flag("kubernetes-control-plane.secure-storage.created")
+        kubernetes_control_plane.maybe_heal_vault_kv()
+        hookenv.log.assert_not_called()
+        clear_flag.assert_called_once_with(
+            "kubernetes-control-plane.secure-storage.created"
+        )
+        set_flag.assert_not_called()
+
+    def test_no_migration_non_leader(self):
+        clear_flag("leadership.is_leader")
+        kubernetes_control_plane.maybe_heal_vault_kv()
+        hookenv.log.assert_called_once_with("Vault healing complete for non-leader")
+        clear_flag.assert_called_once_with("leadership.is_leader")
+        set_flag.assert_not_called()
+
+    def test_migration_non_leader(self):
+        vault_kv._get_secret_backend.return_value = "defg"
+        clear_flag("leadership.is_leader")
+        kubernetes_control_plane.maybe_heal_vault_kv()
+        hookenv.log.assert_any_call("Need to migrate to new secrets backend")
+        hookenv.log.assert_any_call("Vault healing complete for non-leader")
+        assert hookenv.log.call_count == 2, "Only 2 log calls expected"
+        clear_flag.assert_any_call("leadership.is_leader")
+        clear_flag.assert_any_call("layer.vault-kv.requested")
+        assert clear_flag.call_count == 2, "Only 2 log calls expected"
+        set_flag.assert_not_called()
+
+    def test_no_migration_leader(self):
+        kubernetes_control_plane.maybe_heal_vault_kv()
+        hookenv.log.assert_not_called()
+        clear_flag.assert_not_called()
+        set_flag.assert_not_called()
+
+    def test_migration_leader(self):
+        vault_kv._get_secret_backend.return_value = "defg"
+        kubernetes_control_plane.maybe_heal_vault_kv()
+        hookenv.log.assert_any_call("Need to migrate to new secrets backend")
+        hookenv.log.assert_any_call("Will perform secret backend migration.")
+        assert hookenv.log.call_count == 2, "Only 2 log calls expected"
+        clear_flag.assert_called_once_with("layer.vault-kv.requested")
+        set_flag.assert_called_once_with(
+            "kubernetes-control-plane.secure-storage.migrate"
+        )
+
+
+class TestMigrateKVSecretsBackend:
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        app_kv = vault_kv.VaultAppKV.return_value
+
+        app_kv.reset_mock()
+        clear_flag.reset_mock()
+        hookenv.log.reset_mock()
+
+        config_file = kubernetes_common.encryption_config_path.return_value
+        config_file.exists.return_value = True
+        config_file.read_text.return_value = ""
+
+    def test_no_encryption_key(self):
+        kubernetes_control_plane.migrate_vault_kv_secrets_backend()
+        hookenv.log.assert_any_call("Migrating to new secrets backend.")
+        hookenv.log.assert_any_call(
+            "Failed to read encryption_key file.", level=hookenv.ERROR
+        )
+        assert hookenv.log.call_count == 2, "Only 2 log calls expected"
+        clear_flag.assert_not_called()
+        app_kv = vault_kv.VaultAppKV.return_value
+        app_kv.__setitem__.assert_not_called()
+
+    def test_invalid_encryption_key(self):
+        config_file = kubernetes_common.encryption_config_path.return_value
+        config_file.read_text.return_value = "key: value"
+        kubernetes_control_plane.migrate_vault_kv_secrets_backend()
+        hookenv.log.assert_any_call("Migrating to new secrets backend.")
+        hookenv.log.mock_calls[1].args[0].startswith(
+            "Failed to read and decode encryption_key secret."
+        )
+        assert hookenv.log.call_count == 2, "Only 2 log calls expected"
+        clear_flag.assert_not_called()
+        app_kv = vault_kv.VaultAppKV.return_value
+        app_kv.__setitem__.assert_not_called()
+
+    def test_apply_encryption_key(self):
+        config_file = kubernetes_common.encryption_config_path.return_value
+        config_file.read_text.return_value = """
+        resources:
+        - providers:
+          - aescbc:
+              keys:
+              - secret: YWJjZA==
+        """
+        kubernetes_control_plane.migrate_vault_kv_secrets_backend()
+        hookenv.log.assert_any_call("Migrating to new secrets backend.")
+        assert hookenv.log.call_count == 1, "Only 1 log calls expected"
+        app_kv = vault_kv.VaultAppKV.return_value
+        app_kv.__setitem__.assert_called_once_with("encryption_key", "abcd")
+        clear_flag.assert_called_once_with(
+            "kubernetes-control-plane.secure-storage.migrate"
+        )
