@@ -21,3 +21,8 @@ psutil==5.9.2
 
 # avoid ops 2.1.0 which had a broken setup that kills pip
 ops!=2.1.0
+
+# attrs>=23.1.0, urllib3<=2.0.0 has a build dependency on hatchling, calver, et al
+# rather than pulling in a list of new deps, pin attrs
+attrs<23.1.0
+urllib3<2.0.0
