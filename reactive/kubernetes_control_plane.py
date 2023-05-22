@@ -28,6 +28,7 @@ from pathlib import Path
 from subprocess import check_call, call
 from subprocess import check_output
 from subprocess import CalledProcessError
+from typing import Mapping, Optional
 from urllib.request import Request, urlopen
 
 import charms.coordinator
@@ -318,6 +319,7 @@ def check_for_upgrade_needed():
     maybe_install_kubelet()
     maybe_install_kube_proxy()
     update_certificates()
+    maybe_heal_vault_kv()
     switch_auth_mode(forced=True)
 
     # File-based auth is gone in 1.19; ensure any entries in basic_auth.csv are
@@ -3258,6 +3260,54 @@ def keystone_config():
         set_state("keystone.credentials.configured")
 
 
+def maybe_heal_vault_kv():
+    if not is_state("kubernetes-control-plane.secure-storage.created"):
+        return
+
+    migrate = False
+    vault = endpoint_from_flag("vault-kv.connected")
+    secret_backend = vault_kv._get_secret_backend()
+    for relation in vault.relations:
+        if relation.to_publish["secret_backend"] != secret_backend:
+            # trigger a new vault_access request in layer-vault-kv
+            # the secrets backend has changed and we need to ensure the
+            # current encryption_secret isn't lost
+            hookenv.log("Need to migrate to new secrets backend")
+            clear_flag("layer.vault-kv.requested")
+            migrate = True
+
+    if not is_state("leadership.is_leader"):
+        hookenv.log("Vault healing complete for non-leader")
+        return
+
+    if migrate:
+        hookenv.log("Will perform secret backend migration.")
+        set_flag("kubernetes-control-plane.secure-storage.migrate")
+
+
+@when(
+    "layer.vault-kv.ready",
+    "kubernetes-control-plane.secure-storage.migrate",
+    "kubernetes-control-plane.secure-storage.created",
+)
+def migrate_vault_kv_secrets_backend():
+    hookenv.log("Migrating to new secrets backend.")
+    local_sec = _read_encryption_secret()
+    if not local_sec:
+        return
+
+    try:
+        app_kv = vault_kv.VaultAppKV()
+        app_kv["encryption_key"] = local_sec
+        clear_flag("kubernetes-control-plane.secure-storage.migrate")
+    except vault_kv.VaultNotReady:
+        # will be retried because the flag kubernetes-control-plane.secure-storage.migrate remains set
+        hookenv.log(
+            "Failed to store application encryption_key.\n" + traceback.format_exc(),
+            level=hookenv.ERROR,
+        )
+
+
 @when("layer.vault-kv.app-kv.set.encryption_key", "layer.vaultlocker.ready")
 @when_not("kubernetes-control-plane.secure-storage.created")
 def create_secure_storage():
@@ -3323,6 +3373,31 @@ def generate_encryption_key():
 def restart_apiserver_for_encryption_key():
     clear_flag("kubernetes-control-plane.apiserver.configured")
     clear_flag("layer.vault-kv.app-kv.changed.encryption_key")
+
+
+def _read_encryption_secret() -> Optional[str]:
+    config = _read_encryption_config()
+    if not config:
+        hookenv.log("Failed to read encryption_key file.", level=hookenv.ERROR)
+        return
+    try:
+        b64_secret = config["resources"][0]["providers"][0]["aescbc"]["keys"][0][
+            "secret"
+        ]
+        return base64.b64decode(b64_secret).decode("utf8")
+    except (KeyError, IndexError, ValueError):
+        hookenv.log(
+            "Failed to read and decode encryption_key secret.\n"
+            + traceback.format_exc(),
+            level=hookenv.ERROR,
+        )
+        return
+
+
+def _read_encryption_config() -> Optional[Mapping]:
+    enc_path = encryption_config_path()
+    if enc_path.exists():
+        return yaml.safe_load(enc_path.read_text())
 
 
 def _write_encryption_config():
