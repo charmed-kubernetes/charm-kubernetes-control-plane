@@ -45,7 +45,7 @@ options:
   hacluster:
     binding_address: 'kube-api-endpoint'
   vault-kv:
-    secrets-backend-format: "charm-{model-uuid}-{app}"
+    secrets-backend-format: "charm-{model-uuid}:{app}"
 exclude:
   - .tox
   - __pycache__
