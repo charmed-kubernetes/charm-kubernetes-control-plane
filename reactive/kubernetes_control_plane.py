@@ -243,6 +243,10 @@ register_trigger(
 register_trigger(
     when="cni.available", clear_flag="kubernetes-control-plane.components.started"
 )
+register_trigger(
+    when="config.changed.proxy-extra-config",
+    clear_flag="kubernetes-control-plane.components.started",
+)
 
 
 def set_upgrade_needed(forced=False):
