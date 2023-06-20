@@ -1783,6 +1783,7 @@ def configure_cdk_addons():
         "ceph-kubernetes-key=" + (ceph.get("admin_key", "")),
         'ceph-mon-hosts="' + (ceph.get("mon_hosts", "")) + '"',
         "ceph-user=" + hookenv.application_name(),
+        "cinder-availability-zone=" + hookenv.config("cinder-availability-zone"),
         "default-storage=" + default_storage,
         "enable-keystone=" + keystoneEnabled,
         "keystone-cert-file=" + keystone.get("cert", ""),

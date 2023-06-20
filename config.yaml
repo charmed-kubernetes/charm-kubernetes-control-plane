@@ -374,3 +374,9 @@ options:
       Space separated list of pod names in the kube-system namespace to ignore
       when checking for running pods. Any non-Running Pod whose name is on
       this list, will be ignored during the check.
+  cinder-availability-zone:
+    type: string
+    default: ""
+    description: |
+      Availability zone to use with Cinder CSI. This is passed through to the
+      parameters.availability field of the cdk-cinder StorageClass.
