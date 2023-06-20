@@ -36,7 +36,7 @@ from charms.layer import snap
 from charms.leadership import leader_get, leader_set
 from charms.reactive import hook
 from charms.reactive import remove_state, clear_flag
-from charms.reactive import get_flags, set_state, set_flag
+from charms.reactive import set_state, set_flag
 from charms.reactive import is_state, is_flag_set, get_unset_flags
 from charms.reactive import endpoint_from_flag, endpoint_from_name
 from charms.reactive import when, when_any, when_not, when_none
