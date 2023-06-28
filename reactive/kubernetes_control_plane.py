@@ -36,7 +36,7 @@ from charms.layer import snap
 from charms.leadership import leader_get, leader_set
 from charms.reactive import hook
 from charms.reactive import remove_state, clear_flag
-from charms.reactive import get_flags, set_state, set_flag
+from charms.reactive import set_state, set_flag
 from charms.reactive import is_state, is_flag_set, get_unset_flags
 from charms.reactive import endpoint_from_flag, endpoint_from_name
 from charms.reactive import when, when_any, when_not, when_none
@@ -293,66 +293,12 @@ def check_for_upgrade_needed():
     hookenv.status_set("maintenance", "Checking resources")
     is_leader = is_state("leadership.is_leader")
 
-    # migrate to inclusive flags
-    old, new = "kubernetes-master", "kubernetes-control-plane"  # wokeignore:rule=master
-    for flag in get_flags():
-        if flag.startswith(old):
-            new_flag = flag.replace(old, new, 1)
-            clear_flag(flag)
-            set_flag(new_flag)
-
-    # migrate to new flags
-    if is_state("kubernetes-control-plane.restarted-for-cloud"):
-        remove_state("kubernetes-control-plane.restarted-for-cloud")
-        set_state("kubernetes-control-plane.cloud.ready")
-    if is_state("kubernetes-control-plane.cloud-request-sent"):
-        # minor change, just for consistency
-        remove_state("kubernetes-control-plane.cloud-request-sent")
-        set_state("kubernetes-control-plane.cloud.request-sent")
-    if is_flag_set("kubernetes-control-plane.snaps.installed"):
-        # consistent with layer-kubernetes-node-base
-        remove_state("kubernetes-control-plane.snaps.installed")
-        set_state("kubernetes-node.snaps.installed")
-
-    # ceph-storage.configured flag no longer exists
-    remove_state("ceph-storage.configured")
-
-    # kubernetes-control-plane.ceph.configured flag no longer exists
-    remove_state("kubernetes-control-plane.ceph.configured")
-
     maybe_install_kubelet()
     maybe_install_kube_proxy()
     update_certificates()
     maybe_heal_vault_kv()
     switch_auth_mode(forced=True)
 
-    # File-based auth is gone in 1.19; ensure any entries in basic_auth.csv are
-    # added to known_tokens.csv, and any known_tokens entries are created as secrets.
-    if not is_flag_set("kubernetes-control-plane.basic-auth.migrated"):
-        if kubernetes_control_plane.migrate_auth_file(
-            kubernetes_control_plane.AUTH_BASIC_FILE
-        ):
-            set_flag("kubernetes-control-plane.basic-auth.migrated")
-        else:
-            hookenv.log(
-                "Unable to migrate {} to {}".format(
-                    kubernetes_control_plane.AUTH_BASIC_FILE,
-                    kubernetes_control_plane.AUTH_TOKENS_FILE,
-                )
-            )
-    if not is_flag_set("kubernetes-control-plane.token-auth.migrated"):
-        register_auth_webhook()
-        add_rbac_roles()
-        if kubernetes_control_plane.migrate_auth_file(
-            kubernetes_control_plane.AUTH_TOKENS_FILE
-        ):
-            set_flag("kubernetes-control-plane.token-auth.migrated")
-        else:
-            hookenv.log(
-                "Unable to migrate {} to Kubernetes secrets".format(
-                    kubernetes_control_plane.AUTH_TOKENS_FILE
-                )
-            )
     set_state("reconfigure.authentication.setup")
     remove_state("authentication.setup")
 
@@ -367,11 +313,6 @@ def check_for_upgrade_needed():
     migrate_resource_checksums(checksum_prefix, snap_resources)
     if check_resources_for_upgrade_needed(checksum_prefix, snap_resources):
         set_upgrade_needed()
-
-    # Set the auto storage backend to etcd2.
-    auto_storage_backend = leader_get("auto_storage_backend")
-    if not auto_storage_backend and is_leader:
-        leader_set(auto_storage_backend="etcd2")
 
     if is_leader and not leader_get("auto_dns_provider"):
         leader_set(auto_dns_provider="core-dns")
