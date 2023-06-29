@@ -1797,7 +1797,7 @@ def configure_cdk_addons():
         "enable-openstack=" + enable_openstack,
         "cluster-tag=" + cluster_tag,
     ]
-    if openstack:
+    if openstack and openstack.relations:
         args.extend(
             [
                 "openstack-cloud-conf="
