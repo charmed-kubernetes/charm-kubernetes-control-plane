@@ -1,9 +1,0 @@
-.tox/
-__pycache__/
-*.pyc
-placeholders/
-*.charm
-interfaces
-layers
-.coverage
-htmlcov/
