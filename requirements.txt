@@ -1,1 +1,4 @@
+charm-lib-contextual-status @ git+https://github.com/Cynerva/charm-lib-contextual-status@initial
+charm-lib-kubernetes-snaps @ git+https://github.com/Cynerva/charm-lib-kubernetes-snaps@initial
+charm-lib-reconciler @ git+https://github.com/Cynerva/charm-lib-reconciler@initial
 ops >= 2.2.0

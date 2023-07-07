@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
-# Copyright 2023 George Kraft
+# Copyright 2023 Canonical
 # See LICENSE file for licensing details.
 
-"""Charm the application."""
-
 import logging
-
 import ops
 
-logger = logging.getLogger(__name__)
+from charms import kubernetes_snaps
+from charms.reconciler import Reconciler
+
+
+log = logging.getLogger(__name__)
 
 
 class KubernetesControlPlaneCharm(ops.CharmBase):
-    """Charm the application."""
-
     def __init__(self, *args):
         super().__init__(*args)
-        self.framework.observe(self.on.start, self._on_start)
+        self.reconciler = Reconciler(self, self.reconcile)
 
-    def _on_start(self, event: ops.StartEvent):
-        """Handle start event."""
-        self.unit.status = ops.ActiveStatus()
+    def reconcile(self, event):
+        kubernetes_snaps.install(
+            channel=self.model.config['channel'],
+            control_plane=True
+        )
 
 
 if __name__ == "__main__":  # pragma: nocover

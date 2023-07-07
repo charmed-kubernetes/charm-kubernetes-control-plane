@@ -1,4 +1,4 @@
-# Copyright 2023 George Kraft
+# Copyright 2023 Canonical
 # See LICENSE file for licensing details.
 #
 # Learn more about testing at: https://juju.is/docs/sdk/testing

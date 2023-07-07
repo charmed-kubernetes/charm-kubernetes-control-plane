@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2023 George Kraft
+# Copyright 2023 Canonical
 # See LICENSE file for licensing details.
 
 import asyncio
