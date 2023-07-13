@@ -114,6 +114,7 @@ def update_for_service_cidr_expansion():
 def test_cni_privileges(cni_conf_file, privileged):
     cni = endpoint_from_name.return_value = mock.MagicMock()
     cni.get_configs.return_value = {
+        "no-cni-config": {},
         "my-cni": {"cni-conf-file": cni_conf_file},
         "other-cni": {"cni-conf-file": "01-cni.conflist"},
     }

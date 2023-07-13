@@ -1967,7 +1967,7 @@ def _any_priviledged_cni() -> bool:
         return False
     require_priv = {"calico", "kube-ovn", "cilium"}
     cni_conf_files = {
-        config.get("cni-conf-file") for config in cni.get_configs().values()
+        config.get("cni-conf-file", "") for config in cni.get_configs().values()
     }
     return any(app in fname for fname in cni_conf_files for app in require_priv)
 
