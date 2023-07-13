@@ -15,7 +15,7 @@ from charms.layer.kubernetes_common import (
     kubectl_manifest,
 )
 from charms.reactive import endpoint_from_flag, endpoint_from_name, set_state
-from charms.reactive import set_flag, is_flag_set, clear_flag
+from charms.reactive import set_flag, is_flag_set, clear_flag, is_state
 from charmhelpers.core import hookenv, host, unitdata
 
 
@@ -100,6 +100,26 @@ def update_for_service_cidr_expansion():
     ]
     assert kubectl.call_count == 0
     kubernetes_control_plane.update_for_service_cidr_expansion()
+
+
+@pytest.mark.parametrize(
+    "cni_conf_file, privileged",
+    [
+        ("10-flannel.conflist", False),
+        ("10-calico.conflist", True),
+        ("05-cilium.conflist", True),
+        ("01-kube-ovn.conflist", True),
+    ],
+)
+def test_cni_privileges(cni_conf_file, privileged):
+    cni = endpoint_from_name.return_value = mock.MagicMock()
+    cni.get_configs.return_value = {
+        "my-cni": {"cni-conf-file": cni_conf_file},
+        "other-cni": {"cni-conf-file": "01-cni.conflist"},
+    }
+    hookenv.config.return_value = "auto"
+    is_state.return_value = False
+    assert kubernetes_control_plane.is_privileged() == privileged
 
 
 def test_service_cidr_greenfield_deploy():

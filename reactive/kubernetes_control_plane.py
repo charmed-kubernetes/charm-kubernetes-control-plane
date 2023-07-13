@@ -1960,6 +1960,18 @@ def remove_nrpe_config():
     remove_state("nrpe-external-master.initial-config")
 
 
+def _any_priviledged_cni() -> bool:
+    """Returns boolean indicating relation to a cni requiring priviledge."""
+    cni = endpoint_from_name("cni")
+    if not cni:
+        return False
+    require_priv = {"calico", "kube-ovn", "cilium"}
+    cni_conf_files = {
+        config.get("cni-conf-file") for config in cni.get_configs().values()
+    }
+    return any(app in fname for fname in cni_conf_files for app in require_priv)
+
+
 def is_privileged():
     """Return boolean indicating whether or not to set allow-privileged=true."""
     privileged = hookenv.config("allow-privileged").lower()
@@ -1968,6 +1980,7 @@ def is_privileged():
             is_state("kubernetes-control-plane.gpu.enabled")
             or is_state("ceph-client.available")
             or is_state("endpoint.openstack.joined")
+            or _any_priviledged_cni()
         )
     else:
         return privileged == "true"
