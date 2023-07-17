@@ -4,6 +4,7 @@
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
 import unittest
+from unittest.mock import patch
 
 import ops
 import ops.testing
@@ -15,9 +16,9 @@ class TestCharm(unittest.TestCase):
         self.harness = ops.testing.Harness(KubernetesControlPlaneCharm)
         self.addCleanup(self.harness.cleanup)
 
-    def test_start(self):
-        # Simulate the charm starting
+    @patch("charms.kubernetes_snaps.install")
+    def test_start(self, kubernetes_snaps_install):
         self.harness.begin_with_initial_hooks()
 
-        # Ensure we set an ActiveStatus with no message
+        kubernetes_snaps_install.assert_called()
         self.assertEqual(self.harness.model.unit.status, ops.ActiveStatus())
