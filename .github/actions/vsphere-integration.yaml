@@ -1,0 +1,40 @@
+name: Charmed Kubernetes VSphere Integration Tests
+on: [pull_request]
+
+jobs:
+  integration-test:
+    name: VSphere Integration Test
+    runs-on: self-hosted
+    timeout-minutes: 120
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+      - name: Setup operator environment
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          provider: vsphere
+          credentials-yaml: ${{ secrets.CREDENTIALS_YAML }}
+          clouds-yaml: ${{ secrets.CLOUDS_YAML }}
+          bootstrap-constraints: "arch=amd64 cores=2 mem=4G"
+          bootstrap-options: "${{ secretsJAMMYY_BOOTSTRAP_OPTIONS }} --model-default datastore=vsanDatastore --model-default primary-network=VLAN_2763"
+      - name: Run test
+        run: tox -e integration
+      - name: Setup Debug Artifact Collection
+        if: ${{ failure() }}
+        run: mkdir tmp
+      - name: Collect Juju Status
+        if: ${{ failure() }}
+        run: |
+          juju status 2>&1 | tee tmp/juju-status.txt
+          juju-crashdump -s -m controller -a debug-layer -a config -o tmp/
+          mv juju-crashdump-* tmp/ | true
+      - name: Upload debug artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: test-run-artifacts
+          path: tmp
