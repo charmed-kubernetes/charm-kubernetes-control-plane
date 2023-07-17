@@ -39,3 +39,9 @@ jobs:
         with:
           name: test-run-artifacts
           path: tmp
+      - name: Upload charmcraft logs
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: charmcraft-logs
+          path: "/home/ubuntu/.local/state/charmcraft/log/*"
