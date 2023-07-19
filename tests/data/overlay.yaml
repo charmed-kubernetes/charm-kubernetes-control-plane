@@ -3,7 +3,6 @@ applications:
     charm: {{charm}}
     channel: null
   # Remove the apps we don't support yet
-  etcd: null
   calico: null
   containerd: null
   kubernetes-worker: null
