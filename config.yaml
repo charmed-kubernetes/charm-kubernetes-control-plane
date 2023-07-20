@@ -1,0 +1,6 @@
+options:
+  channel:
+    type: string
+    default: "1.27/edge"
+    description: |
+      Snap channel to install Kubernetes control plane services from

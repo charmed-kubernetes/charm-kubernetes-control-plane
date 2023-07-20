@@ -1,0 +1,4 @@
+charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status
+charm-lib-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps
+charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler
+ops >= 2.2.0
