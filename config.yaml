@@ -4,3 +4,20 @@ options:
     default: "1.27/edge"
     description: |
       Snap channel to install Kubernetes control plane services from
+  dns_domain:
+    type: string
+    default: cluster.local
+    description: The local domain for cluster dns
+  extra_sans:
+    type: string
+    default: ""
+    description: |
+      Space-separated list of extra SAN entries to add to the x509 certificate
+      created for the control plane nodes.
+  service-cidr:
+    type: string
+    default: 10.152.183.0/24
+    description: |
+      CIDR to use for Kubernetes services. After deployment it is
+      only possible to increase the size of the IP range. It is not possible to
+      change or shrink the address range after deployment.
