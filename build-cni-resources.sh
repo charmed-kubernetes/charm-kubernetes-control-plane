@@ -29,7 +29,7 @@ mkdir "$temp_dir"
       -e GOOS=linux \
       -e GOARCH="$arch" \
       -v "$temp_dir"/cni-plugins:/cni \
-      golang:1.18 \
+      golang:1.17 \
       /bin/bash -c "cd /cni && ./build_linux.sh && chown -R ${USER_ID}:${GROUP_ID} /cni"
 
     (cd cni-plugins/bin
