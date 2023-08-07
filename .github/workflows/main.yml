@@ -62,9 +62,6 @@ jobs:
     timeout-minutes: 360
     needs:
       - build-dependencies
-    strategy:
-      matrix:
-        juju: ['2.9', '3.0']
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -72,13 +69,13 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.8
+          python-version: '3.10'
 
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: vsphere
-          juju-channel: ${{ matrix.juju }}/stable
+          juju-channel: 3.1/stable
           credentials-yaml: ${{ secrets.CREDENTIALS_YAML }}
           clouds-yaml: ${{ secrets.CLOUDS_YAML }}
           bootstrap-constraints: "arch=amd64 cores=2 mem=4G"
