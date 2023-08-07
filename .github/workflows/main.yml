@@ -62,9 +62,6 @@ jobs:
     timeout-minutes: 360
     needs:
       - build-dependencies
-    strategy:
-      matrix:
-        juju: ['2.9', '3.1']
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -78,7 +75,7 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: vsphere
-          juju-channel: ${{ matrix.juju }}/stable
+          juju-channel: 3.1/stable
           credentials-yaml: ${{ secrets.CREDENTIALS_YAML }}
           clouds-yaml: ${{ secrets.CLOUDS_YAML }}
           bootstrap-constraints: "arch=amd64 cores=2 mem=4G"
