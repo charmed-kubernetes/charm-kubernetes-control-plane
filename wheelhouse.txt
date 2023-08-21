@@ -6,21 +6,7 @@ git+https://github.com/juju/charm-helpers.git#egg=charmhelpers
 
 # idna>=3.4 and beyond (needed by aiohttp and hvac)
 # requires flit-core for building its wheel.
-# 
-# flit-core can run on python3.6, but requires pip 
-# be upgraded to at least 20.0.2 (same as on focal)
-#
 flit-core<4
-pip==20.0.2  # necessary for bionic
-
-# psutil>=5.9.3 added requirement of setuptools>=43
-# 
-# layer-basic pins-back pip and setuptools
-# for full compatability with bionic
-psutil==5.9.2
-
-# avoid ops 2.1.0 which had a broken setup that kills pip
-ops!=2.1.0
 
 # attrs>=23.1.0, urllib3<=2.0.0 have a build dependency on hatchling, calver, et al
 # rather than pulling in a list of new deps, pin these
