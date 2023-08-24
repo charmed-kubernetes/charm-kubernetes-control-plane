@@ -1,8 +1,6 @@
 aiohttp>=3.7.4,<3.8.0
 charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status
-# FIXME
-#charm-lib-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps
-charm-lib-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps@gkk/api
+charm-lib-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps
 charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler
 gunicorn >= 20.0.0,<21.0.0
 jinja2
