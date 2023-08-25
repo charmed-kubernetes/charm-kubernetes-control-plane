@@ -48,9 +48,9 @@ def configure(
 
     # For 'api_ver', match the api version of the authentication.k8s.io TokenReview
     # that k8s-apiserver will be sending:
-    #   https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18
+    #   https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.23/#tokenreview-v1-authentication-k8s-io
     context = {
-        "api_ver": "v1beta1",
+        "api_ver": "v1",
         "aws_iam_endpoint": aws_iam_endpoint,
         "charm_dir": charm_dir,
         "custom_authn_endpoint": custom_authn_endpoint,
