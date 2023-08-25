@@ -53,10 +53,12 @@ def test_active(
     get_public_address.return_value = "10.0.0.10"
 
     certificates_relation_id = harness.add_relation("certificates", "easyrsa")
+    container_runtime_relation_id = harness.add_relation("container-runtime", "containerd")
     etcd_relation_id = harness.add_relation("etcd", "etcd")
     peer_relation_id = harness.add_relation("peer", "kubernetes-control-plane")
 
     harness.add_relation_unit(certificates_relation_id, "easyrsa/0")
+    harness.add_relation_unit(container_runtime_relation_id, "containerd/0")
     harness.add_relation_unit(etcd_relation_id, "etcd/0")
 
     harness.update_relation_data(

@@ -107,6 +107,13 @@ options:
     description: |
       Space-separated list of extra SAN entries to add to the x509 certificate
       created for the control plane nodes.
+  image-registry:
+    type: string
+    default: "rocks.canonical.com:443/cdk"
+    description: |
+      Container image registry to use for CDK. This includes addons like the Kubernetes dashboard,
+      metrics server, ingress, and dns along with non-addon images including the pause
+      container and default backend image.
   scheduler-extra-args:
     type: string
     default: ""

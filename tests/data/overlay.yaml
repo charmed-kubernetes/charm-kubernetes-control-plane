@@ -4,7 +4,6 @@ applications:
     channel: null
   # Remove the apps we don't support yet
   calico: null
-  containerd: null
   kubernetes-worker: null
 # override machines since we dropped kubernetes-worker
 machines:

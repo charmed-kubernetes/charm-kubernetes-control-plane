@@ -13,6 +13,7 @@ import charms.contextual_status as status
 import leader_data
 import ops
 from charms import kubernetes_snaps
+from charms.interface_container_runtime import ContainerRuntimeProvides
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.reconciler import Reconciler
 from ops import BlockedStatus, WaitingStatus
@@ -27,6 +28,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def __init__(self, *args):
         super().__init__(*args)
         self.certificates = CertificatesRequires(self, endpoint="certificates")
+        self.container_runtime = ContainerRuntimeProvides(self, endpoint="container-runtime")
         self.etcd = EtcdReactiveRequires(self)
         self.reconciler = Reconciler(self, self.reconcile)
 
@@ -59,6 +61,15 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             # aws_iam_endpoint=???,
             # keystone_endpoint=???
         )
+
+    def configure_container_runtime(self):
+        if not self.container_runtime.relations:
+            status.add(BlockedStatus("Missing container-runtime integration"))
+            return
+
+        registry = self.model.config["image-registry"]
+        sandbox_image = kubernetes_snaps.get_sandbox_image(registry)
+        self.container_runtime.set_sandbox_image(sandbox_image)
 
     def configure_controller_manager(self):
         cluster_name = self.get_cluster_name()
@@ -201,6 +212,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         """Reconcile state change events."""
         kubernetes_snaps.install(channel=self.model.config["channel"], control_plane=True)
         kubernetes_snaps.configure_services_restart_always(control_plane=True)
+        self.configure_container_runtime()
         self.request_certificates()
         self.write_certificates()
         self.write_etcd_client_credentials()
