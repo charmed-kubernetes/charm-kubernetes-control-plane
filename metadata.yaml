@@ -21,9 +21,14 @@ description: |
 
   Finally, a paragraph that describes whom the charm is useful for.
 
+peers:
+  peer:
+    interface: kubernetes-control-plane-peer
 provides:
   kube-control:
     interface: kube-control
 requires:
   certificates:
     interface: tls-certificates
+  etcd:
+    interface: etcd
