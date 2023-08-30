@@ -1,6 +1,7 @@
 aiohttp>=3.7.4,<3.8.0
 charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status
 charm-lib-interface-container-runtime @ git+https://github.com/charmed-kubernetes/charm-lib-interface-container-runtime@gkk/initial
+charm-lib-interface-kubernetes-cni @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kubernetes-cni@gkk/initial
 charm-lib-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps@gkk/subordinates
 charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler
 gunicorn >= 20.0.0,<21.0.0

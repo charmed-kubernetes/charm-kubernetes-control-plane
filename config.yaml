@@ -97,6 +97,18 @@ options:
         runtime-config=batch/v2alpha1=true profiling=true
       will result in kube-controller-manager being run with the following options:
         --runtime-config=batch/v2alpha1=true --profiling=true
+  default-cni:
+    type: string
+    default: ""
+    description: |
+      Default CNI network to use when multiple CNI subordinates are related.
+
+      The value of this config should be the application name of a related CNI
+      subordinate. For example:
+
+      juju config kubernetes-control-plane default-cni=flannel
+
+      If unspecified, then the default CNI network is chosen alphabetically.
   dns_domain:
     type: string
     default: cluster.local

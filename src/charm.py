@@ -14,6 +14,7 @@ import leader_data
 import ops
 from charms import kubernetes_snaps
 from charms.interface_container_runtime import ContainerRuntimeProvides
+from charms.interface_kubernetes_cni import KubernetesCniProvides
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.reconciler import Reconciler
 from ops import BlockedStatus, WaitingStatus
@@ -28,6 +29,9 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def __init__(self, *args):
         super().__init__(*args)
         self.certificates = CertificatesRequires(self, endpoint="certificates")
+        self.cni = KubernetesCniProvides(
+            self, endpoint="cni", default_cni=self.model.config["default-cni"]
+        )
         self.container_runtime = ContainerRuntimeProvides(self, endpoint="container-runtime")
         self.etcd = EtcdReactiveRequires(self)
         self.reconciler = Reconciler(self, self.reconcile)
@@ -45,8 +49,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             audit_webhook_conf=self.model.config["audit-webhook-config"],
             auth_webhook_conf=auth_webhook.auth_webhook_conf,
             authorization_mode=self.model.config["authorization-mode"],
-            # TODO: cluster_cidr from CNI relation
-            cluster_cidr=None,
+            cluster_cidr=self.cni.cidr,
             etcd_connection_string=self.etcd.get_connection_string(),
             extra_args_config=self.model.config["api-extra-args"],
             privileged=self.model.config["allow-privileged"],
@@ -71,6 +74,12 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         sandbox_image = kubernetes_snaps.get_sandbox_image(registry)
         self.container_runtime.set_sandbox_image(sandbox_image)
 
+    def configure_cni(self):
+        self.cni.set_image_registry(self.model.config["image-registry"])
+        self.cni.set_kubeconfig_hash_from_file("/root/.kube/config")
+        self.cni.set_service_cidr(self.model.config["service-cidr"])
+        kubernetes_snaps.set_default_cni_conf_file(self.cni.cni_conf_file)
+
     def configure_controller_manager(self):
         cluster_name = self.get_cluster_name()
         if not cluster_name:
@@ -78,8 +87,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             return
 
         kubernetes_snaps.configure_controller_manager(
-            # TODO: cluster_cidr from CNI relation
-            cluster_cidr=None,
+            cluster_cidr=self.cni.cidr,
             cluster_name=cluster_name,
             extra_args_config=self.model.config["controller-manager-extra-args"],
             kubeconfig="/root/cdk/kubecontrollermanagerconfig",
@@ -212,7 +220,6 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         """Reconcile state change events."""
         kubernetes_snaps.install(channel=self.model.config["channel"], control_plane=True)
         kubernetes_snaps.configure_services_restart_always(control_plane=True)
-        self.configure_container_runtime()
         self.request_certificates()
         self.write_certificates()
         self.write_etcd_client_credentials()
@@ -222,6 +229,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.create_kubeconfigs()
         self.configure_controller_manager()
         self.configure_scheduler()
+        self.configure_container_runtime()
+        self.configure_cni()
 
     def request_certificates(self):
         """Request client and server certificates."""
