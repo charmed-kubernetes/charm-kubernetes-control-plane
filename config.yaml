@@ -142,3 +142,16 @@ options:
       CIDR to use for Kubernetes services. After deployment it is
       only possible to increase the size of the IP range. It is not possible to
       change or shrink the address range after deployment.
+  sysctl:
+    type: string
+    default: "{net.ipv4.conf.all.forwarding: 1, net.ipv4.conf.all.rp_filter: 1, net.ipv4.neigh.default.gc_thresh1: 128, net.ipv4.neigh.default.gc_thresh2: 28672, net.ipv4.neigh.default.gc_thresh3: 32768, net.ipv6.neigh.default.gc_thresh1: 128, net.ipv6.neigh.default.gc_thresh2: 28672, net.ipv6.neigh.default.gc_thresh3: 32768, fs.inotify.max_user_instances: 8192, fs.inotify.max_user_watches: 1048576, kernel.panic: 10, kernel.panic_on_oops: 1, vm.overcommit_memory: 1}"
+    description: |
+      YAML formatted associative array of sysctl values, e.g.:
+      '{kernel.pid_max: 4194303}'. Note that kube-proxy handles
+      the conntrack settings. The proper way to alter them is to
+      use the proxy-extra-args config to set them, e.g.:
+        juju config kubernetes-control-plane proxy-extra-args="conntrack-min=1000000 conntrack-max-per-core=250000"
+        juju config kubernetes-worker proxy-extra-args="conntrack-min=1000000 conntrack-max-per-core=250000"
+      The proxy-extra-args conntrack-min and conntrack-max-per-core can be set to 0 to ignore
+      kube-proxy's settings and use the sysctl settings instead. Note the fundamental difference between
+      the setting of conntrack-max-per-core vs nf_conntrack_max.

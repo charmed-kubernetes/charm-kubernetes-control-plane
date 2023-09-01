@@ -12,6 +12,7 @@ import auth_webhook
 import charms.contextual_status as status
 import leader_data
 import ops
+import yaml
 from charms import kubernetes_snaps
 from charms.interface_container_runtime import ContainerRuntimeProvides
 from charms.interface_kubernetes_cni import KubernetesCniProvides
@@ -93,6 +94,10 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             kubeconfig="/root/cdk/kubecontrollermanagerconfig",
             service_cidr=self.model.config["service-cidr"],
         )
+
+    def configure_kernel_parameters(self):
+        sysctl = yaml.safe_load(self.model.config["sysctl"])
+        kubernetes_snaps.configure_kernel_parameters(sysctl)
 
     def configure_scheduler(self):
         kubernetes_snaps.configure_scheduler(
@@ -231,6 +236,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.configure_scheduler()
         self.configure_container_runtime()
         self.configure_cni()
+        self.configure_kernel_parameters()
 
     def request_certificates(self):
         """Request client and server certificates."""
