@@ -28,6 +28,9 @@ def harness():
 @patch("charms.interface_kubernetes_cni.hash_file")
 @patch("charms.kubernetes_snaps.configure_apiserver")
 @patch("charms.kubernetes_snaps.configure_controller_manager")
+@patch("charms.kubernetes_snaps.configure_kernel_parameters")
+@patch("charms.kubernetes_snaps.configure_kube_proxy")
+@patch("charms.kubernetes_snaps.configure_kubelet")
 @patch("charms.kubernetes_snaps.configure_scheduler")
 @patch("charms.kubernetes_snaps.configure_services_restart_always")
 @patch("charms.kubernetes_snaps.create_kubeconfig")
@@ -47,6 +50,9 @@ def test_active(
     create_kubeconfig,
     configure_services_restart_always,
     configure_scheduler,
+    configure_kubelet,
+    configure_kube_proxy,
+    configure_kernel_parameters,
     configure_controller_manager,
     configure_apiserver,
     hash_file,
@@ -98,6 +104,9 @@ def test_active(
         {"cidr": "192.168.0.0/16", "cni-conf-file": "10-calico.conflist"},
     )
     harness.update_relation_data(
+        container_runtime_relation_id, "containerd/0", {"socket": "test-container-runtime-socket"}
+    )
+    harness.update_relation_data(
         etcd_relation_id,
         "etcd/0",
         {
@@ -134,6 +143,41 @@ def test_active(
         extra_args_config="",
         kubeconfig="/root/cdk/kubecontrollermanagerconfig",
         service_cidr="10.152.183.0/24",
+    )
+    configure_kernel_parameters.assert_called_once_with(
+        {
+            "net.ipv4.conf.all.forwarding": 1,
+            "net.ipv4.conf.all.rp_filter": 1,
+            "net.ipv4.neigh.default.gc_thresh1": 128,
+            "net.ipv4.neigh.default.gc_thresh2": 28672,
+            "net.ipv4.neigh.default.gc_thresh3": 32768,
+            "net.ipv6.neigh.default.gc_thresh1": 128,
+            "net.ipv6.neigh.default.gc_thresh2": 28672,
+            "net.ipv6.neigh.default.gc_thresh3": 32768,
+            "fs.inotify.max_user_instances": 8192,
+            "fs.inotify.max_user_watches": 1048576,
+            "kernel.panic": 10,
+            "kernel.panic_on_oops": 1,
+            "vm.overcommit_memory": 1,
+        }
+    )
+    configure_kubelet.assert_called_once_with(
+        container_runtime_endpoint="test-container-runtime-socket",
+        dns_domain="cluster.local",
+        dns_ip=None,
+        extra_args_config="",
+        extra_config={},
+        has_xcp=False,
+        kubeconfig="/root/cdk/kubeconfig",
+        node_ip="10.0.0.10",
+        registry="rocks.canonical.com:443/cdk",
+        taints=["node-role.kubernetes.io/control-plane:NoSchedule"],
+    )
+    configure_kube_proxy.assert_called_once_with(
+        cluster_cidr="192.168.0.0/16",
+        extra_args_config="",
+        extra_config={},
+        kubeconfig="/root/cdk/kubeproxyconfig",
     )
     configure_scheduler.assert_called_once_with(
         extra_args_config="", kubeconfig="/root/cdk/kubeschedulerconfig"

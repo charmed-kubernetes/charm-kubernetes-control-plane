@@ -99,6 +99,28 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         sysctl = yaml.safe_load(self.model.config["sysctl"])
         kubernetes_snaps.configure_kernel_parameters(sysctl)
 
+    def configure_kubelet(self):
+        kubernetes_snaps.configure_kubelet(
+            container_runtime_endpoint=self.container_runtime.socket,
+            dns_domain=self.model.config["dns_domain"],
+            dns_ip=None,  # TODO: needs kube-dns relation, or cdk-addons
+            extra_args_config=self.model.config["kubelet-extra-args"],
+            extra_config=yaml.safe_load(self.model.config["kubelet-extra-config"]),
+            has_xcp=False,  # TODO: cloud config
+            kubeconfig="/root/cdk/kubeconfig",
+            node_ip=self.model.get_binding("kube-control").network.ingress_addresses[0].exploded,
+            registry=self.model.config["image-registry"],
+            taints=self.model.config["register-with-taints"].split(),
+        )
+
+    def configure_kube_proxy(self):
+        kubernetes_snaps.configure_kube_proxy(
+            cluster_cidr=self.cni.cidr,
+            extra_args_config=self.model.config["proxy-extra-args"],
+            extra_config=yaml.safe_load(self.model.config["proxy-extra-config"]),
+            kubeconfig="/root/cdk/kubeproxyconfig",
+        )
+
     def configure_scheduler(self):
         kubernetes_snaps.configure_scheduler(
             extra_args_config=self.model.config["scheduler-extra-args"],
@@ -237,6 +259,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.configure_container_runtime()
         self.configure_cni()
         self.configure_kernel_parameters()
+        self.configure_kubelet()
+        self.configure_kube_proxy()
 
     def request_certificates(self):
         """Request client and server certificates."""
