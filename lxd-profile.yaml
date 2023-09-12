@@ -14,3 +14,7 @@ devices:
     path: /dev/kmsg
     source: /dev/kmsg
     type: unix-char
+  sysfsbpf:
+    path: /sys/fs/bpf
+    source: /sys/fs/bpf
+    type: disk
