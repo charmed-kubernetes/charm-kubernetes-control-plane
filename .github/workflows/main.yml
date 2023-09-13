@@ -36,7 +36,7 @@ jobs:
           sudo apt update
           sudo apt install python3-virtualenv -y
           sudo snap install docker --channel=stable
-          sudo snap install charm --channel=2.x/stable --classic
+          sudo snap install charm --channel=3.x/stable --classic
 
       - name: Build Charm
         run:  charm build . -F
