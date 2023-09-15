@@ -25,6 +25,7 @@ def harness():
 
 @patch("auth_webhook.configure")
 @patch("auth_webhook.get_token")
+@patch("charms.interface_kubernetes_cni.hash_file")
 @patch("charms.kubernetes_snaps.configure_apiserver")
 @patch("charms.kubernetes_snaps.configure_controller_manager")
 @patch("charms.kubernetes_snaps.configure_scheduler")
@@ -32,6 +33,7 @@ def harness():
 @patch("charms.kubernetes_snaps.create_kubeconfig")
 @patch("charms.kubernetes_snaps.get_public_address")
 @patch("charms.kubernetes_snaps.install_snap")
+@patch("charms.kubernetes_snaps.set_default_cni_conf_file")
 @patch("charms.kubernetes_snaps.write_certificates")
 @patch("charms.kubernetes_snaps.write_etcd_client_credentials")
 @patch("charms.kubernetes_snaps.write_service_account_key")
@@ -39,6 +41,7 @@ def test_active(
     write_service_account_key,
     write_etcd_client_credentials,
     write_certificates,
+    set_default_cni_conf_file,
     install_snap,
     get_public_address,
     create_kubeconfig,
@@ -46,17 +49,23 @@ def test_active(
     configure_scheduler,
     configure_controller_manager,
     configure_apiserver,
+    hash_file,
     auth_webhook_get_token,
     auth_webhook_configure,
     harness,
 ):
     get_public_address.return_value = "10.0.0.10"
+    hash_file.return_value = "test-hash"
 
     certificates_relation_id = harness.add_relation("certificates", "easyrsa")
+    cni_relation_id = harness.add_relation("cni", "calico")
+    container_runtime_relation_id = harness.add_relation("container-runtime", "containerd")
     etcd_relation_id = harness.add_relation("etcd", "etcd")
     peer_relation_id = harness.add_relation("peer", "kubernetes-control-plane")
 
     harness.add_relation_unit(certificates_relation_id, "easyrsa/0")
+    harness.add_relation_unit(cni_relation_id, "calico/0")
+    harness.add_relation_unit(container_runtime_relation_id, "containerd/0")
     harness.add_relation_unit(etcd_relation_id, "etcd/0")
 
     harness.update_relation_data(
@@ -84,6 +93,11 @@ def test_active(
         },
     )
     harness.update_relation_data(
+        cni_relation_id,
+        "calico/0",
+        {"cidr": "192.168.0.0/16", "cni-conf-file": "10-calico.conflist"},
+    )
+    harness.update_relation_data(
         etcd_relation_id,
         "etcd/0",
         {
@@ -108,14 +122,14 @@ def test_active(
         audit_webhook_conf=harness.charm.model.config["audit-webhook-config"],
         auth_webhook_conf="/root/cdk/auth-webhook/auth-webhook-conf.yaml",
         authorization_mode="Node,RBAC",
-        cluster_cidr=None,
+        cluster_cidr="192.168.0.0/16",
         etcd_connection_string="https://10.0.0.11:2379",
         extra_args_config="",
         privileged="auto",
         service_cidr="10.152.183.0/24",
     )
     configure_controller_manager.assert_called_once_with(
-        cluster_cidr=None,
+        cluster_cidr="192.168.0.0/16",
         cluster_name="test-cluster-name",
         extra_args_config="",
         kubeconfig="/root/cdk/kubecontrollermanagerconfig",
@@ -127,6 +141,7 @@ def test_active(
     configure_services_restart_always.assert_called_once_with(control_plane=True)
     create_kubeconfig.assert_called()
     install_snap.assert_called()
+    set_default_cni_conf_file.assert_called_once_with("10-calico.conflist")
     write_certificates.assert_called_once_with(
         ca="test-ca",
         client_cert="test-client-cert-apiserver",

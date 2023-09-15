@@ -4,9 +4,16 @@ applications:
     channel: null
   # Remove the apps we don't support yet
   calico: null
-  containerd: null
   kubernetes-worker: null
+  # Test CNI with flannel for now, since we don't have kubelet yet
+  flannel:
+    charm: flannel
 # override machines since we dropped kubernetes-worker
 machines:
   "0":
     constraints: "cores=2 mem=8G root-disk=16G"
+relations:
+- - flannel:etcd
+  - etcd:db
+- - flannel:cni
+  - kubernetes-control-plane:cni

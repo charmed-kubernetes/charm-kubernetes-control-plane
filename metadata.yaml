@@ -25,6 +25,12 @@ peers:
   peer:
     interface: kubernetes-control-plane-peer
 provides:
+  cni:
+    interface: kubernetes-cni
+    scope: container
+  container-runtime:
+    interface: container-runtime
+    scope: container
   kube-control:
     interface: kube-control
 requires:
