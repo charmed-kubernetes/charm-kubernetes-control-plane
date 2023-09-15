@@ -7,6 +7,7 @@ charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-recon
 gunicorn >= 20.0.0,<21.0.0
 jinja2
 ops >= 2.2.0
+ops.interface_kube_control @ git+https://github.com/juju-solutions/interface-kube-control@gkk/ops-provides#subdirectory=ops
 ops.interface_tls_certificates @ git+https://github.com/juju-solutions/interface-tls-certificates#subdirectory=ops
 pydantic < 2
 tenacity

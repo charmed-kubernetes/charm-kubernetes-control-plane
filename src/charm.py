@@ -19,6 +19,7 @@ from charms.interface_kubernetes_cni import KubernetesCniProvides
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.reconciler import Reconciler
 from ops import BlockedStatus, WaitingStatus
+from ops.interface_kube_control import KubeControlProvides
 from ops.interface_tls_certificates import CertificatesRequires
 
 log = logging.getLogger(__name__)
@@ -35,13 +36,26 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         )
         self.container_runtime = ContainerRuntimeProvides(self, endpoint="container-runtime")
         self.etcd = EtcdReactiveRequires(self)
+        self.kube_control = KubeControlProvides(self, endpoint="kube-control")
         self.reconciler = Reconciler(self, self.reconcile)
 
-    def configure_apiserver(self):
+    def api_dependencies_ready(self):
+        common_name = kubernetes_snaps.get_public_address()
+        ca = self.certificates.ca
+        client_cert = self.certificates.client_certs_map.get("system:kube-apiserver")
+        server_cert = self.certificates.server_certs_map.get(common_name)
+
+        if not ca or not client_cert or not server_cert:
+            status.add(WaitingStatus("Waiting for certificates"))
+            return False
+
         if not self.etcd.is_ready:
             status.add(WaitingStatus("Waiting for etcd"))
-            return
+            return False
 
+        return True
+
+    def configure_apiserver(self):
         kubernetes_snaps.configure_apiserver(
             advertise_address=self.model.get_binding("kube-control")
             .network.ingress_addresses[0]
@@ -99,6 +113,53 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         sysctl = yaml.safe_load(self.model.config["sysctl"])
         kubernetes_snaps.configure_kernel_parameters(sysctl)
 
+    def configure_kube_control(self):
+        # TODO: proper endpoint handling
+        endpoint_address = (
+            self.model.get_binding("kube-control").network.ingress_addresses[0].exploded
+        )
+        endpoint = f"https://{endpoint_address}:6443"
+        self.kube_control.set_api_endpoints([endpoint])
+        self.kube_control.set_cluster_name(self.get_cluster_name())
+        self.kube_control.set_default_cni(self.model.config["default-cni"])
+        # TODO: Use real DNS info. These are placeholder values until the
+        # kube-dns relation and cdk-addons have been added
+        self.kube_control.set_dns_address("")
+        self.kube_control.set_dns_domain(self.model.config["dns_domain"])
+        self.kube_control.set_dns_enabled(False)
+        self.kube_control.set_dns_port(53)
+        # TODO: external cloud provider support
+        self.kube_control.set_has_external_cloud_provider(False)
+        self.kube_control.set_image_registry(self.model.config["image-registry"])
+        # TODO: labels
+        self.kube_control.set_labels([])
+        self.kube_control.set_taints(self.model.config["register-with-taints"].split())
+
+        if self.unit.is_leader():
+            client_token = auth_webhook.get_token("admin")
+            proxy_token = auth_webhook.get_token("system:kube-proxy")
+
+            for request in self.kube_control.auth_requests:
+                kubelet_token = auth_webhook.create_token(
+                    uid=request.unit, username=request.user, groups=[request.group]
+                )
+                self.kube_control.sign_auth_request(
+                    request,
+                    client_token=client_token,
+                    kubelet_token=kubelet_token,
+                    proxy_token=proxy_token,
+                )
+        else:
+            self.kube_control.clear_creds()
+
+    def configure_kube_proxy(self):
+        kubernetes_snaps.configure_kube_proxy(
+            cluster_cidr=self.cni.cidr,
+            extra_args_config=self.model.config["proxy-extra-args"],
+            extra_config=yaml.safe_load(self.model.config["proxy-extra-config"]),
+            kubeconfig="/root/cdk/kubeproxyconfig",
+        )
+
     def configure_kubelet(self):
         kubernetes_snaps.configure_kubelet(
             container_runtime_endpoint=self.container_runtime.socket,
@@ -113,14 +174,6 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             taints=self.model.config["register-with-taints"].split(),
         )
 
-    def configure_kube_proxy(self):
-        kubernetes_snaps.configure_kube_proxy(
-            cluster_cidr=self.cni.cidr,
-            extra_args_config=self.model.config["proxy-extra-args"],
-            extra_config=yaml.safe_load(self.model.config["proxy-extra-config"]),
-            kubeconfig="/root/cdk/kubeproxyconfig",
-        )
-
     def configure_scheduler(self):
         kubernetes_snaps.configure_scheduler(
             extra_args_config=self.model.config["scheduler-extra-args"],
@@ -129,14 +182,6 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def create_kubeconfigs(self):
         ca = self.certificates.ca
-        if not ca:
-            status.add(WaitingStatus("Waiting for certificates"))
-            return
-
-        if not self.etcd.is_ready:
-            status.add(WaitingStatus("Waiting for etcd"))
-            return
-
         local_server = "https://127.0.0.1:6443"
         node_name = kubernetes_snaps.get_node_name()
         # TODO: support loadbalancers, hacluster, etc
@@ -252,15 +297,17 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.write_etcd_client_credentials()
         self.write_service_account_key()
         self.configure_auth_webhook()
-        self.configure_apiserver()
-        self.create_kubeconfigs()
-        self.configure_controller_manager()
-        self.configure_scheduler()
-        self.configure_container_runtime()
-        self.configure_cni()
-        self.configure_kernel_parameters()
-        self.configure_kubelet()
-        self.configure_kube_proxy()
+        if self.api_dependencies_ready():
+            self.configure_apiserver()
+            self.create_kubeconfigs()
+            self.configure_controller_manager()
+            self.configure_scheduler()
+            self.configure_container_runtime()
+            self.configure_cni()
+            self.configure_kernel_parameters()
+            self.configure_kubelet()
+            self.configure_kube_proxy()
+            self.configure_kube_control()
 
     def request_certificates(self):
         """Request client and server certificates."""
