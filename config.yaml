@@ -152,6 +152,14 @@ options:
 
       For more information about KubeletConfiguration, see upstream docs:
       https://kubernetes.io/docs/tasks/administer-cluster/kubelet-config-file/
+  loadbalancer-ips:
+    type: string
+    description: |
+      Space separated list of IP addresses of loadbalancers in front of the control plane.
+      These can be either virtual IP addresses that have been floated in front of the control
+      plane or the IP of a loadbalancer appliance such as an F5. Currently, workers will only
+      use the first address that is specified.
+    default: ""
   proxy-extra-args:
     type: string
     default: ""

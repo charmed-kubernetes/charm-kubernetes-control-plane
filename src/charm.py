@@ -18,6 +18,8 @@ from charms.interface_container_runtime import ContainerRuntimeProvides
 from charms.interface_kubernetes_cni import KubernetesCniProvides
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.reconciler import Reconciler
+from k8s_api_endpoints import K8sApiEndpoints
+from loadbalancer_interface import LBProvider
 from ops import BlockedStatus, WaitingStatus
 from ops.interface_kube_control import KubeControlProvides
 from ops.interface_tls_certificates import CertificatesRequires
@@ -36,7 +38,10 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         )
         self.container_runtime = ContainerRuntimeProvides(self, endpoint="container-runtime")
         self.etcd = EtcdReactiveRequires(self)
+        self.k8s_api_endpoints = K8sApiEndpoints(self)
         self.kube_control = KubeControlProvides(self, endpoint="kube-control")
+        self.lb_external = LBProvider(self, "loadbalancer-external")
+        self.lb_internal = LBProvider(self, "loadbalancer-internal")
         self.reconciler = Reconciler(self, self.reconcile)
 
     def api_dependencies_ready(self):
@@ -57,9 +62,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def configure_apiserver(self):
         kubernetes_snaps.configure_apiserver(
-            advertise_address=self.model.get_binding("kube-control")
-            .network.ingress_addresses[0]
-            .exploded,
+            advertise_address=self.kube_control.ingress_addresses[0],
             audit_policy=self.model.config["audit-policy"],
             audit_webhook_conf=self.model.config["audit-webhook-config"],
             auth_webhook_conf=auth_webhook.auth_webhook_conf,
@@ -114,12 +117,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         kubernetes_snaps.configure_kernel_parameters(sysctl)
 
     def configure_kube_control(self):
-        # TODO: proper endpoint handling
-        endpoint_address = (
-            self.model.get_binding("kube-control").network.ingress_addresses[0].exploded
-        )
-        endpoint = f"https://{endpoint_address}:6443"
-        self.kube_control.set_api_endpoints([endpoint])
+        self.kube_control.set_api_endpoints([self.k8s_api_endpoints.internal()])
         self.kube_control.set_cluster_name(self.get_cluster_name())
         self.kube_control.set_default_cni(self.model.config["default-cni"])
         # TODO: Use real DNS info. These are placeholder values until the
@@ -169,10 +167,32 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             extra_config=yaml.safe_load(self.model.config["kubelet-extra-config"]),
             has_xcp=False,  # TODO: cloud config
             kubeconfig="/root/cdk/kubeconfig",
-            node_ip=self.model.get_binding("kube-control").network.ingress_addresses[0].exploded,
+            node_ip=self.kube_control.ingress_addresses[0],
             registry=self.model.config["image-registry"],
             taints=self.model.config["register-with-taints"].split(),
         )
+
+    def configure_loadbalancers(self):
+        if not self.unit.is_leader():
+            return
+
+        if self.lb_external.is_available:
+            req = self.lb_external.get_request("api-server-external")
+            req.protocol = req.protocols.tcp
+            req.port_mapping = {443: 6443}
+            req.public = True
+            if not req.health_checks:
+                req.add_health_check(protocol=req.protocols.http, port=6443, path="/livez")
+            self.lb_external.send_request(req)
+
+        if self.lb_internal.is_available:
+            req = self.lb_internal.get_request("api-server-internal")
+            req.protocol = req.protocols.tcp
+            req.port_mapping = {6443: 6443}
+            req.public = False
+            if not req.health_checks:
+                req.add_health_check(protocol=req.protocols.http, port=6443, path="/livez")
+            self.lb_internal.send_request(req)
 
     def configure_scheduler(self):
         kubernetes_snaps.configure_scheduler(
@@ -182,11 +202,9 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def create_kubeconfigs(self):
         ca = self.certificates.ca
-        local_server = "https://127.0.0.1:6443"
+        local_server = self.k8s_api_endpoints.local()
         node_name = kubernetes_snaps.get_node_name()
-        # TODO: support loadbalancers, hacluster, etc
-        public_address = kubernetes_snaps.get_public_address()
-        public_server = f"https://{public_address}:6443"
+        public_server = self.k8s_api_endpoints.external()
 
         if not os.path.exists("/root/.kube/config"):
             # Create a bootstrap client config. This initial config will allow
@@ -297,6 +315,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.write_etcd_client_credentials()
         self.write_service_account_key()
         self.configure_auth_webhook()
+        self.configure_loadbalancers()
         if self.api_dependencies_ready():
             self.configure_apiserver()
             self.create_kubeconfigs()
@@ -322,13 +341,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         k8s_service_addrs = kubernetes_snaps.get_kubernetes_service_addresses(
             self.config["service-cidr"].split(",")
         )
-        ingress_addrs = [
-            # RFC 5280 section 4.2.1.6: "For IP version 6 ... the octet string
-            # MUST contain exactly sixteen octets." We'll use .exploded to be
-            # safe.
-            addr.exploded
-            for addr in self.model.get_binding("kube-control").network.ingress_addresses
-        ]
+        ingress_addrs = self.kube_control.ingress_addresses
 
         sans = [
             # The CN field is checked as a hostname, so if it's an IP, it

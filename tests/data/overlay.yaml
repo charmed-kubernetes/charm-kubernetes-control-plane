@@ -2,3 +2,7 @@ applications:
   kubernetes-control-plane:
     charm: {{charm}}
     channel: null
+  etcd:
+    num_units: 1
+  kubernetes-worker:
+    num_units: 1
