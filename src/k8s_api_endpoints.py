@@ -63,7 +63,7 @@ class K8sApiEndpoints:
             self.from_config()
             or self.from_lb_internal()
             or self.from_lb_external()
-            or self.from_ingress_addresses()
+            or self.from_ingress_address()
         )
 
     def local(self) -> str:
