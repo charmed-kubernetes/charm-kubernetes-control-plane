@@ -2,9 +2,7 @@ applications:
   kubernetes-control-plane:
     charm: {{charm}}
     channel: null
-  # Remove the apps we don't support yet
-  kubernetes-worker: null
-# override machines since we dropped kubernetes-worker
-machines:
-  "0":
-    constraints: "cores=2 mem=8G root-disk=16G"
+  etcd:
+    num_units: 1
+  kubernetes-worker:
+    num_units: 1

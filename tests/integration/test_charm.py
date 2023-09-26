@@ -17,7 +17,9 @@ async def test_build_and_deploy(ops_test: OpsTest):
     charm = await ops_test.build_charm(".")
 
     bundle, *overlays = await ops_test.async_render_bundles(
-        ops_test.Bundle("kubernetes-core", channel="edge"), "tests/data/overlay.yaml", charm=charm
+        ops_test.Bundle("charmed-kubernetes", channel="edge"),
+        "tests/data/overlay.yaml",
+        charm=charm,
     )
 
     log.info("Deploying bundle")
