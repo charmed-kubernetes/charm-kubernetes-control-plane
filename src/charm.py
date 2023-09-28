@@ -13,6 +13,7 @@ import charms.contextual_status as status
 import leader_data
 import ops
 import yaml
+from cdk_addons import CdkAddons
 from charms import kubernetes_snaps
 from charms.interface_container_runtime import ContainerRuntimeProvides
 from charms.interface_kubernetes_cni import KubernetesCniProvides
@@ -32,6 +33,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def __init__(self, *args):
         super().__init__(*args)
+        self.cdk_addons = CdkAddons(self)
         self.certificates = CertificatesRequires(self, endpoint="certificates")
         self.cni = KubernetesCniProvides(
             self, endpoint="cni", default_cni=self.model.config["default-cni"]
@@ -326,6 +328,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.configure_kernel_parameters()
             self.configure_kubelet()
             self.configure_kube_proxy()
+            self.cdk_addons.configure()
             self.configure_kube_control()
 
     def request_certificates(self):
