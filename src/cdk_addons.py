@@ -4,7 +4,9 @@ import os
 import shutil
 from subprocess import CalledProcessError, check_call, check_output
 
-from kubectl import kubectl
+import charms.contextual_status as status
+from kubectl import get_service_ip, kubectl, kubectl_get
+from ops import BlockedStatus
 from tenacity import retry, stop_after_delay, wait_exponential
 
 kubeconfig_dir = "/root/snap/cdk-addons/common"
@@ -90,6 +92,12 @@ class CdkAddons:
             def_storage_class = "ceph-xfs"
         return def_storage_class
 
+    def get_dns_address(self):
+        if self.get_dns_provider() == "core-dns":
+            return get_service_ip(namespace="kube-system", name="kube-dns")
+        else:
+            return ""
+
     def get_dns_provider(self):
         """Get the DNS provider.
 
@@ -99,6 +107,7 @@ class CdkAddons:
 
         dns_provider = self.charm.model.config["dns-provider"].lower()
         if dns_provider not in valid_dns_providers:
+            status.add(BlockedStatus(f"dns-provider={dns_provider} is invalid"))
             raise InvalidDnsProviderError(dns_provider)
 
         if dns_provider == "auto":
@@ -109,7 +118,7 @@ class CdkAddons:
     def get_storage_classes(self):
         """Get StorageClasses from Kubernetes."""
         try:
-            storage_classes = json.loads(kubectl("get", "storageclass", "-o=json"))
+            storage_classes = kubectl_get("storageclass")
         except (CalledProcessError, FileNotFoundError):
             log.exception("Failed to get the current storage classes.")
             storage_classes = {"items": []}

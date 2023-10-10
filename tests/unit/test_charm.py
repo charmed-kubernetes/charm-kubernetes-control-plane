@@ -25,6 +25,7 @@ def harness():
 
 @patch("auth_webhook.configure")
 @patch("auth_webhook.get_token")
+@patch("cdk_addons.CdkAddons.get_dns_address")
 @patch("charms.interface_kubernetes_cni.hash_file")
 @patch("charms.kubernetes_snaps.configure_apiserver")
 @patch("charms.kubernetes_snaps.configure_controller_manager")
@@ -56,10 +57,12 @@ def test_active(
     configure_controller_manager,
     configure_apiserver,
     hash_file,
+    get_dns_address,
     auth_webhook_get_token,
     auth_webhook_configure,
     harness,
 ):
+    get_dns_address.return_value = "10.152.183.10"
     get_public_address.return_value = "10.0.0.10"
     hash_file.return_value = "test-hash"
 
@@ -164,7 +167,7 @@ def test_active(
     configure_kubelet.assert_called_once_with(
         container_runtime_endpoint="test-container-runtime-socket",
         dns_domain="cluster.local",
-        dns_ip=None,
+        dns_ip="10.152.183.10",
         extra_args_config="",
         extra_config={},
         has_xcp=False,

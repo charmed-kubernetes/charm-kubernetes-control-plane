@@ -16,6 +16,7 @@ import yaml
 from cdk_addons import CdkAddons
 from charms import kubernetes_snaps
 from charms.interface_container_runtime import ContainerRuntimeProvides
+from charms.interface_kube_dns import KubeDnsRequires
 from charms.interface_kubernetes_cni import KubernetesCniProvides
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.reconciler import Reconciler
@@ -42,6 +43,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.etcd = EtcdReactiveRequires(self)
         self.k8s_api_endpoints = K8sApiEndpoints(self)
         self.kube_control = KubeControlProvides(self, endpoint="kube-control")
+        self.kube_dns = KubeDnsRequires(self, endpoint="dns-provider")
         self.lb_external = LBProvider(self, "loadbalancer-external")
         self.lb_internal = LBProvider(self, "loadbalancer-internal")
         self.reconciler = Reconciler(self, self.reconcile)
@@ -119,15 +121,18 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         kubernetes_snaps.configure_kernel_parameters(sysctl)
 
     def configure_kube_control(self):
+        dns_address = self.get_dns_address()
+        dns_domain = self.get_dns_domain()
+        dns_enabled = bool(dns_address)
+        dns_port = self.get_dns_port()
+
         self.kube_control.set_api_endpoints([self.k8s_api_endpoints.internal()])
         self.kube_control.set_cluster_name(self.get_cluster_name())
         self.kube_control.set_default_cni(self.model.config["default-cni"])
-        # TODO: Use real DNS info. These are placeholder values until the
-        # kube-dns relation and cdk-addons have been added
-        self.kube_control.set_dns_address("")
-        self.kube_control.set_dns_domain(self.model.config["dns_domain"])
-        self.kube_control.set_dns_enabled(False)
-        self.kube_control.set_dns_port(53)
+        self.kube_control.set_dns_address(dns_address)
+        self.kube_control.set_dns_domain(dns_domain)
+        self.kube_control.set_dns_enabled(dns_enabled)
+        self.kube_control.set_dns_port(dns_port)
         # TODO: external cloud provider support
         self.kube_control.set_has_external_cloud_provider(False)
         self.kube_control.set_image_registry(self.model.config["image-registry"])
@@ -163,8 +168,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def configure_kubelet(self):
         kubernetes_snaps.configure_kubelet(
             container_runtime_endpoint=self.container_runtime.socket,
-            dns_domain=self.model.config["dns_domain"],
-            dns_ip=None,  # TODO: needs kube-dns relation, or cdk-addons
+            dns_domain=self.get_dns_domain(),
+            dns_ip=self.get_dns_address(),
             extra_args_config=self.model.config["kubelet-extra-args"],
             extra_config=yaml.safe_load(self.model.config["kubelet-extra-config"]),
             has_xcp=False,  # TODO: cloud config
@@ -308,6 +313,15 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         peer_relation.data[self.app]["cluster-name"] = cluster_name
         return cluster_name
 
+    def get_dns_address(self):
+        return self.kube_dns.address or self.cdk_addons.get_dns_address()
+
+    def get_dns_domain(self):
+        return self.kube_dns.domain or self.model.config["dns_domain"]
+
+    def get_dns_port(self):
+        return self.kube_dns.port or 53
+
     def reconcile(self, event):
         """Reconcile state change events."""
         kubernetes_snaps.install(channel=self.model.config["channel"], control_plane=True)
@@ -323,12 +337,12 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.create_kubeconfigs()
             self.configure_controller_manager()
             self.configure_scheduler()
+            self.cdk_addons.configure()
             self.configure_container_runtime()
             self.configure_cni()
             self.configure_kernel_parameters()
             self.configure_kubelet()
             self.configure_kube_proxy()
-            self.cdk_addons.configure()
             self.configure_kube_control()
 
     def request_certificates(self):
@@ -339,7 +353,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
         bind_addrs = kubernetes_snaps.get_bind_addresses()
         common_name = kubernetes_snaps.get_public_address()
-        domain = self.config["dns_domain"]
+        domain = self.get_dns_domain()
         extra_sans = self.config["extra_sans"].split()
         k8s_service_addrs = kubernetes_snaps.get_kubernetes_service_addresses(
             self.config["service-cidr"].split(",")
