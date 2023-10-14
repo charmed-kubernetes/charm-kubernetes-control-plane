@@ -1331,8 +1331,10 @@ def get_dns_info():
             dns_ip = kubernetes_control_plane.get_dns_ip()
         except CalledProcessError:
             hookenv.log("DNS addon service not ready yet")
+        if dns_ip:
+            return True, dns_ip, 53, dns_domain
+        else:
             return False, None, None, None
-        return True, dns_ip, 53, dns_domain
 
 
 @when("kube-control.connected")
@@ -1629,7 +1631,11 @@ def configure_default_storage_class():
     "leadership.is_leader",
     "leadership.set.cluster_tag",
 )
-@when_not("upgrade.series.in-progress")
+@when_not(
+    "upgrade.series.in-progress",
+    "endpoint.cni.departed",
+    "endpoint.container-runtime.departed",
+)
 def configure_cdk_addons():
     """Configure CDK addons"""
     remove_state("cdk-addons.reconfigure")
@@ -2536,7 +2542,7 @@ def update_for_service_cidr_expansion():
             "-l",
             "cdk-restart-on-ca-change=true",
         ).decode("UTF-8")
-        deployments = json.loads(output)["items"]
+        deployments = json.loads(output)["items"] if output else {}
 
         # Now restart the addons
         for deployment in deployments:
@@ -2736,7 +2742,7 @@ def get_pods(namespace="default"):
         output = kubectl(
             "get", "po", "-n", namespace, "-o", "json", "--request-timeout", "10s"
         ).decode("UTF-8")
-        result = json.loads(output)
+        result = json.loads(output) if output else None
     except CalledProcessError:
         hookenv.log("failed to get {} pod status".format(namespace))
         return None
@@ -2749,7 +2755,7 @@ def get_svcs(namespace="default"):
         output = kubectl(
             "get", "svc", "-n", namespace, "-o", "json", "--request-timeout", "10s"
         ).decode("UTF-8")
-        result = json.loads(output)
+        result = json.loads(output) if output else None
     except CalledProcessError:
         hookenv.log("failed to get {} service status".format(namespace))
         return None
@@ -2831,7 +2837,7 @@ def poke_network_unavailable():
 
     try:
         output = kubectl("get", "nodes", "-o", "json").decode("utf-8")
-        nodes = json.loads(output)["items"]
+        nodes = json.loads(output)["items"] if output else {}
     except CalledProcessError:
         hookenv.log("failed to get kube-system nodes")
         return
@@ -3546,7 +3552,7 @@ def restart_addons_for_ca():
             "-l",
             "cdk-restart-on-ca-change=true",
         ).decode("UTF-8")
-        deployments = json.loads(output)["items"]
+        deployments = json.loads(output)["items"] if output else {}
 
         # Get ServiceAccounts
         service_account_names = set(
@@ -3563,8 +3569,9 @@ def restart_addons_for_ca():
             output = kubectl(
                 "get", "ServiceAccount", name, "-o", "json", "-n", namespace
             ).decode("UTF-8")
-            service_account = json.loads(output)
-            service_accounts.append(service_account)
+            if output:
+                service_account = json.loads(output)
+                service_accounts.append(service_account)
 
         # Get ServiceAccount secrets
         secret_names = set()
@@ -3577,8 +3584,9 @@ def restart_addons_for_ca():
             output = kubectl(
                 "get", "Secret", name, "-o", "json", "-n", namespace
             ).decode("UTF-8")
-            secret = json.loads(output)
-            secrets.append(secret)
+            if output:
+                secret = json.loads(output)
+                secrets.append(secret)
 
         # Check secrets have updated CA
         with open(ca_crt_path, "rb") as f:
