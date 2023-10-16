@@ -162,5 +162,4 @@ def arch():
     Raise an exception if the architecture is not supported by kubernetes.
     """
     architecture = check_output(["dpkg", "--print-architecture"]).rstrip()
-    architecture = architecture.decode("utf-8")
-    return architecture
+    return architecture.decode("utf-8")
