@@ -109,10 +109,43 @@ options:
       juju config kubernetes-control-plane default-cni=flannel
 
       If unspecified, then the default CNI network is chosen alphabetically.
+  default-storage:
+    type: string
+    default: "auto"
+    description: |-
+      The storage class to make the default storage class.
+
+      Setting to "auto" is the same as setting "ceph-xfs"
+
+      Any value is allowed, if it matches the name of a storage class,
+      it alone will be selected as the default storage class for the cluster.
   dns_domain:
     type: string
     default: cluster.local
     description: The local domain for cluster dns
+  dns-provider:
+    type: string
+    default: "auto"
+    description: |
+      DNS provider addon to use. Can be "auto", "core-dns", or "none".
+
+      CoreDNS is only supported on Kubernetes 1.14+.
+
+      When set to "auto", the behavior is as follows:
+      - New deployments of Kubernetes 1.14+ will use CoreDNS
+      - Upgraded deployments will continue to use whichever provider was
+      previously used.
+  enable-dashboard-addons:
+    type: boolean
+    default: true
+    description: Deploy the Kubernetes Dashboard
+  enable-metrics:
+    type: boolean
+    default: true
+    description: |
+      If true the metrics server for Kubernetes will be deployed onto the cluster
+      managed entirely by kubernetes addons. Consider disabling this option and deploying
+      `kubernetes-metrics-server-operator` into a kubernetes model.
   extra_sans:
     type: string
     default: ""

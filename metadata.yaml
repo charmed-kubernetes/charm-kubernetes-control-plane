@@ -40,6 +40,8 @@ provides:
 requires:
   certificates:
     interface: tls-certificates
+  dns-provider:
+    interface: kube-dns
   etcd:
     interface: etcd
   loadbalancer-external:
