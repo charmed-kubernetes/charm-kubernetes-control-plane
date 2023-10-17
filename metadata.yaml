@@ -31,8 +31,12 @@ provides:
   container-runtime:
     interface: container-runtime
     scope: container
+  cos-agent:
+    interface: cos_agent
   kube-control:
     interface: kube-control
+  tokens:
+    interface: tokens
 requires:
   certificates:
     interface: tls-certificates

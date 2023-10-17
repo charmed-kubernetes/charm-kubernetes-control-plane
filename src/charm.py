@@ -2,11 +2,12 @@
 # Copyright 2023 Canonical
 # See LICENSE file for licensing details.
 
-"""Charm."""
+"""Charmed Machine Operator for Kubernetes Control Plane."""
 
 import logging
 import os
 import socket
+from collections import namedtuple
 
 import auth_webhook
 import charms.contextual_status as status
@@ -14,11 +15,14 @@ import leader_data
 import ops
 import yaml
 from charms import kubernetes_snaps
+from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.interface_container_runtime import ContainerRuntimeProvides
 from charms.interface_kubernetes_cni import KubernetesCniProvides
+from charms.interface_tokens import TokensProvider
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.reconciler import Reconciler
 from k8s_api_endpoints import K8sApiEndpoints
+from kubectl import kubectl
 from loadbalancer_interface import LBProvider
 from ops import BlockedStatus, WaitingStatus
 from ops.interface_kube_control import KubeControlProvides
@@ -26,9 +30,12 @@ from ops.interface_tls_certificates import CertificatesRequires
 
 log = logging.getLogger(__name__)
 
+OBSERVABILITY_USER = OBSERVABILITY_ROLE = "system:cos-monitoring-control-plane"
+JobConfig = namedtuple("JobConfig", ["name", "metrics_path", "scheme", "target"])
+
 
 class KubernetesControlPlaneCharm(ops.CharmBase):
-    """Charm."""
+    """Charmed Operator for Kubernetes Control Plane."""
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -37,12 +44,66 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self, endpoint="cni", default_cni=self.model.config["default-cni"]
         )
         self.container_runtime = ContainerRuntimeProvides(self, endpoint="container-runtime")
+        self.cos_agent = COSAgentProvider(
+            self,
+            relation_name="cos-agent",
+            scrape_configs=self.get_metrics_endpoints,
+            refresh_events=[self.on.tokens_relation_changed, self.on.upgrade_charm],
+        )
         self.etcd = EtcdReactiveRequires(self)
         self.k8s_api_endpoints = K8sApiEndpoints(self)
         self.kube_control = KubeControlProvides(self, endpoint="kube-control")
         self.lb_external = LBProvider(self, "loadbalancer-external")
         self.lb_internal = LBProvider(self, "loadbalancer-internal")
         self.reconciler = Reconciler(self, self.reconcile)
+        self.tokens = TokensProvider(self, endpoint="tokens")
+
+    def get_metrics_endpoints(self) -> list:
+        """Return the metrics endpoints for K8s components."""
+        log.info("Building Prometheus scraping jobs.")
+        token = auth_webhook.get_token(OBSERVABILITY_USER)
+
+        if not token:
+            log.info("COS Token not yet available")
+            return []
+
+        def create_scrape_job(config: JobConfig):
+            return {
+                "tls_config": {"insecure_skip_verify": True},
+                "authorization": {"credentials": token},
+                "job_name": config.name,
+                "metrics_path": config.metrics_path,
+                "scheme": config.scheme,
+                "static_configs": [
+                    {
+                        "targets": [config.target],
+                        "labels": {"node": kubernetes_snaps.get_node_name()},
+                    }
+                ],
+                "relabel_configs": [
+                    {"target_label": "metrics_path", "replacement": config.metrics_path},
+                    {"target_label": "job", "replacement": config.name},
+                ],
+            }
+
+        kubernetes_jobs = [
+            JobConfig("kube-proxy", "/metrics", "http", "localhost:10249"),
+            JobConfig("kube-apiserver", "/metrics", "https", "localhost:6443"),
+            JobConfig("kube-controller-manager", "/metrics", "https", "localhost:10257"),
+        ]
+        kubelet_paths = [
+            "/metrics",
+            "/metrics/resource",
+            "/metrics/cadvisor",
+            "/metrics/probes",
+        ]
+
+        kubelet_jobs = [
+            JobConfig(f"kubelet-{path.split('/')[-1]}", path, "https", "localhost:10250")
+            for path in kubelet_paths
+        ]
+
+        return [create_scrape_job(job) for job in kubernetes_jobs + kubelet_jobs]
 
     def api_dependencies_ready(self):
         common_name = kubernetes_snaps.get_public_address()
@@ -284,6 +345,25 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             user="kube-proxy",
         )
 
+    def configure_observability(self):
+        """Apply observability configurations to the cluster."""
+        # Apply Clusterrole and Clusterrole binding for COS observability
+        if self.unit.is_leader():
+            kubectl("apply", "-f", "templates/observability.yaml")
+            # Issue a token for metrics scraping
+            auth_webhook.create_token(
+                uid=self.model.unit.name, username=OBSERVABILITY_USER, groups=[OBSERVABILITY_ROLE]
+            )
+
+    def generate_tokens(self):
+        """Generate and send tokens for units that request them."""
+        if self.unit.is_leader():
+            for request in self.tokens.token_requests:
+                token = auth_webhook.create_token(
+                    uid=request.unit, username=request.user, groups=[request.group]
+                )
+                self.tokens.send_token(request, token)
+
     def get_cluster_name(self):
         peer_relation = self.model.get_relation("peer")
         cluster_name = peer_relation.data[self.app].get("cluster-name")
@@ -327,6 +407,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.configure_kubelet()
             self.configure_kube_proxy()
             self.configure_kube_control()
+            self.generate_tokens()
+            self.configure_observability()
 
     def request_certificates(self):
         """Request client and server certificates."""
