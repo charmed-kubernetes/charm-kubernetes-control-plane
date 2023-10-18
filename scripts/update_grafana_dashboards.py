@@ -15,11 +15,9 @@ import yaml
 VERSION = "v0.13.0"
 SOURCE_URL = f"https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/{VERSION}/manifests/grafana-dashboardDefinitions.yaml"
 DASHBOARDS = {
-    # "alertmanager-overview.json",
     "apiserver.json",
     "cluster-total.json",
     "controller-manager.json",
-    # "grafana-overview.json",
     "k8s-resources-cluster.json",
     "k8s-resources-multicluster.json",
     "k8s-resources-namespace.json",
@@ -30,14 +28,8 @@ DASHBOARDS = {
     "kubelet.json",
     "namespace-by-pod.json",
     "namespace-by-workload.json",
-    # "node-cluster-rsrc-use.json",
-    # "node-rsrc-use.json",
-    # "nodes-darwin.json",
-    # "nodes.json",
     "persistentvolumesusage.json",
     "pod-total.json",
-    # "prometheus-remote-write.json",
-    # "prometheus.json",
     "proxy.json",
     "scheduler.json",
     "workload-total.json",
