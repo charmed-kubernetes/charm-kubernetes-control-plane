@@ -325,6 +325,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         if not self.unit.is_leader():
             return
 
+        self.tokens.remove_stale_tokens()
+
         for request in self.tokens.token_requests:
             tokens = {
                 user: auth_webhook.create_token(uid=request.unit, username=user, groups=[group])
