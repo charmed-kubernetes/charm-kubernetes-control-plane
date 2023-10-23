@@ -322,12 +322,15 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def generate_tokens(self):
         """Generate and send tokens for units that request them."""
-        if self.unit.is_leader():
-            for request in self.tokens.token_requests:
-                token = auth_webhook.create_token(
-                    uid=request.unit, username=request.user, groups=[request.group]
-                )
-                self.tokens.send_token(request, token)
+        if not self.unit.is_leader():
+            return
+
+        for request in self.tokens.token_requests:
+            tokens = {
+                user: auth_webhook.create_token(uid=request.unit, username=user, groups=[group])
+                for user, group in request.requests.items()
+            }
+            self.tokens.send_token(request, tokens)
 
     def get_cluster_name(self):
         peer_relation = self.model.get_relation("peer")

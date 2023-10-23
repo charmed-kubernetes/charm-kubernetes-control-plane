@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: system:cos-monitoring
+  name: system:cos
 rules:
 - apiGroups: [""]
   resources:
@@ -16,25 +16,12 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: system:cos-monitoring-control-plane
+  name: system:cos
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: system:cos-monitoring
+  name: system:cos
 subjects:
 - apiGroup: rbac.authorization.k8s.io
-  kind: User
-  name: system:cos-monitoring-control-plane
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: system:cos-monitoring-worker
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: system:cos-monitoring
-subjects:
-- apiGroup: rbac.authorization.k8s.io
-  kind: User
-  name: system:cos-monitoring-worker
+  kind: Group
+  name: system:cos
