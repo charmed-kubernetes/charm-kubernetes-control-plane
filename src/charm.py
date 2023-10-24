@@ -371,7 +371,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         log.info("Building Prometheus scraping jobs.")
 
         try:
-            token = auth_webhook.get_token(OBSERVABILITY_USER)
+            cos_user = f"system:cos:{kubernetes_snaps.get_node_name()}"
+            token = auth_webhook.get_token(cos_user)
         except (CalledProcessError, RetryError):
             log.error("Failed to retrieve observability token.")
             return []
