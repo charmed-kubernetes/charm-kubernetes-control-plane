@@ -34,7 +34,7 @@ from tenacity import RetryError
 
 log = logging.getLogger(__name__)
 
-OBSERVABILITY_USER = OBSERVABILITY_ROLE = "system:cos-monitoring-control-plane"
+OBSERVABILITY_ROLE = "system:cos"
 JobConfig = namedtuple("JobConfig", ["name", "metrics_path", "scheme", "target"])
 
 
@@ -316,8 +316,9 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         if self.unit.is_leader():
             kubectl("apply", "-f", "templates/observability.yaml")
         # Issue a token for metrics scraping
+        cos_user = f"system:cos:{kubernetes_snaps.get_node_name()}"
         auth_webhook.create_token(
-            uid=self.model.unit.name, username=OBSERVABILITY_USER, groups=[OBSERVABILITY_ROLE]
+            uid=self.model.unit.name, username=cos_user, groups=[OBSERVABILITY_ROLE]
         )
 
     def generate_tokens(self):
