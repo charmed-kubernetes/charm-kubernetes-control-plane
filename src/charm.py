@@ -213,8 +213,9 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def create_kubeconfigs(self):
         ca = self.certificates.ca
+        fqdn = self.external_cloud_provider.name == "aws"
         local_server = self.k8s_api_endpoints.local()
-        node_name = kubernetes_snaps.get_node_name()
+        node_name = kubernetes_snaps.get_node_name(fqdn)
         public_server = self.k8s_api_endpoints.external()
 
         if not os.path.exists("/root/.kube/config"):
