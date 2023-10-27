@@ -139,6 +139,7 @@ def test_active(
         extra_args_config="",
         privileged="auto",
         service_cidr="10.152.183.0/24",
+        external_cloud_provider=harness.charm.external_cloud_provider,
     )
     configure_controller_manager.assert_called_once_with(
         cluster_cidr="192.168.0.0/16",
@@ -146,6 +147,7 @@ def test_active(
         extra_args_config="",
         kubeconfig="/root/cdk/kubecontrollermanagerconfig",
         service_cidr="10.152.183.0/24",
+        external_cloud_provider=harness.charm.external_cloud_provider,
     )
     configure_kernel_parameters.assert_called_once_with(
         {
@@ -170,7 +172,7 @@ def test_active(
         dns_ip="10.152.183.10",
         extra_args_config="",
         extra_config={},
-        has_xcp=False,
+        external_cloud_provider=harness.charm.external_cloud_provider,
         kubeconfig="/root/cdk/kubeconfig",
         node_ip="10.0.0.10",
         registry="rocks.canonical.com:443/cdk",
@@ -181,6 +183,7 @@ def test_active(
         extra_args_config="",
         extra_config={},
         kubeconfig="/root/cdk/kubeproxyconfig",
+        external_cloud_provider=harness.charm.external_cloud_provider,
     )
     configure_scheduler.assert_called_once_with(
         extra_args_config="", kubeconfig="/root/cdk/kubeschedulerconfig"
