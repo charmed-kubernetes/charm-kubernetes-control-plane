@@ -4,7 +4,7 @@ charm-lib-interface-container-runtime @ git+https://github.com/charmed-kubernete
 charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider
 charm-lib-interface-kube-dns @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kube-dns
 charm-lib-interface-kubernetes-cni @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kubernetes-cni
-charm-lib-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps
+charm-lib-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps@feature/cloud-integration
 charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler
 gunicorn >= 20.0.0,<21.0.0
 jinja2
