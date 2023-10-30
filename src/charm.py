@@ -19,6 +19,7 @@ from cdk_addons import CdkAddons
 from charms import kubernetes_snaps
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.interface_container_runtime import ContainerRuntimeProvides
+from charms.interface_external_cloud_provider import ExternalCloudProvider
 from charms.interface_kube_dns import KubeDnsRequires
 from charms.interface_kubernetes_cni import KubernetesCniProvides
 from charms.interface_tokens import TokensProvider
@@ -64,6 +65,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.kube_dns = KubeDnsRequires(self, endpoint="dns-provider")
         self.lb_external = LBProvider(self, "loadbalancer-external")
         self.lb_internal = LBProvider(self, "loadbalancer-internal")
+        self.external_cloud_provider = ExternalCloudProvider(self, "external-cloud-provider")
         self.reconciler = Reconciler(self, self.reconcile)
         self.tokens = TokensProvider(self, endpoint="tokens")
 
@@ -95,6 +97,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             extra_args_config=self.model.config["api-extra-args"],
             privileged=self.model.config["allow-privileged"],
             service_cidr=self.model.config["service-cidr"],
+            external_cloud_provider=self.external_cloud_provider,
         )
 
     def configure_auth_webhook(self):
@@ -133,6 +136,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             extra_args_config=self.model.config["controller-manager-extra-args"],
             kubeconfig="/root/cdk/kubecontrollermanagerconfig",
             service_cidr=self.model.config["service-cidr"],
+            external_cloud_provider=self.external_cloud_provider,
         )
 
     def configure_kernel_parameters(self):
@@ -152,8 +156,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.kube_control.set_dns_domain(dns_domain)
         self.kube_control.set_dns_enabled(dns_enabled)
         self.kube_control.set_dns_port(dns_port)
-        # TODO: external cloud provider support
-        self.kube_control.set_has_external_cloud_provider(False)
+        self.kube_control.set_has_external_cloud_provider(self.external_cloud_provider.has_xcp)
         self.kube_control.set_image_registry(self.model.config["image-registry"])
         # TODO: labels
         self.kube_control.set_labels([])
@@ -182,6 +185,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             extra_args_config=self.model.config["proxy-extra-args"],
             extra_config=yaml.safe_load(self.model.config["proxy-extra-config"]),
             kubeconfig="/root/cdk/kubeproxyconfig",
+            external_cloud_provider=self.external_cloud_provider,
         )
 
     def configure_kubelet(self):
@@ -191,7 +195,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             dns_ip=self.get_dns_address(),
             extra_args_config=self.model.config["kubelet-extra-args"],
             extra_config=yaml.safe_load(self.model.config["kubelet-extra-config"]),
-            has_xcp=False,  # TODO: cloud config
+            external_cloud_provider=self.external_cloud_provider,
             kubeconfig="/root/cdk/kubeconfig",
             node_ip=self.kube_control.ingress_addresses[0],
             registry=self.model.config["image-registry"],
@@ -228,8 +232,9 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def create_kubeconfigs(self):
         ca = self.certificates.ca
+        fqdn = self.external_cloud_provider.name == "aws"
         local_server = self.k8s_api_endpoints.local()
-        node_name = kubernetes_snaps.get_node_name()
+        node_name = kubernetes_snaps.get_node_name(fqdn)
         public_server = self.k8s_api_endpoints.external()
 
         if not os.path.exists("/root/.kube/config"):

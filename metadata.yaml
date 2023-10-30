@@ -52,3 +52,5 @@ requires:
     # Indicates that the LB should not be public and should use internal
     # networks if available. Intended for control plane and other internal use.
     interface: loadbalancer
+  external-cloud-provider:
+    interface: external_cloud_provider

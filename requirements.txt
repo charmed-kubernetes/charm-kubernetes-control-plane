@@ -1,6 +1,7 @@
 aiohttp>=3.7.4,<3.8.0
 charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status
 charm-lib-interface-container-runtime @ git+https://github.com/charmed-kubernetes/charm-lib-interface-container-runtime
+charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider
 charm-lib-interface-kube-dns @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kube-dns
 charm-lib-interface-kubernetes-cni @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kubernetes-cni
 charm-lib-interface-tokens @ git+https://github.com/charmed-kubernetes/charm-lib-interface-tokens
