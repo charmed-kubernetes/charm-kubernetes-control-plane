@@ -7,8 +7,6 @@
 import logging
 import os
 import socket
-from collections import namedtuple
-from subprocess import CalledProcessError
 
 import auth_webhook
 import charms.contextual_status as status
@@ -25,18 +23,17 @@ from charms.interface_kubernetes_cni import KubernetesCniProvides
 from charms.interface_tokens import TokensProvider
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.reconciler import Reconciler
+from cos_integration import COSIntegration
 from k8s_api_endpoints import K8sApiEndpoints
 from kubectl import kubectl
 from loadbalancer_interface import LBProvider
 from ops import BlockedStatus, WaitingStatus
 from ops.interface_kube_control import KubeControlProvides
 from ops.interface_tls_certificates import CertificatesRequires
-from tenacity import RetryError
 
 log = logging.getLogger(__name__)
 
 OBSERVABILITY_ROLE = "system:cos"
-JobConfig = namedtuple("JobConfig", ["name", "metrics_path", "scheme", "target"])
 
 
 class KubernetesControlPlaneCharm(ops.CharmBase):
@@ -50,10 +47,11 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self, endpoint="cni", default_cni=self.model.config["default-cni"]
         )
         self.container_runtime = ContainerRuntimeProvides(self, endpoint="container-runtime")
+        self.cos_integration = COSIntegration(self)
         self.cos_agent = COSAgentProvider(
             self,
             relation_name="cos-agent",
-            scrape_configs=self.get_metrics_endpoints,
+            scrape_configs=self.cos_integration.get_metrics_endpoints,
             refresh_events=[
                 self.on.peer_relation_changed,
                 self.on.upgrade_charm,
@@ -232,9 +230,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def create_kubeconfigs(self):
         ca = self.certificates.ca
-        fqdn = self.external_cloud_provider.name == "aws"
         local_server = self.k8s_api_endpoints.local()
-        node_name = kubernetes_snaps.get_node_name(fqdn)
+        node_name = self.get_node_name()
         public_server = self.k8s_api_endpoints.external()
 
         if not os.path.exists("/root/.kube/config"):
@@ -321,7 +318,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         if self.unit.is_leader():
             kubectl("apply", "-f", "templates/observability.yaml")
         # Issue a token for metrics scraping
-        cos_user = f"system:cos:{kubernetes_snaps.get_node_name()}"
+        node_name = self.get_node_name()
+        cos_user = f"system:cos:{node_name}"
         auth_webhook.create_token(
             uid=self.model.unit.name, username=cos_user, groups=[OBSERVABILITY_ROLE]
         )
@@ -371,58 +369,9 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def get_dns_port(self):
         return self.kube_dns.port or 53
 
-    def get_metrics_endpoints(self) -> list:
-        """Return the metrics endpoints for K8s components."""
-        log.info("Building Prometheus scraping jobs.")
-
-        try:
-            cos_user = f"system:cos:{kubernetes_snaps.get_node_name()}"
-            token = auth_webhook.get_token(cos_user)
-        except (CalledProcessError, RetryError):
-            log.error("Failed to retrieve observability token.")
-            return []
-
-        if not token:
-            log.info("COS Token not yet available")
-            return []
-
-        def create_scrape_job(config: JobConfig):
-            return {
-                "tls_config": {"insecure_skip_verify": True},
-                "authorization": {"credentials": token},
-                "job_name": config.name,
-                "metrics_path": config.metrics_path,
-                "scheme": config.scheme,
-                "static_configs": [
-                    {
-                        "targets": [config.target],
-                        "labels": {"node": kubernetes_snaps.get_node_name()},
-                    }
-                ],
-                "relabel_configs": [
-                    {"target_label": "metrics_path", "replacement": config.metrics_path},
-                    {"target_label": "job", "replacement": config.name},
-                ],
-            }
-
-        kubernetes_jobs = [
-            JobConfig("kube-proxy", "/metrics", "http", "localhost:10249"),
-            JobConfig("kube-apiserver", "/metrics", "https", "localhost:6443"),
-            JobConfig("kube-controller-manager", "/metrics", "https", "localhost:10257"),
-        ]
-        kubelet_paths = [
-            "/metrics",
-            "/metrics/resource",
-            "/metrics/cadvisor",
-            "/metrics/probes",
-        ]
-
-        kubelet_jobs = [
-            JobConfig(f"kubelet-{path.split('/')[-1]}", path, "https", "localhost:10250")
-            for path in kubelet_paths
-        ]
-
-        return [create_scrape_job(job) for job in kubernetes_jobs + kubelet_jobs]
+    def get_node_name(self) -> str:
+        fqdn = self.external_cloud_provider.name == "aws"
+        return kubernetes_snaps.get_node_name(fqdn)
 
     def reconcile(self, event):
         """Reconcile state change events."""
