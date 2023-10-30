@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from subprocess import CalledProcessError
 
 import auth_webhook
-from charm import KubernetesControlPlaneCharm
+from ops import CharmBase
 from tenacity import RetryError
 
 log = logging.getLogger(__name__)
@@ -13,6 +13,18 @@ OBSERVABILITY_ROLE = "system:cos"
 
 @dataclass
 class JobConfig:
+    """Data class representing the configuration for a Prometheus scrape job.
+
+    Attributes:
+        name (str): The name of the scrape job. Corresponds to the name of the Kubernetes
+                    component being monitored (e.g., 'kube-apiserver').
+        metrics_path (str): The endpoint path where the metrics are exposed by the
+                            component (e.g., '/metrics').
+        scheme (str): The scheme used for the endpoint. (e.g.'http' or 'https').
+        target (str): The network address of the target component along with the port.
+                      Format is 'hostname:port' (e.g., 'localhost:6443').
+    """
+
     name: str
     metrics_path: str
     scheme: str
@@ -20,7 +32,16 @@ class JobConfig:
 
 
 class COSIntegration:
-    def __init__(self, charm: KubernetesControlPlaneCharm) -> None:
+    """Utility class that handles the integration with COS for Charmed Kubernetes.
+
+    This class provides methods to retrieve and configure Prometheus metrics scraping endpoints
+    based on the Kubernetes components running within the cluster.
+
+    Attributes:
+        charm (CharmBase): Reference to the base charm instance.
+    """
+
+    def __init__(self, charm: CharmBase) -> None:
         self.charm = charm
 
     def _create_scrape_jobs(self, config: JobConfig, node_name: str, token: str) -> dict:
