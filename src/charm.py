@@ -2,7 +2,7 @@
 # Copyright 2023 Canonical
 # See LICENSE file for licensing details.
 
-"""Charm."""
+"""Charmed Machine Operator for Kubernetes Control Plane."""
 
 import logging
 import os
@@ -15,13 +15,17 @@ import ops
 import yaml
 from cdk_addons import CdkAddons
 from charms import kubernetes_snaps
+from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.interface_container_runtime import ContainerRuntimeProvides
 from charms.interface_external_cloud_provider import ExternalCloudProvider
 from charms.interface_kube_dns import KubeDnsRequires
 from charms.interface_kubernetes_cni import KubernetesCniProvides
+from charms.interface_tokens import TokensProvider
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.reconciler import Reconciler
+from cos_integration import COSIntegration
 from k8s_api_endpoints import K8sApiEndpoints
+from kubectl import kubectl
 from loadbalancer_interface import LBProvider
 from ops import BlockedStatus, WaitingStatus
 from ops.interface_kube_control import KubeControlProvides
@@ -29,9 +33,11 @@ from ops.interface_tls_certificates import CertificatesRequires
 
 log = logging.getLogger(__name__)
 
+OBSERVABILITY_ROLE = "system:cos"
+
 
 class KubernetesControlPlaneCharm(ops.CharmBase):
-    """Charm."""
+    """Charmed Operator for Kubernetes Control Plane."""
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -41,6 +47,16 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self, endpoint="cni", default_cni=self.model.config["default-cni"]
         )
         self.container_runtime = ContainerRuntimeProvides(self, endpoint="container-runtime")
+        self.cos_integration = COSIntegration(self)
+        self.cos_agent = COSAgentProvider(
+            self,
+            relation_name="cos-agent",
+            scrape_configs=self.cos_integration.get_metrics_endpoints,
+            refresh_events=[
+                self.on.peer_relation_changed,
+                self.on.upgrade_charm,
+            ],
+        )
         self.etcd = EtcdReactiveRequires(self)
         self.k8s_api_endpoints = K8sApiEndpoints(self)
         self.kube_control = KubeControlProvides(self, endpoint="kube-control")
@@ -49,6 +65,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.lb_internal = LBProvider(self, "loadbalancer-internal")
         self.external_cloud_provider = ExternalCloudProvider(self, "external-cloud-provider")
         self.reconciler = Reconciler(self, self.reconcile)
+        self.tokens = TokensProvider(self, endpoint="tokens")
 
     def api_dependencies_ready(self):
         common_name = kubernetes_snaps.get_public_address()
@@ -213,9 +230,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def create_kubeconfigs(self):
         ca = self.certificates.ca
-        fqdn = self.external_cloud_provider.name == "aws"
         local_server = self.k8s_api_endpoints.local()
-        node_name = kubernetes_snaps.get_node_name(fqdn)
+        node_name = self.get_node_name()
         public_server = self.k8s_api_endpoints.external()
 
         if not os.path.exists("/root/.kube/config"):
@@ -296,6 +312,32 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             user="kube-proxy",
         )
 
+    def configure_observability(self):
+        """Apply observability configurations to the cluster."""
+        # Apply Clusterrole and Clusterrole binding for COS observability
+        if self.unit.is_leader():
+            kubectl("apply", "-f", "templates/observability.yaml")
+        # Issue a token for metrics scraping
+        node_name = self.get_node_name()
+        cos_user = f"system:cos:{node_name}"
+        auth_webhook.create_token(
+            uid=self.model.unit.name, username=cos_user, groups=[OBSERVABILITY_ROLE]
+        )
+
+    def generate_tokens(self):
+        """Generate and send tokens for units that request them."""
+        if not self.unit.is_leader():
+            return
+
+        self.tokens.remove_stale_tokens()
+
+        for request in self.tokens.token_requests:
+            tokens = {
+                user: auth_webhook.create_token(uid=request.unit, username=user, groups=[group])
+                for user, group in request.requests.items()
+            }
+            self.tokens.send_token(request, tokens)
+
     def get_cluster_name(self):
         peer_relation = self.model.get_relation("peer")
         cluster_name = peer_relation.data[self.app].get("cluster-name")
@@ -327,6 +369,10 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def get_dns_port(self):
         return self.kube_dns.port or 53
 
+    def get_node_name(self) -> str:
+        fqdn = self.external_cloud_provider.name == "aws"
+        return kubernetes_snaps.get_node_name(fqdn)
+
     def reconcile(self, event):
         """Reconcile state change events."""
         kubernetes_snaps.install(channel=self.model.config["channel"], control_plane=True)
@@ -349,6 +395,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.configure_kubelet()
             self.configure_kube_proxy()
             self.configure_kube_control()
+            self.generate_tokens()
+            self.configure_observability()
 
     def request_certificates(self):
         """Request client and server certificates."""
