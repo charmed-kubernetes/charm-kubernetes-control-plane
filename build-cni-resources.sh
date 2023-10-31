@@ -1,45 +1,50 @@
-#!/usr/bin/env bash
-
-set -eux
+#!/bin/bash
+set -euo pipefail
 
 # When changing CNI_VERSION, it should be updated in both
 # charm-kubernetes-control-plane/build-cni-resources.sh and
 # charm-kubernetes-worker/build-cni-resources.sh
-CNI_VERSION="${CNI_VERSION:-v1.2.0}"
-ARCH="${ARCH:-amd64 arm64 s390x}"
+CNI_VERSION="v1.2.0"
 
-temp_dir="$(readlink -f build-cni-resources.tmp)"
-rm -rf "$temp_dir"
-mkdir "$temp_dir"
-(
-	cd "$temp_dir"
-	git clone https://github.com/containernetworking/plugins.git cni-plugins \
-		--branch "$CNI_VERSION" \
-		--depth 1
+# Check for required commands
+for cmd in wget sha256sum; do
+	if ! command -v $cmd &>/dev/null; then
+		echo "Error: $cmd is not installed." >&2
+		exit 1
+	fi
+done
 
-	# Grab the user id and group id of this current user.
-	GROUP_ID=$(id -g)
-	USER_ID=$(id -u)
+fetch() {
+	local url="$1"
+	local filename="${url##*/}"
 
-	for arch in $ARCH; do
-		echo "Building cni $CNI_VERSION for $arch"
-		rm -f cni-plugins/bin/*
-		docker run \
-			--rm \
-			-e GOOS=linux \
-			-e GOARCH="$arch" \
-			-v "$temp_dir"/cni-plugins:/cni \
-			golang:1.17 \
-			/bin/bash -c "cd /cni && ./build_linux.sh && chown -R ${USER_ID}:${GROUP_ID} /cni"
+	wget -O "$filename" "$url" || {
+		echo "Failed to download $url"
+		exit 1
+	}
+	echo "$filename"
+}
 
-		(
-			cd cni-plugins/bin
-			echo "cni-$arch $CNI_VERSION" >>BUILD_INFO
-			echo "Built $(date)" >>BUILD_INFO
-			echo "cni-plugins commit: $(git show --oneline -q)" >>BUILD_INFO
-			tar -czf "$temp_dir/cni-$arch.tar.gz" .
-		)
-	done
-)
-mv "$temp_dir"/cni-*.tar.gz .
-rm -rf "$temp_dir"
+fetch_and_validate() {
+	local binary_url="$1"
+	local sha_url="$2"
+	local arch="$3"
+
+	local binary_file=$(fetch "$binary_url")
+	local sha_file=$(fetch "$sha_url")
+
+	sha256sum -c "$sha_file" || {
+		echo "Checksum validation failed for $binary_file"
+		exit 1
+	}
+	mv "$binary_file" "cni-plugins-${arch}.tar.gz"
+	rm "$sha_file"
+}
+
+ARCH=${ARCH:-"amd64 arm64 s390x"}
+for arch in $ARCH; do
+	fetch_and_validate \
+		"https://github.com/containernetworking/plugins/releases/download/${CNI_VERSION}/cni-plugins-linux-${arch}-${CNI_VERSION}.tgz" \
+		"https://github.com/containernetworking/plugins/releases/download/${CNI_VERSION}/cni-plugins-linux-${arch}-${CNI_VERSION}.tgz.sha256" \
+		"$arch"
+done
