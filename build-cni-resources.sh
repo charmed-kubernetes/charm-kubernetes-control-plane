@@ -8,7 +8,6 @@ set -eux
 CNI_VERSION="${CNI_VERSION:-v1.2.0}"
 ARCH="${ARCH:-amd64 arm64 s390x}"
 
-build_script_commit="$(git show --oneline -q)"
 temp_dir="$(readlink -f build-cni-resources.tmp)"
 rm -rf "$temp_dir"
 mkdir "$temp_dir"
@@ -37,7 +36,6 @@ mkdir "$temp_dir"
 			cd cni-plugins/bin
 			echo "cni-$arch $CNI_VERSION" >>BUILD_INFO
 			echo "Built $(date)" >>BUILD_INFO
-			echo "build script commit: $build_script_commit" >>BUILD_INFO
 			echo "cni-plugins commit: $(git show --oneline -q)" >>BUILD_INFO
 			tar -czf "$temp_dir/cni-$arch.tar.gz" .
 		)
