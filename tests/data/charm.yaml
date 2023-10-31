@@ -1,0 +1,7 @@
+description: Overlay to attach a local Kubernetes Control Plane charm.
+applications:
+  kubernetes-control-plane:
+    charm: {{charm}}
+    channel: null
+    resources:
+      cni-plugins: {{resource_path}}/cni-{{arch}}.tar.gz
