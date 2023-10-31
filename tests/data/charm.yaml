@@ -4,4 +4,4 @@ applications:
     charm: {{charm}}
     channel: null
     resources:
-      cni-plugins: {{resource_path}}/cni-{{arch}}.tar.gz
+      cni-plugins: {{resource_path}}/cni-plugins-{{arch}}.tar.gz

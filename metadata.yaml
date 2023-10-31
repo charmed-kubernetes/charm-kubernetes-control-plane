@@ -58,5 +58,5 @@ requires:
 resources:
   cni-plugins:
     type: file
-    filename: cni.tar.gz
+    filename: cni-plugins.tar.gz
     description: CNI network plugins for Kubernetes
