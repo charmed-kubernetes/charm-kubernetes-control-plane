@@ -44,7 +44,7 @@ class COSIntegration:
     def __init__(self, charm: CharmBase) -> None:
         self.charm = charm
 
-    def _create_scrape_jobs(self, config: JobConfig, node_name: str, token: str) -> dict:
+    def _create_scrape_job(self, config: JobConfig, node_name: str, token: str) -> dict:
         return {
             "tls_config": {"insecure_skip_verify": True},
             "authorization": {"credentials": token},
@@ -96,4 +96,7 @@ class COSIntegration:
             for path in kubelet_paths
         ]
 
-        return [self.create_scrape_job(job) for job in kubernetes_jobs + kubelet_jobs]
+        return [
+            self._create_scrape_job(job, node_name, token)
+            for job in kubernetes_jobs + kubelet_jobs
+        ]

@@ -6,7 +6,11 @@
 
 import logging
 import os
+import shlex
 import socket
+import subprocess
+from pathlib import Path
+from subprocess import CalledProcessError
 
 import auth_webhook
 import charms.contextual_status as status
@@ -27,7 +31,7 @@ from cos_integration import COSIntegration
 from k8s_api_endpoints import K8sApiEndpoints
 from kubectl import kubectl
 from loadbalancer_interface import LBProvider
-from ops import BlockedStatus, WaitingStatus
+from ops import BlockedStatus, ModelError, WaitingStatus
 from ops.interface_kube_control import KubeControlProvides
 from ops.interface_tls_certificates import CertificatesRequires
 
@@ -373,8 +377,35 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         fqdn = self.external_cloud_provider.name == "aws"
         return kubernetes_snaps.get_node_name(fqdn)
 
+    def install_cni_binaries(self):
+        try:
+            resource_path = self.model.resources.fetch("cni-plugins")
+        except ModelError:
+            message = "Something went wrong when claiming 'cni-plugins' resource."
+            status.add(BlockedStatus(message))
+            log.exception(message)
+            return
+
+        except NameError:
+            message = "Resource 'cni-plugins' not found."
+            status.add(message)
+            log.exception(message)
+            return
+
+        unpack_path = Path("/opt/cni/bin")
+        unpack_path.mkdir(parents=True, exist_ok=True)
+
+        command = f"tar -xzvf {resource_path} -C {unpack_path} --no-same-owner"
+        try:
+            subprocess.check_call(shlex.split(command))
+        except CalledProcessError:
+            log.exception("Failed to extract 'cni-plugins:'")
+
+        log.info(f"Extracted 'cni-plugins' to {unpack_path}")
+
     def reconcile(self, event):
         """Reconcile state change events."""
+        self.install_cni_binaries()
         kubernetes_snaps.install(channel=self.model.config["channel"], control_plane=True)
         kubernetes_snaps.configure_services_restart_always(control_plane=True)
         self.request_certificates()

@@ -41,7 +41,9 @@ def harness():
 @patch("charms.kubernetes_snaps.write_certificates")
 @patch("charms.kubernetes_snaps.write_etcd_client_credentials")
 @patch("charms.kubernetes_snaps.write_service_account_key")
+@patch("charm.KubernetesControlPlaneCharm.install_cni_binaries")
 def test_active(
+    install_cni_binaries,
     write_service_account_key,
     write_etcd_client_credentials,
     write_certificates,
@@ -191,6 +193,7 @@ def test_active(
     configure_services_restart_always.assert_called_once_with(control_plane=True)
     create_kubeconfig.assert_called()
     install_snap.assert_called()
+    install_cni_binaries.assert_called()
     set_default_cni_conf_file.assert_called_once_with("10-calico.conflist")
     write_certificates.assert_called_once_with(
         ca="test-ca",
