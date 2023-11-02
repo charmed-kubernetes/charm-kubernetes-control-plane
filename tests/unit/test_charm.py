@@ -42,6 +42,7 @@ def harness():
 @patch("charms.kubernetes_snaps.write_etcd_client_credentials")
 @patch("charms.kubernetes_snaps.write_service_account_key")
 @patch("charm.KubernetesControlPlaneCharm.install_cni_binaries")
+@patch("charm.KubernetesControlPlaneCharm.get_cloud_name")
 @patch("charms.node_base.LabelMaker.active_labels")
 @patch("charms.node_base.LabelMaker.set_label")
 @patch("charms.node_base.LabelMaker.remove_label")
@@ -49,6 +50,7 @@ def test_active(
     remove_label,
     set_label,
     active_labels,
+    get_cloud_name,
     install_cni_binaries,
     write_service_account_key,
     write_etcd_client_credentials,
@@ -70,6 +72,7 @@ def test_active(
     auth_webhook_configure,
     harness,
 ):
+    get_cloud_name.return_value = None
     active_labels.return_value = {}
     get_dns_address.return_value = "10.152.183.10"
     get_public_address.return_value = "10.0.0.10"
@@ -214,11 +217,13 @@ def test_active(
     )
     write_service_account_key.assert_called_once_with("test-service-account-key")
 
+    assert len(set_label.mock_calls) == 3
     set_label.assert_has_calls(
         [
             call("node-role.kubernetes.io/control-plane", ""),
             call("juju-application", "kubernetes-control-plane"),
             call("juju-charm", "kubernetes-control-plane"),
-        ]
+        ],
+        any_order=False,
     )
-    remove_label.assert_has_calls([call("juju.io/cloud")])
+    remove_label.assert_called_once_with("juju.io/cloud")
