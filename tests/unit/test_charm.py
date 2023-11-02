@@ -4,7 +4,7 @@
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
 import json
-from unittest.mock import patch, call
+from unittest.mock import call, patch
 
 import ops
 import ops.testing
@@ -213,10 +213,12 @@ def test_active(
         ca="test-etcd-ca", cert="test-etcd-client-cert", key="test-etcd-client-key"
     )
     write_service_account_key.assert_called_once_with("test-service-account-key")
-    
-    set_label.assert_has_calls([
-        call("node-role.kubernetes.io/control-plane", ""),
-        call("juju-application", "kubernetes-control-plane"),
-        call("juju-charm", "kubernetes-control-plane"),
-    ])
+
+    set_label.assert_has_calls(
+        [
+            call("node-role.kubernetes.io/control-plane", ""),
+            call("juju-application", "kubernetes-control-plane"),
+            call("juju-charm", "kubernetes-control-plane"),
+        ]
+    )
     remove_label.assert_has_calls([call("juju.io/cloud")])
