@@ -185,6 +185,12 @@ options:
 
       For more information about KubeletConfiguration, see upstream docs:
       https://kubernetes.io/docs/tasks/administer-cluster/kubelet-config-file/
+  labels:
+    type: string
+    default: "node-role.kubernetes.io/control-plane="
+    description: |
+      Labels can be used to organize and to select subsets of nodes in the
+      cluster. Declare node labels in key=value format, separated by spaces.
   loadbalancer-ips:
     type: string
     description: |

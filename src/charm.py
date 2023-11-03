@@ -26,6 +26,7 @@ from charms.interface_kube_dns import KubeDnsRequires
 from charms.interface_kubernetes_cni import KubernetesCniProvides
 from charms.interface_tokens import TokensProvider
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
+from charms.node_base import LabelMaker
 from charms.reconciler import Reconciler
 from cos_integration import COSIntegration
 from k8s_api_endpoints import K8sApiEndpoints
@@ -62,6 +63,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             ],
         )
         self.etcd = EtcdReactiveRequires(self)
+        self.node_base = LabelMaker(self, kubeconfig_path="/root/cdk/kubeconfig")
         self.k8s_api_endpoints = K8sApiEndpoints(self)
         self.kube_control = KubeControlProvides(self, endpoint="kube-control")
         self.kube_dns = KubeDnsRequires(self, endpoint="dns-provider")
@@ -160,8 +162,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.kube_control.set_dns_port(dns_port)
         self.kube_control.set_has_external_cloud_provider(self.external_cloud_provider.has_xcp)
         self.kube_control.set_image_registry(self.model.config["image-registry"])
-        # TODO: labels
-        self.kube_control.set_labels([])
+        self.kube_control.set_labels(self.model.config["labels"].split())
         self.kube_control.set_taints(self.model.config["register-with-taints"].split())
 
         if self.unit.is_leader():
@@ -373,9 +374,11 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def get_dns_port(self):
         return self.kube_dns.port or 53
 
+    def get_cloud_name(self) -> str:
+        return self.external_cloud_provider.name
+
     def get_node_name(self) -> str:
-        fqdn = self.external_cloud_provider.name == "aws"
-        return kubernetes_snaps.get_node_name(fqdn)
+        return kubernetes_snaps.get_node_name(fqdn=self.get_cloud_name() == "aws")
 
     def install_cni_binaries(self):
         try:
@@ -428,6 +431,9 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.configure_kube_control()
             self.generate_tokens()
             self.configure_observability()
+
+            if self.node_base.active_labels() is not None:
+                self.node_base.apply_node_labels()
 
     def request_certificates(self):
         """Request client and server certificates."""
