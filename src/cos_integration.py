@@ -109,7 +109,7 @@ class COSIntegration:
                 [{"target_label": "job", "replacement": "kube-controller-manager"}],
             ),
         ]
-        kubelet_paths = [
+        kubelet_metrics_paths = [
             "/metrics",
             "/metrics/resource",
             "/metrics/cadvisor",
@@ -118,7 +118,7 @@ class COSIntegration:
 
         kubelet_jobs = [
             JobConfig(
-                f"kubelet-{path.split('/')[-1]}" if len(path.split("/")) > 2 else "kubelet",
+                f"kubelet-{metric}" if metric else "kubelet",
                 path,
                 "https",
                 "localhost:10250",
@@ -127,7 +127,8 @@ class COSIntegration:
                     {"target_label": "job", "replacement": "kubelet"},
                 ],
             )
-            for path in kubelet_paths
+            for path in kubelet_metrics_paths
+            if (metric := path.strip("/metrics")) is not None
         ]
 
         kube_state_metrics = [
