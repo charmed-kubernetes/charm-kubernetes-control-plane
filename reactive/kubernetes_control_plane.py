@@ -1446,9 +1446,8 @@ def request_load_balancers():
             continue
         req = lb_provider.get_request("api-server-" + lb_type)
         req.protocol = req.protocols.tcp
-        ext_api_port = kubernetes_control_plane.EXTERNAL_API_PORT
         int_api_port = kubernetes_control_plane.STANDARD_API_PORT
-        api_port = ext_api_port if lb_type == "external" else int_api_port
+        api_port = kubernetes_control_plane.get_lb_port(lb_type)
         req.port_mapping = {api_port: int_api_port}
         req.public = lb_type == "external"
         if not req.health_checks:
