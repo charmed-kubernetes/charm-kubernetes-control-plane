@@ -8,7 +8,9 @@ rules:
   - "nodes/metrics"
   - "pods/metrics"
   - "services/metrics"
+  - "services"
   - "services/proxy"
+  - "nodes/proxy"
   verbs: ["get", "list", "watch"]
 - nonResourceURLs: ["/metrics"]
   verbs: ["get"]
