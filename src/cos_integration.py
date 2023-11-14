@@ -57,7 +57,7 @@ class COSIntegration:
             "static_configs": [
                 {
                     "targets": [config.target],
-                    "labels": {"node": node_name, "cluster": self.charm.model.name},
+                    "labels": {"node": node_name, "cluster": self.charm.get_cluster_name()},
                 }
             ],
             "relabel_configs": config.relabel_configs,
