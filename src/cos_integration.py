@@ -57,7 +57,7 @@ class COSIntegration:
             "static_configs": [
                 {
                     "targets": [config.target],
-                    "labels": {"node": node_name},
+                    "labels": {"node": node_name, "cluster": self.charm.model.name},
                 }
             ],
             "relabel_configs": config.relabel_configs,
@@ -92,13 +92,19 @@ class COSIntegration:
                 "/metrics",
                 "https",
                 "localhost:6443",
-                [{"target_label": "job", "replacement": "apiserver"}],
+                [
+                    {
+                        "source_labels": ["job"],
+                        "target_label": "job",
+                        "replacement": "apiserver",
+                    }
+                ],
             ),
             JobConfig(
                 "kube-scheduler",
                 "/metrics",
                 "https",
-                "localhost:6443",
+                "localhost:10259",
                 [{"target_label": "job", "replacement": "kube-scheduler"}],
             ),
             JobConfig(
