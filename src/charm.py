@@ -63,7 +63,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             ],
         )
         self.etcd = EtcdReactiveRequires(self)
-        self.node_base = LabelMaker(self, kubeconfig_path="/root/cdk/kubeconfig")
+        self.node_base = LabelMaker(self, kubeconfig_path="/root/.kube/config")
         self.k8s_api_endpoints = K8sApiEndpoints(self)
         self.kube_control = KubeControlProvides(self, endpoint="kube-control")
         self.kube_dns = KubeDnsRequires(self, endpoint="dns-provider")
