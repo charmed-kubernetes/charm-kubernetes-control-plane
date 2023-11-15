@@ -5,7 +5,7 @@ charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kub
 charm-lib-interface-kube-dns @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kube-dns
 charm-lib-interface-kubernetes-cni @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kubernetes-cni
 charm-lib-interface-tokens @ git+https://github.com/charmed-kubernetes/charm-lib-interface-tokens
-charm-lib-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps@m/scheduler-auth
+charm-lib-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps
 charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@main#subdirectory=ops
 charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler
 cosl == 0.0.7
