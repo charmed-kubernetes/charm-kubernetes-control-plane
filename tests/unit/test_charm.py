@@ -41,6 +41,7 @@ def harness():
 @patch("charms.kubernetes_snaps.write_certificates")
 @patch("charms.kubernetes_snaps.write_etcd_client_credentials")
 @patch("charms.kubernetes_snaps.write_service_account_key")
+@patch("charm.KubernetesControlPlaneCharm.configure_apiserver_kubelet_api_admin")
 @patch("charm.KubernetesControlPlaneCharm.install_cni_binaries")
 @patch("charm.KubernetesControlPlaneCharm.get_cloud_name")
 @patch("charms.node_base.LabelMaker.active_labels")
@@ -52,6 +53,7 @@ def test_active(
     active_labels,
     get_cloud_name,
     install_cni_binaries,
+    configure_apiserver_kubelet_api_admin,
     write_service_account_key,
     write_etcd_client_credentials,
     write_certificates,
@@ -153,6 +155,7 @@ def test_active(
         service_cidr="10.152.183.0/24",
         external_cloud_provider=harness.charm.external_cloud_provider,
     )
+    configure_apiserver_kubelet_api_admin.assert_called_once_with()
     configure_controller_manager.assert_called_once_with(
         cluster_cidr="192.168.0.0/16",
         cluster_name="test-cluster-name",

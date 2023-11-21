@@ -104,6 +104,9 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             external_cloud_provider=self.external_cloud_provider,
         )
 
+    def configure_apiserver_kubelet_api_admin(self):
+        kubectl("apply", "-f", "templates/apiserver-kubelet-api-admin.yaml")
+
     def configure_auth_webhook(self):
         auth_webhook.configure(
             charm_dir=self.charm_dir,
@@ -422,6 +425,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.create_kubeconfigs()
             self.configure_controller_manager()
             self.configure_scheduler()
+            self.configure_apiserver_kubelet_api_admin()
             self.cdk_addons.configure()
             self.configure_container_runtime()
             self.configure_cni()
