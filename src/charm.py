@@ -462,6 +462,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             address
             for option in ["loadbalancer-ips", "ha-cluster-vip", "ha-cluster-dns"]
             for address in self.config[option].split()
+            if address
         ]
         domain = self.get_dns_domain()
         extra_sans = self.config["extra_sans"].split()
