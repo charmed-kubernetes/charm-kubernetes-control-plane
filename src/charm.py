@@ -73,6 +73,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.reconciler = Reconciler(self, self.reconcile)
         self.tokens = TokensProvider(self, endpoint="tokens")
 
+        self.framework.observe(self.on.upgrade_action, self.on_upgrade_action)
+
     def api_dependencies_ready(self):
         common_name = kubernetes_snaps.get_public_address()
         ca = self.certificates.ca
@@ -405,6 +407,12 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             log.exception("Failed to extract 'cni-plugins:'")
 
         log.info(f"Extracted 'cni-plugins' to {unpack_path}")
+
+    def on_upgrade_action(self, event):
+        """Handle the upgrade action."""
+        with status.context(self.unit):
+            channel = self.model.config.get("channel")
+            kubernetes_snaps.upgrade_snaps(channel=channel, event=event, control_plane=True)
 
     def reconcile(self, event):
         """Reconcile state change events."""
