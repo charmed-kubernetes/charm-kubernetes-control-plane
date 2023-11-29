@@ -29,10 +29,11 @@ from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.node_base import LabelMaker
 from charms.reconciler import Reconciler
 from cos_integration import COSIntegration
+from hacluster import HACluster
 from k8s_api_endpoints import K8sApiEndpoints
 from kubectl import kubectl
 from loadbalancer_interface import LBProvider
-from ops import BlockedStatus, ModelError, WaitingStatus
+from ops import BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
 from ops.interface_kube_control import KubeControlProvides
 from ops.interface_tls_certificates import CertificatesRequires
 
@@ -64,6 +65,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         )
         self.etcd = EtcdReactiveRequires(self)
         self.node_base = LabelMaker(self, kubeconfig_path="/root/.kube/config")
+        self.hacluster = HACluster(self, self.config)
         self.k8s_api_endpoints = K8sApiEndpoints(self)
         self.kube_control = KubeControlProvides(self, endpoint="kube-control")
         self.kube_dns = KubeDnsRequires(self, endpoint="dns-provider")
@@ -72,6 +74,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.external_cloud_provider = ExternalCloudProvider(self, "external-cloud-provider")
         self.reconciler = Reconciler(self, self.reconcile)
         self.tokens = TokensProvider(self, endpoint="tokens")
+        self.framework.observe(self.on.update_status, self.update_status)
 
         self.framework.observe(self.on.upgrade_action, self.on_upgrade_action)
 
@@ -147,6 +150,17 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             service_cidr=self.model.config["service-cidr"],
             external_cloud_provider=self.external_cloud_provider,
         )
+
+    def configure_hacluster(self):
+        if self.hacluster.is_ready:
+            status.add(MaintenanceStatus("Configuring HACluster"))
+            self.hacluster.update_vips()
+            self.hacluster.configure_hacluster()
+            # Note that we do not register any systemd services with HACluster.
+            # We used to register the Kubernetes control plane services, but
+            # that meant Pacemaker would take over managing the services, and
+            # often would not start them when it should. Long history of bugs
+            # there.
 
     def configure_kernel_parameters(self):
         sysctl = yaml.safe_load(self.model.config["sysctl"])
@@ -441,6 +455,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.configure_kubelet()
             self.configure_kube_proxy()
             self.configure_kube_control()
+            self.configure_hacluster()
             self.generate_tokens()
             self.configure_observability()
 
@@ -455,6 +470,12 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
         bind_addrs = kubernetes_snaps.get_bind_addresses()
         common_name = kubernetes_snaps.get_public_address()
+        config_addrs = [
+            address
+            for option in ["loadbalancer-ips", "ha-cluster-vip", "ha-cluster-dns"]
+            for address in self.config[option].split()
+            if address
+        ]
         domain = self.get_dns_domain()
         extra_sans = self.config["extra_sans"].split()
         k8s_service_addrs = kubernetes_snaps.get_kubernetes_service_addresses(
@@ -476,6 +497,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             f"kubernetes.default.svc.{domain}",
         ]
         sans += bind_addrs
+        sans += config_addrs
         sans += ingress_addrs
         sans += k8s_service_addrs
         sans += extra_sans
@@ -483,6 +505,16 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
         self.certificates.request_client_cert("system:kube-apiserver")
         self.certificates.request_server_cert(cn=common_name, sans=sans)
+
+    def update_status(self, event):
+        if self.hacluster.is_ready:
+            apiserver_running = (
+                subprocess.call(["systemctl", "is-active", "snap.kube-apiserver.daemon"]) == 0
+            )
+            if apiserver_running:
+                self.hacluster.set_node_online()
+            else:
+                self.hacluster.set_node_standby()
 
     def write_service_account_key(self):
         peer_relation = self.model.get_relation("peer")

@@ -11,13 +11,24 @@ class K8sApiEndpoints:
         self.charm = charm
 
     def from_config(self) -> Optional[str]:
-        """Endpoint URLs from the loadbalancer-ips config option.
+        """Endpoint URL from charm configuration.
 
         Usually an IP address. Could be a domain name.
+
+        If the loadbalancer-ips config option is set, use that first.
+
+        Otherwise, if we are integrated with hacluster, then build an endpoint
+        from the ha-cluster-vip or ha-cluster-dns configs.
         """
-        addresses = self.charm.model.config["loadbalancer-ips"].split()
+        addresses = self.charm.config["loadbalancer-ips"].split()
         if addresses:
-            return build_url(addresses[0])
+            return build_url(addresses[0], 6443)
+
+        if self.charm.hacluster.is_ready:
+            for key in ["ha-cluster-vip", "ha-cluster-dns"]:
+                addresses = self.charm.config[key].split()
+                if addresses:
+                    return build_url(addresses[0], 6443)
 
     def from_lb_external(self) -> Optional[str]:
         """Endpoint URL from the loadbalancer-external relation."""

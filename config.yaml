@@ -152,6 +152,19 @@ options:
     description: |
       Space-separated list of extra SAN entries to add to the x509 certificate
       created for the control plane nodes.
+  ha-cluster-vip:
+    type: string
+    description: |
+      Virtual IP for the charm to use with the HA Cluster subordinate charm
+      Mutually exclusive with ha-cluster-dns. Multiple virtual IPs are
+      separated by spaces.
+    default: ""
+  ha-cluster-dns:
+    type: string
+    description: |
+      DNS entry to use with the HA Cluster subordinate charm.
+      Mutually exclusive with ha-cluster-vip.
+    default: ""
   image-registry:
     type: string
     default: "rocks.canonical.com:443/cdk"
