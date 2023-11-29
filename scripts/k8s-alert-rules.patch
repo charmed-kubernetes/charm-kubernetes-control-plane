@@ -1,0 +1,40 @@
+diff --git a/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml b/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
+index f3ee60b..c188dbe 100644
+--- a/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
++++ b/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
+@@ -579,7 +579,7 @@ groups:
+       description: KubeAPI has disappeared from Prometheus target discovery.
+       runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubeapidown
+       summary: Target disappeared from Prometheus target discovery.
+-    expr: 'absent(up{job="apiserver"} == 1)
++    expr: 'up{job="apiserver"} == 0
+ 
+       '
+     for: 15m
+@@ -756,7 +756,7 @@ groups:
+       description: Kubelet has disappeared from Prometheus target discovery.
+       runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubeletdown
+       summary: Target disappeared from Prometheus target discovery.
+-    expr: 'absent(up{job="kubelet", metrics_path="/metrics"} == 1)
++    expr: 'up{job="kubelet", metrics_path="/metrics"} == 0
+ 
+       '
+     for: 15m
+@@ -769,7 +769,7 @@ groups:
+       description: KubeScheduler has disappeared from Prometheus target discovery.
+       runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubeschedulerdown
+       summary: Target disappeared from Prometheus target discovery.
+-    expr: 'absent(up{job="kube-scheduler"} == 1)
++    expr: 'up{job="kube-scheduler"} == 0
+ 
+       '
+     for: 15m
+@@ -782,7 +782,7 @@ groups:
+       description: KubeControllerManager has disappeared from Prometheus target discovery.
+       runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubecontrollermanagerdown
+       summary: Target disappeared from Prometheus target discovery.
+-    expr: 'absent(up{job="kube-controller-manager"} == 1)
++    expr: 'up{job="kube-controller-manager"} == 0
+ 
+       '
+     for: 15m

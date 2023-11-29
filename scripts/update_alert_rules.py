@@ -3,7 +3,9 @@
 #
 import os
 import shutil
+import subprocess
 import sys
+from pathlib import Path
 from urllib.request import urlopen
 
 import yaml
@@ -56,3 +58,7 @@ for file in FILES:
 
     with open(f"src/prometheus_alert_rules/{file}", "w") as fout:
         fout.write("\n".join(data))
+
+# Apply K8s core components expr patch
+patch_file = Path("scripts/k8s-alert-rules.patch")
+subprocess.run(["git", "apply", str(patch_file)], check=True)
