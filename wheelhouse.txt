@@ -26,3 +26,8 @@ ops!=2.1.0
 # rather than pulling in a list of new deps, pin these
 attrs<23.1.0
 urllib3<2.0.0
+
+# yarl>=1.9.3 has changed their build process in such a way
+# its deps aren't pulled into the wheelhouse 
+# https://yarl.aio-libs.org/en/latest/changes/#id3
+yarl<1.9.3
