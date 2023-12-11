@@ -380,3 +380,18 @@ options:
     description: |
       Availability zone to use with Cinder CSI. This is passed through to the
       parameters.availability field of the cdk-cinder StorageClass.
+  api-int-lb-port:
+    type: int
+    default:
+    description: |
+      The port that the internal load balancer listens on, defaults to
+      the same as the standard kube-apiserver listen port (6443). This is
+      primarily used where the load balancer needs to run on the same host(s) as
+      the kube-apiserver and both the apiserver and lb cannot bind to 6443.
+  api-ext-lb-port:
+    type: int
+    default:
+    description: |
+      The port that the external load balancer listens on, defaults to 443. This
+      is primarily used where the load balancer needs to run on the same host(s)
+      where another application requires port 443 (eg. kubernetes worker).

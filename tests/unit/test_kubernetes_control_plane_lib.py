@@ -3,6 +3,7 @@ import pytest
 import tempfile
 from pathlib import Path
 from unittest import mock
+import unittest
 
 from charmhelpers.core import hookenv
 from lib.charms.layer import kubernetes_control_plane as charmlib
@@ -115,3 +116,122 @@ def test_get_snap_revs():
     ):
         revs = charmlib.get_snap_revs([snap])
         assert revs[snap] == revision
+
+
+def test_get_lb_port():
+    """Verify correct lb port is returned"""
+    # Test no custom ports
+    hookenv.config.return_value = None
+    assert charmlib.get_lb_port("internal") == charmlib.STANDARD_API_PORT
+    assert charmlib.get_lb_port("external") == charmlib.EXTERNAL_API_PORT
+
+    # Test custom internal lb port
+    hookenv.config.return_value = 9999
+    assert charmlib.get_lb_port("internal") == 9999
+
+    # Test custom external lb port
+    hookenv.config.return_value = 8888
+    assert charmlib.get_lb_port("external") == 8888
+
+    # Test wrong parameter
+    testcase = unittest.TestCase()
+    with testcase.assertRaises(NameError):
+        charmlib.get_lb_port("dummy")
+
+
+@mock.patch(
+    "lib.charms.layer.kubernetes_control_plane.get_endpoints_from_config",
+    return_value=None,
+)
+def test_get_external_api_endpoints(mock1):
+    """Verify correct external endpoint is returned"""
+    # No lb config, no custom lb port
+    hookenv.unit_public_ip.return_value = "10.10.10.10"
+    hookenv.goal_state.return_value = {"relations": {}}
+    with mock.patch(
+        "lib.charms.layer.kubernetes_control_plane.get_lb_port",
+        return_value=charmlib.EXTERNAL_API_PORT,
+    ):
+        assert charmlib.get_external_api_endpoints() == [
+            ("10.10.10.10", charmlib.STANDARD_API_PORT)
+        ]
+    # No lb config, custom lb port
+    with mock.patch(
+        "lib.charms.layer.kubernetes_control_plane.get_lb_port",
+        return_value=9443,
+    ):
+        assert charmlib.get_external_api_endpoints() == [
+            ("10.10.10.10", charmlib.STANDARD_API_PORT)
+        ]
+
+    # External lb configured
+    hookenv.goal_state.return_value = {"relations": {"loadbalancer-external": {}}}
+    with mock.patch(
+        "lib.charms.layer.kubernetes_control_plane.endpoint_from_name"
+    ) as mock_endpoint:
+        endpoint = mock_endpoint.return_value
+        endpoint.get_response.return_value.address = "192.168.0.1"
+        endpoint.get_response.return_value.error = None
+        # No custom lb port
+        with mock.patch(
+            "lib.charms.layer.kubernetes_control_plane.get_lb_port",
+            return_value=charmlib.EXTERNAL_API_PORT,
+        ):
+            assert charmlib.get_external_api_endpoints() == [
+                ("192.168.0.1", charmlib.EXTERNAL_API_PORT)
+            ]
+        # Custom lb port
+        with mock.patch(
+            "lib.charms.layer.kubernetes_control_plane.get_lb_port",
+            return_value=9443,
+        ):
+            assert charmlib.get_external_api_endpoints() == [("192.168.0.1", 9443)]
+
+
+@mock.patch(
+    "lib.charms.layer.kubernetes_control_plane.get_endpoints_from_config",
+    return_value=None,
+)
+def test_get_internal_api_endpoints(mock1):
+    """Verify correct internal endpoint is returned"""
+    # No lb config, no custom lb port
+    hookenv.unit_public_ip.return_value = "10.10.10.10"
+    hookenv.goal_state.return_value = {"relations": {}}
+    with mock.patch(
+        "lib.charms.layer.kubernetes_control_plane.get_lb_port",
+        return_value=charmlib.STANDARD_API_PORT,
+    ):
+        assert charmlib.get_external_api_endpoints() == [
+            ("10.10.10.10", charmlib.STANDARD_API_PORT)
+        ]
+    # No lb config, custom lb port
+    with mock.patch(
+        "lib.charms.layer.kubernetes_control_plane.get_lb_port",
+        return_value=8443,
+    ):
+        assert charmlib.get_external_api_endpoints() == [
+            ("10.10.10.10", charmlib.STANDARD_API_PORT)
+        ]
+
+    # Test external lb configured
+    hookenv.goal_state.return_value = {"relations": {"loadbalancer-internal": {}}}
+    with mock.patch(
+        "lib.charms.layer.kubernetes_control_plane.endpoint_from_name"
+    ) as mock_endpoint:
+        endpoint = mock_endpoint.return_value
+        endpoint.get_response.return_value.address = "192.168.0.1"
+        endpoint.get_response.return_value.error = None
+        # No custom external lb port
+        with mock.patch(
+            "lib.charms.layer.kubernetes_control_plane.get_lb_port",
+            return_value=charmlib.STANDARD_API_PORT,
+        ):
+            assert charmlib.get_internal_api_endpoints() == [
+                ("192.168.0.1", charmlib.STANDARD_API_PORT)
+            ]
+        # Custom external lb port
+        with mock.patch(
+            "lib.charms.layer.kubernetes_control_plane.get_lb_port",
+            return_value=9443,
+        ):
+            assert charmlib.get_internal_api_endpoints() == [("192.168.0.1", 9443)]

@@ -33,6 +33,26 @@ CEPH_KEYRING = CEPH_CONF_DIR / "ceph.client.{}.keyring".format(
 db = unitdata.kv()
 
 
+def get_lb_port(lb_type):
+    """
+    Return the port the lb will listen on based on config or standard values.
+
+    param lb_type: either 'internal' or 'external'
+    type: string
+    """
+
+    if lb_type == "internal":
+        configured_port = hookenv.config("api-int-lb-port")
+        return configured_port if configured_port else STANDARD_API_PORT
+    if lb_type == "external":
+        configured_port = hookenv.config("api-ext-lb-port")
+        return configured_port if configured_port else EXTERNAL_API_PORT
+
+    raise NameError(
+        "Invalid lb_type '{}': expected 'internal' or 'external'".format(lb_type)
+    )
+
+
 def get_endpoints_from_config():
     """
     Return a list of any manually configured API endpoints.
@@ -87,7 +107,7 @@ def get_internal_api_endpoints(relation=None):
     for lb_type in ("internal", "external"):
         lb_endpoint = "loadbalancer-" + lb_type
         request_name = "api-server-" + lb_type
-        api_port = EXTERNAL_API_PORT if lb_type == "external" else STANDARD_API_PORT
+        api_port = get_lb_port(lb_type)
         if lb_endpoint in goal_state["relations"]:
             lb_provider = endpoint_from_name(lb_endpoint)
             lb_response = lb_provider.get_response(request_name)
@@ -135,7 +155,7 @@ def get_external_api_endpoints():
     for lb_type in ("external", "internal"):
         lb_endpoint = "loadbalancer-" + lb_type
         lb_name = "api-server-" + lb_type
-        api_port = EXTERNAL_API_PORT if lb_type == "external" else STANDARD_API_PORT
+        api_port = get_lb_port(lb_type)
         if lb_endpoint in goal_state["relations"]:
             lb_provider = endpoint_from_name(lb_endpoint)
             lb_response = lb_provider.get_response(lb_name)
