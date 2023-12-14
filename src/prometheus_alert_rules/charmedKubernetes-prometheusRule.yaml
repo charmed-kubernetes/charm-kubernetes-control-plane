@@ -1,0 +1,11 @@
+groups:
+- name: ssl_cert_expiry_alert
+  rules:
+  - alert: SSLCertificateExpiringSoon
+    expr: probe_ssl_earliest_cert_expiry - time() < 86400 * 15
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "SSL certificate is expiring soon (instance {{ $labels.instance }})"
+      description: "SSL certificate for {{ $labels.instance }} expires in less than 15 days."
