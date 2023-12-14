@@ -36,6 +36,7 @@ def harness():
 @patch("charms.kubernetes_snaps.configure_services_restart_always")
 @patch("charms.kubernetes_snaps.create_kubeconfig")
 @patch("charms.kubernetes_snaps.get_public_address")
+@patch("charms.kubernetes_snaps.is_snap_installed")
 @patch("charms.kubernetes_snaps.install_snap")
 @patch("charms.kubernetes_snaps.set_default_cni_conf_file")
 @patch("charms.kubernetes_snaps.write_certificates")
@@ -59,6 +60,7 @@ def test_active(
     write_certificates,
     set_default_cni_conf_file,
     install_snap,
+    is_snap_installed,
     get_public_address,
     create_kubeconfig,
     configure_services_restart_always,
@@ -79,6 +81,7 @@ def test_active(
     get_dns_address.return_value = "10.152.183.10"
     get_public_address.return_value = "10.0.0.10"
     hash_file.return_value = "test-hash"
+    is_snap_installed.return_value = False
 
     certificates_relation_id = harness.add_relation("certificates", "easyrsa")
     cni_relation_id = harness.add_relation("cni", "calico")
