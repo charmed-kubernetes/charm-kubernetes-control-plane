@@ -51,4 +51,4 @@ def test_status(ops_test):
     worker_app = ops_test.model.applications["kubernetes-control-plane"]
     k8s_version_str = worker_app.data["workload-version"]
     assert k8s_version_str, "Workload version is unset"
-    assert tuple(int(i) for i in k8s_version_str.split(".")[:2]) >= 1.26
+    assert tuple(int(i) for i in k8s_version_str.split(".")[:2]) >= (1, 26)
