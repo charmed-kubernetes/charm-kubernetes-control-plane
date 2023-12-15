@@ -434,6 +434,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def reconcile(self, event):
         """Reconcile state change events."""
         self.install_cni_binaries()
+        self._set_workload_version()
         kubernetes_snaps.install(channel=self.model.config["channel"], control_plane=True)
         kubernetes_snaps.configure_services_restart_always(control_plane=True)
         self.request_certificates()
@@ -572,6 +573,20 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         kubernetes_snaps.write_etcd_client_credentials(
             ca=creds["client_ca"], cert=creds["client_cert"], key=creds["client_key"]
         )
+
+    def _set_workload_version(self):
+        cmd = ["kubelet", "--version"]
+        try:
+            version = subprocess.run(cmd, stdout=subprocess.PIPE)
+        except FileNotFoundError:
+            log.warning("kubelet not yet found, skip setting workload version")
+            return
+        if not version.returncode:
+            val = version.stdout.split(b" v")[-1].rstrip().decode()
+            log.info("Setting workload version to %s.", val)
+            self.unit.set_workload_version(val)
+        else:
+            self.unit.set_workload_version("")
 
 
 if __name__ == "__main__":  # pragma: nocover
