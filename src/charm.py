@@ -434,7 +434,6 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def reconcile(self, event):
         """Reconcile state change events."""
         self.install_cni_binaries()
-        self._set_workload_version()
         kubernetes_snaps.install(channel=self.model.config["channel"], control_plane=True)
         kubernetes_snaps.configure_services_restart_always(control_plane=True)
         self.request_certificates()
@@ -516,6 +515,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                 self.hacluster.set_node_online()
             else:
                 self.hacluster.set_node_standby()
+        self._set_workload_version()
 
     def write_service_account_key(self):
         peer_relation = self.model.get_relation("peer")
