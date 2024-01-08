@@ -6,6 +6,7 @@
 
 import logging
 import os
+import re
 import shlex
 import socket
 import subprocess
@@ -31,9 +32,10 @@ from charms.reconciler import Reconciler
 from cos_integration import COSIntegration
 from hacluster import HACluster
 from k8s_api_endpoints import K8sApiEndpoints
+from k8s_kube_system import get_kube_system_pods_not_running
 from kubectl import kubectl
 from loadbalancer_interface import LBProvider
-from ops import BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
+from ops import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
 from ops.interface_kube_control import KubeControlProvides
 from ops.interface_tls_certificates import CertificatesRequires
 
@@ -516,6 +518,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             else:
                 self.hacluster.set_node_standby()
         self._set_workload_version()
+        self._check_kube_system()
 
     def write_service_account_key(self):
         peer_relation = self.model.get_relation("peer")
@@ -587,6 +590,28 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.unit.set_workload_version(val)
         else:
             self.unit.set_workload_version("")
+
+    def _check_kube_system(self):
+        if not self.reconciler.stored.reconciled:
+            # Bail, the unit isn't reconciled
+            return
+
+        # only update the kube-system status under these conditions
+        # 1) currently active status
+        # 2) matches a waiting on kube-system message
+
+        kube_system_re = re.compile(r"Waiting for (?:\d+ )?kube-system pods? to start")
+        pre_status = self.unit.status
+        if isinstance(pre_status, ActiveStatus) or kube_system_re.match(pre_status.message):
+            with status.context(self.unit):
+                unready = get_kube_system_pods_not_running(self)
+                if unready is None:
+                    status.add(WaitingStatus("Waiting for kube-system pods to start"))
+                elif unready:
+                    plural = "s" if len(unready) > 1 else ""
+                    msg = "Waiting for {} kube-system pod{} to start"
+                    msg = msg.format(len(unready), plural)
+                    status.add(WaitingStatus(msg))
 
 
 if __name__ == "__main__":  # pragma: nocover
