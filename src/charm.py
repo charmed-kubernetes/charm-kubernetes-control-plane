@@ -600,7 +600,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         # 1) currently active status
         # 2) matches a waiting on kube-system message
 
-        kube_system_re = re.compile(r"Waiting for (?:\d+ +)?kube-system pods? to start")
+        kube_system_re = re.compile(r"Waiting for (?:\d+ )?kube-system pods? to start")
         pre_status = self.unit.status
         if isinstance(pre_status, ActiveStatus) or kube_system_re.match(pre_status.message):
             with status.context(self.unit):
