@@ -399,7 +399,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         return self.external_cloud_provider.name
 
     def get_node_name(self) -> str:
-        return kubernetes_snaps.get_node_name(fqdn=self.get_cloud_name() == "aws")
+        fqdn = self.external_cloud_provider.name == "aws" and self.external_cloud_provider.has_xcp
+        return kubernetes_snaps.get_node_name(fqdn=fqdn)
 
     def install_cni_binaries(self):
         try:
