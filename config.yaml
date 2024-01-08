@@ -165,6 +165,13 @@ options:
       DNS entry to use with the HA Cluster subordinate charm.
       Mutually exclusive with ha-cluster-vip.
     default: ""
+  ignore-kube-system-pods:
+    type: string
+    default: ""
+    description: |
+      Space separated list of pod names in the kube-system namespace to ignore
+      when checking for running pods. Any non-Running Pod whose name is on
+      this list, will be ignored during the check.
   image-registry:
     type: string
     default: "rocks.canonical.com:443/cdk"
