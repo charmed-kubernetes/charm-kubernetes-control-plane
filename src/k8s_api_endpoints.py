@@ -1,5 +1,5 @@
 from ipaddress import ip_address
-from typing import Optional, List
+from typing import List, Optional
 
 from charms import kubernetes_snaps
 

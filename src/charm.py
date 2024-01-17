@@ -239,6 +239,13 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         if not self.unit.is_leader():
             return
 
+        def check_status(endpoint, ep_name):
+            if not endpoint.has_response:
+                status.add(WaitingStatus(f"Waiting for {ep_name}"))
+            elif resp := endpoint.get_response("api-server-external"):
+                if resp and resp.error:
+                    status.add(BlockedStatus(f"Blocked by {ep_name}"))
+
         status.add(MaintenanceStatus("Configuring LoadBalancers"))
         if self.lb_external.is_available:
             req = self.lb_external.get_request("api-server-external")
@@ -248,12 +255,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             if not req.health_checks:
                 req.add_health_check(protocol=req.protocols.http, port=6443, path="/livez")
             self.lb_external.send_request(req)
-
-            if not self.lb_external.has_response:
-                status.add(WaitingStatus("Waiting for loadbalancer-external"))
-            elif resp := self.lb_external.get_response("api-server-external"):
-                if resp and resp.error:
-                    status.add(BlockedStatus("Blocked by loadbalancer-external"))
+            check_status(self.lb_external, "loadbalancer-external")
 
         if self.lb_internal.is_available:
             req = self.lb_internal.get_request("api-server-internal")
@@ -264,12 +266,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                 req.add_health_check(protocol=req.protocols.http, port=6443, path="/livez")
             self.lb_internal.send_request(req)
 
-            if not self.lb_internal.has_response:
-                status.add(WaitingStatus("Waiting for loadbalancer-internal"))
-            elif resp := self.lb_internal.get_response("api-server-internal"):
-                if resp and resp.error:
-                    status.add(BlockedStatus("Blocked by loadbalancer-internal"))
-
+            check_status(self.lb_internal, "loadbalancer-internal")
 
     def configure_scheduler(self):
         status.add(MaintenanceStatus("Configuring Scheduler"))
