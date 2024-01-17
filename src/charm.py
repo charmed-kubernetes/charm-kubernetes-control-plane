@@ -97,6 +97,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         return True
 
     def configure_apiserver(self):
+        status.add(MaintenanceStatus("Configuring API Server"))
         kubernetes_snaps.configure_apiserver(
             advertise_address=self.kube_control.ingress_addresses[0],
             audit_policy=self.model.config["audit-policy"],
@@ -112,6 +113,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         )
 
     def configure_apiserver_kubelet_api_admin(self):
+        status.add(MaintenanceStatus("Configuring API Server kubelet admin"))
         kubectl("apply", "-f", "templates/apiserver-kubelet-api-admin.yaml")
 
     def configure_auth_webhook(self):
@@ -128,11 +130,13 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             status.add(BlockedStatus("Missing container-runtime integration"))
             return
 
+        status.add(MaintenanceStatus("Configuring CRI"))
         registry = self.model.config["image-registry"]
         sandbox_image = kubernetes_snaps.get_sandbox_image(registry)
         self.container_runtime.set_sandbox_image(sandbox_image)
 
     def configure_cni(self):
+        status.add(MaintenanceStatus("Configuring CNI"))
         self.cni.set_image_registry(self.model.config["image-registry"])
         self.cni.set_kubeconfig_hash_from_file("/root/.kube/config")
         self.cni.set_service_cidr(self.model.config["service-cidr"])
@@ -144,6 +148,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             status.add(WaitingStatus("Waiting for cluster name"))
             return
 
+        status.add(MaintenanceStatus("Configuring Controller Manager"))
         kubernetes_snaps.configure_controller_manager(
             cluster_cidr=self.cni.cidr,
             cluster_name=cluster_name,
@@ -165,10 +170,12 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             # there.
 
     def configure_kernel_parameters(self):
+        status.add(MaintenanceStatus("Configuring Kernel Params"))
         sysctl = yaml.safe_load(self.model.config["sysctl"])
         kubernetes_snaps.configure_kernel_parameters(sysctl)
 
     def configure_kube_control(self):
+        status.add(MaintenanceStatus("Configuring Kube Control"))
         dns_address = self.get_dns_address()
         dns_domain = self.get_dns_domain()
         dns_enabled = bool(dns_address)
@@ -204,6 +211,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.kube_control.clear_creds()
 
     def configure_kube_proxy(self):
+        status.add(MaintenanceStatus("Configuring Kube Proxy"))
         kubernetes_snaps.configure_kube_proxy(
             cluster_cidr=self.cni.cidr,
             extra_args_config=self.model.config["proxy-extra-args"],
@@ -213,6 +221,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         )
 
     def configure_kubelet(self):
+        status.add(MaintenanceStatus("Configuring Kubelet"))
         kubernetes_snaps.configure_kubelet(
             container_runtime_endpoint=self.container_runtime.socket,
             dns_domain=self.get_dns_domain(),
@@ -230,6 +239,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         if not self.unit.is_leader():
             return
 
+        status.add(MaintenanceStatus("Configuring LoadBalancers"))
         if self.lb_external.is_available:
             req = self.lb_external.get_request("api-server-external")
             req.protocol = req.protocols.tcp
@@ -238,6 +248,12 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             if not req.health_checks:
                 req.add_health_check(protocol=req.protocols.http, port=6443, path="/livez")
             self.lb_external.send_request(req)
+
+            if not self.lb_external.has_response:
+                status.add(WaitingStatus("Waiting for loadbalancer-external"))
+            elif resp := self.lb_external.get_response("api-server-external"):
+                if resp and resp.error:
+                    status.add(BlockedStatus("Blocked by loadbalancer-external"))
 
         if self.lb_internal.is_available:
             req = self.lb_internal.get_request("api-server-internal")
@@ -248,13 +264,22 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                 req.add_health_check(protocol=req.protocols.http, port=6443, path="/livez")
             self.lb_internal.send_request(req)
 
+            if not self.lb_internal.has_response:
+                status.add(WaitingStatus("Waiting for loadbalancer-internal"))
+            elif resp := self.lb_internal.get_response("api-server-internal"):
+                if resp and resp.error:
+                    status.add(BlockedStatus("Blocked by loadbalancer-internal"))
+
+
     def configure_scheduler(self):
+        status.add(MaintenanceStatus("Configuring Scheduler"))
         kubernetes_snaps.configure_scheduler(
             extra_args_config=self.model.config["scheduler-extra-args"],
             kubeconfig="/root/cdk/kubeschedulerconfig",
         )
 
     def create_kubeconfigs(self):
+        status.add(MaintenanceStatus("Creating kubeconfigs"))
         ca = self.certificates.ca
         local_server = self.k8s_api_endpoints.local()
         node_name = self.get_node_name()
@@ -341,6 +366,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def configure_observability(self):
         """Apply observability configurations to the cluster."""
         # Apply Clusterrole and Clusterrole binding for COS observability
+        status.add(MaintenanceStatus("Configuring Observability"))
         if self.unit.is_leader():
             kubectl("apply", "-f", "templates/observability.yaml")
         # Issue a token for metrics scraping
@@ -355,6 +381,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         if not self.unit.is_leader():
             return
 
+        status.add(MaintenanceStatus("Generating Tokens"))
         self.tokens.remove_stale_tokens()
 
         for request in self.tokens.token_requests:
@@ -503,8 +530,10 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         sans += config_addrs
         sans += ingress_addrs
         sans += k8s_service_addrs
+        sans += self.k8s_api_endpoints.get_external_api_endpoints()
+        sans += self.k8s_api_endpoints.get_internal_api_endpoints()
         sans += extra_sans
-        sans = list(set(sans))
+        sans = sorted(set(sans))
 
         self.certificates.request_client_cert("system:kube-apiserver")
         self.certificates.request_server_cert(cn=common_name, sans=sans)

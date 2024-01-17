@@ -1,5 +1,5 @@
 from ipaddress import ip_address
-from typing import Optional
+from typing import Optional, List
 
 from charms import kubernetes_snaps
 
@@ -29,6 +29,18 @@ class K8sApiEndpoints:
                 addresses = self.charm.config[key].split()
                 if addresses:
                     return build_url(addresses[0], 6443)
+
+    def get_external_api_endpoints(self) -> List[str]:
+        response = self.charm.lb_external.get_response("api-server-external")
+        if not response or response.error:
+            return []
+        return [response.address]
+
+    def get_internal_api_endpoints(self) -> List[str]:
+        response = self.charm.lb_external.get_response("api-server-internal")
+        if not response or response.error:
+            return []
+        return [response.address]
 
     def from_lb_external(self) -> Optional[str]:
         """Endpoint URL from the loadbalancer-external relation."""
