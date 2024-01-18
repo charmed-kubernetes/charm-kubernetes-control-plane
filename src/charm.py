@@ -485,9 +485,17 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.configure_hacluster()
             self.generate_tokens()
             self.configure_observability()
+            self.apply_node_labels()
 
-            if self.node_base.active_labels() is not None:
-                self.node_base.apply_node_labels()
+    def apply_node_labels(self):
+        """Request client and server certificates."""
+        status.add(MaintenanceStatus("Apply Node Labels"))
+        node = self.get_node_name()
+        if self.node_base.active_labels() is not None:
+            self.node_base.apply_node_labels()
+            log.info("Node %s labelled successfully", node)
+        else:
+            log.info("Node %s not yet labelled", node)
 
     def request_certificates(self):
         """Request client and server certificates."""
@@ -616,11 +624,14 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             log.info("Setting workload version to %s.", val)
             self.unit.set_workload_version(val)
         else:
+            stderr = version.stderr.decode()
+            log.warning("Unable to get kubectl version. %s", stderr)
             self.unit.set_workload_version("")
 
     def _check_kube_system(self):
         if not self.reconciler.stored.reconciled:
             # Bail, the unit isn't reconciled
+            log.info("Wait to check kube-system until reconciled")
             return
 
         # only update the kube-system status under these conditions
