@@ -527,8 +527,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         sans += config_addrs
         sans += ingress_addrs
         sans += k8s_service_addrs
-        sans += self.k8s_api_endpoints.get_external_api_endpoints()
-        sans += self.k8s_api_endpoints.get_internal_api_endpoints()
+        sans += filter(None, [self.k8s_api_endpoints.get_external_api_endpoint()])
+        sans += filter(None, [self.k8s_api_endpoints.get_internal_api_endpoint()])
         sans += extra_sans
         sans = sorted(set(sans))
 
