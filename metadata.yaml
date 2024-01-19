@@ -22,11 +22,11 @@ series:
   - jammy
   - focal
 peers:
+  coordinator:
+    # LP:2049953 needed for upgrading from < 1.29
+    interface: coordinator
   peer:
     interface: kubernetes-control-plane-peer
-  coordinator:
-￼    # LP:2049953 needed for upgrading from < 1.29
-￼    interface: coordinator
 provides:
   cni:
     interface: kubernetes-cni
