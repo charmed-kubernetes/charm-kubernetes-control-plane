@@ -3,7 +3,6 @@ display-name: Kubernetes Control Plane
 summary: The Kubernetes control plane.
 maintainers:
   - Kevin Monroe <kevin.monroe@canonical.com>
-  - George Kraft <george.kraft@canonical.com>
   - Mateo Florido <mateo.florido@canonical.com>
   - Adam Dyess <adam.dyess@canonical.com>
 description: |
@@ -23,6 +22,9 @@ series:
   - jammy
   - focal
 peers:
+  coordinator:
+    # LP:2049953 needed for upgrading from < 1.29
+    interface: coordinator
   peer:
     interface: kubernetes-control-plane-peer
 provides:
