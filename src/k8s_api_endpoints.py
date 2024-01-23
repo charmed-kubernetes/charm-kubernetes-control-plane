@@ -30,19 +30,29 @@ class K8sApiEndpoints:
                 if addresses:
                     return build_url(addresses[0], 6443)
 
-    def from_lb_external(self) -> Optional[str]:
-        """Endpoint URL from the loadbalancer-external relation."""
+    def get_external_api_endpoint(self) -> Optional[str]:
+        """Endpoint address from the loadbalancer-external relation."""
         response = self.charm.lb_external.get_response("api-server-external")
         if not response or response.error:
             return None
-        return build_url(response.address, 443)
+        return response.address
+
+    def get_internal_api_endpoint(self) -> Optional[str]:
+        """Endpoint address from the loadbalancer-external relation."""
+        response = self.charm.lb_external.get_response("api-server-internal")
+        if not response or response.error:
+            return None
+        return response.address
+
+    def from_lb_external(self) -> Optional[str]:
+        """Endpoint URL from the loadbalancer-external relation."""
+        ep = self.get_external_api_endpoint()
+        return ep and build_url(ep, 443)
 
     def from_lb_internal(self) -> Optional[str]:
         """Endpoint URL from the loadbalancer-internal relation."""
-        response = self.charm.lb_internal.get_response("api-server-internal")
-        if not response or response.error:
-            return None
-        return build_url(response.address, 6443)
+        ep = self.get_internal_api_endpoint()
+        return ep and build_url(ep, 6443)
 
     def from_public_address(self) -> str:
         """Endpoint URL from unit-get public-address."""

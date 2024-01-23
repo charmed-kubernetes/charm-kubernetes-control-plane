@@ -44,10 +44,11 @@ async def test_build_and_deploy(ops_test: OpsTest):
     rc, stdout, stderr = await ops_test.run(*cmd)
     assert rc == 0, f"Bundle deploy failed: {(stderr or stdout).strip()}"
 
-    await ops_test.model.wait_for_idle(status="active", timeout=60 * 60)
+    async with ops_test.fast_forward():
+        await ops_test.model.wait_for_idle(status="active", timeout=60 * 60)
 
 
-def test_status(ops_test):
+async def test_status(ops_test):
     worker_app = ops_test.model.applications["kubernetes-control-plane"]
     k8s_version_str = worker_app.data["workload-version"]
     assert k8s_version_str, "Workload version is unset"
