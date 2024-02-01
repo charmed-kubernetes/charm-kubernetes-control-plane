@@ -487,7 +487,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     @status.on_error(ops.WaitingStatus("Waiting for certificate authority"))
     def request_certificates(self):
         """Request client and server certificates."""
-        assert self.certificates.relation, "Certifcates relation doesn't yet exist"
+        assert self.certificates.relation, "Certificates relation doesn't yet exist"
 
         bind_addrs = kubernetes_snaps.get_bind_addresses()
         common_name = kubernetes_snaps.get_public_address()
