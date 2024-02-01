@@ -35,7 +35,6 @@ from k8s_api_endpoints import K8sApiEndpoints
 from k8s_kube_system import get_kube_system_pods_not_running
 from kubectl import kubectl
 from loadbalancer_interface import LBProvider
-from ops import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
 from ops.interface_kube_control import KubeControlProvides
 from ops.interface_tls_certificates import CertificatesRequires
 
@@ -80,24 +79,20 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
         self.framework.observe(self.on.upgrade_action, self.on_upgrade_action)
 
+    @status.on_error(ops.WaitingStatus("Waiting on valid ceritifcate data"))
     def api_dependencies_ready(self):
         common_name = kubernetes_snaps.get_public_address()
         ca = self.certificates.ca
         client_cert = self.certificates.client_certs_map.get("system:kube-apiserver")
         server_cert = self.certificates.server_certs_map.get(common_name)
-
-        if not ca or not client_cert or not server_cert:
-            status.add(WaitingStatus("Waiting for certificates"))
-            return False
-
-        if not self.etcd.is_ready:
-            status.add(WaitingStatus("Waiting for etcd"))
-            return False
+        assert ca, "CA Certificate not ready"
+        assert client_cert, "Client Cert not ready"
+        assert server_cert, "Server Cert not ready"
 
         return True
 
     def configure_apiserver(self):
-        status.add(MaintenanceStatus("Configuring API Server"))
+        status.add(ops.MaintenanceStatus("Configuring API Server"))
         kubernetes_snaps.configure_apiserver(
             advertise_address=self.kube_control.ingress_addresses[0],
             audit_policy=self.model.config["audit-policy"],
@@ -113,7 +108,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         )
 
     def configure_apiserver_kubelet_api_admin(self):
-        status.add(MaintenanceStatus("Configuring API Server kubelet admin"))
+        status.add(ops.MaintenanceStatus("Configuring API Server kubelet admin"))
         kubectl("apply", "-f", "templates/apiserver-kubelet-api-admin.yaml")
 
     def configure_auth_webhook(self):
@@ -125,18 +120,16 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             # keystone_endpoint=???
         )
 
+    @status.on_error(ops.WaitingStatus("Waiting for container runtime"))
     def configure_container_runtime(self):
-        if not self.container_runtime.relations:
-            status.add(BlockedStatus("Missing container-runtime integration"))
-            return
-
-        status.add(MaintenanceStatus("Configuring CRI"))
+        assert self.container_runtime.relations, "Missing container-runtime integration"
+        status.add(ops.MaintenanceStatus("Configuring CRI"))
         registry = self.model.config["image-registry"]
         sandbox_image = kubernetes_snaps.get_sandbox_image(registry)
         self.container_runtime.set_sandbox_image(sandbox_image)
 
     def configure_cni(self):
-        status.add(MaintenanceStatus("Configuring CNI"))
+        status.add(ops.MaintenanceStatus("Configuring CNI"))
         self.cni.set_image_registry(self.model.config["image-registry"])
         self.cni.set_kubeconfig_hash_from_file("/root/.kube/config")
         self.cni.set_service_cidr(self.model.config["service-cidr"])
@@ -145,10 +138,10 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def configure_controller_manager(self):
         cluster_name = self.get_cluster_name()
         if not cluster_name:
-            status.add(WaitingStatus("Waiting for cluster name"))
+            status.add(ops.WaitingStatus("Waiting for cluster name"))
             return
 
-        status.add(MaintenanceStatus("Configuring Controller Manager"))
+        status.add(ops.MaintenanceStatus("Configuring Controller Manager"))
         kubernetes_snaps.configure_controller_manager(
             cluster_cidr=self.cni.cidr,
             cluster_name=cluster_name,
@@ -160,7 +153,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def configure_hacluster(self):
         if self.hacluster.is_ready:
-            status.add(MaintenanceStatus("Configuring HACluster"))
+            status.add(ops.MaintenanceStatus("Configuring HACluster"))
             self.hacluster.update_vips()
             self.hacluster.configure_hacluster()
             # Note that we do not register any systemd services with HACluster.
@@ -170,12 +163,12 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             # there.
 
     def configure_kernel_parameters(self):
-        status.add(MaintenanceStatus("Configuring Kernel Params"))
+        status.add(ops.MaintenanceStatus("Configuring Kernel Params"))
         sysctl = yaml.safe_load(self.model.config["sysctl"])
         kubernetes_snaps.configure_kernel_parameters(sysctl)
 
     def configure_kube_control(self):
-        status.add(MaintenanceStatus("Configuring Kube Control"))
+        status.add(ops.MaintenanceStatus("Configuring Kube Control"))
         dns_address = self.get_dns_address()
         dns_domain = self.get_dns_domain()
         dns_enabled = bool(dns_address)
@@ -211,7 +204,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.kube_control.clear_creds()
 
     def configure_kube_proxy(self):
-        status.add(MaintenanceStatus("Configuring Kube Proxy"))
+        status.add(ops.MaintenanceStatus("Configuring Kube Proxy"))
         kubernetes_snaps.configure_kube_proxy(
             cluster_cidr=self.cni.cidr,
             extra_args_config=self.model.config["proxy-extra-args"],
@@ -221,7 +214,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         )
 
     def configure_kubelet(self):
-        status.add(MaintenanceStatus("Configuring Kubelet"))
+        status.add(ops.MaintenanceStatus("Configuring Kubelet"))
         kubernetes_snaps.configure_kubelet(
             container_runtime_endpoint=self.container_runtime.socket,
             dns_domain=self.get_dns_domain(),
@@ -241,12 +234,12 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
         def check_status(endpoint, ep_name):
             if not endpoint.has_response:
-                status.add(WaitingStatus(f"Waiting for {ep_name}"))
+                status.add(ops.WaitingStatus(f"Waiting for {ep_name}"))
             elif resp := endpoint.get_response("api-server-external"):
                 if resp and resp.error:
-                    status.add(BlockedStatus(f"Blocked by {ep_name}"))
+                    status.add(ops.BlockedStatus(f"Blocked by {ep_name}"))
 
-        status.add(MaintenanceStatus("Configuring LoadBalancers"))
+        status.add(ops.MaintenanceStatus("Configuring LoadBalancers"))
         if self.lb_external.is_available:
             req = self.lb_external.get_request("api-server-external")
             req.protocol = req.protocols.tcp
@@ -269,14 +262,14 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             check_status(self.lb_internal, "loadbalancer-internal")
 
     def configure_scheduler(self):
-        status.add(MaintenanceStatus("Configuring Scheduler"))
+        status.add(ops.MaintenanceStatus("Configuring Scheduler"))
         kubernetes_snaps.configure_scheduler(
             extra_args_config=self.model.config["scheduler-extra-args"],
             kubeconfig="/root/cdk/kubeschedulerconfig",
         )
 
     def create_kubeconfigs(self):
-        status.add(MaintenanceStatus("Creating kubeconfigs"))
+        status.add(ops.MaintenanceStatus("Creating kubeconfigs"))
         ca = self.certificates.ca
         local_server = self.k8s_api_endpoints.local()
         node_name = self.get_node_name()
@@ -363,7 +356,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def configure_observability(self):
         """Apply observability configurations to the cluster."""
         # Apply Clusterrole and Clusterrole binding for COS observability
-        status.add(MaintenanceStatus("Configuring Observability"))
+        status.add(ops.MaintenanceStatus("Configuring Observability"))
         if self.unit.is_leader():
             kubectl("apply", "-f", "templates/observability.yaml")
         # Issue a token for metrics scraping
@@ -378,7 +371,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         if not self.unit.is_leader():
             return
 
-        status.add(MaintenanceStatus("Generating Tokens"))
+        status.add(ops.MaintenanceStatus("Generating Tokens"))
         self.tokens.remove_stale_tokens()
 
         for request in self.tokens.token_requests:
@@ -396,7 +389,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             return cluster_name
 
         if not self.unit.is_leader():
-            status.add(WaitingStatus("Waiting for cluster name from leader"))
+            status.add(ops.WaitingStatus("Waiting for cluster name from leader"))
             return None
 
         # Check for old cluster name in leader data
@@ -426,20 +419,13 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         fqdn = self.external_cloud_provider.name == "aws" and self.external_cloud_provider.has_xcp
         return kubernetes_snaps.get_node_name(fqdn=fqdn)
 
+    @status.on_error(ops.BlockedStatus("cni-plugins resource missing or invalid"))
     def install_cni_binaries(self):
         try:
             resource_path = self.model.resources.fetch("cni-plugins")
-        except ModelError:
-            message = "Something went wrong when claiming 'cni-plugins' resource."
-            status.add(BlockedStatus(message))
-            log.exception(message)
-            return
-
-        except NameError:
-            message = "Resource 'cni-plugins' not found."
-            status.add(message)
-            log.exception(message)
-            return
+        except (ops.ModelError, NameError):
+            log.error("Something went wrong when claiming 'cni-plugins' resource.")
+            raise
 
         unpack_path = Path("/opt/cni/bin")
         unpack_path.mkdir(parents=True, exist_ok=True)
@@ -448,7 +434,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         try:
             subprocess.check_call(shlex.split(command))
         except CalledProcessError:
-            log.exception("Failed to extract 'cni-plugins:'")
+            log.error("Failed to extract 'cni-plugins:'")
+            raise
 
         log.info(f"Extracted 'cni-plugins' to {unpack_path}")
 
@@ -489,7 +476,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def apply_node_labels(self):
         """Request client and server certificates."""
-        status.add(MaintenanceStatus("Apply Node Labels"))
+        status.add(ops.MaintenanceStatus("Apply Node Labels"))
         node = self.get_node_name()
         if self.node_base.active_labels() is not None:
             self.node_base.apply_node_labels()
@@ -497,11 +484,10 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         else:
             log.info("Node %s not yet labelled", node)
 
+    @status.on_error(ops.WaitingStatus("Waiting for certificate authority"))
     def request_certificates(self):
         """Request client and server certificates."""
-        if not self.certificates.relation:
-            status.add(BlockedStatus("Missing relation to certificate authority"))
-            return
+        assert self.certificates.relation, "Certificates relation doesn't yet exist"
 
         bind_addrs = kubernetes_snaps.get_bind_addresses()
         common_name = kubernetes_snaps.get_public_address()
@@ -564,7 +550,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             return
 
         if not self.unit.is_leader():
-            status.add(WaitingStatus("Waiting for key from leader"))
+            status.add(ops.WaitingStatus("Waiting for key from leader"))
             return
 
         # Check for old key in leader data
@@ -585,7 +571,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         server_cert = self.certificates.server_certs_map.get(common_name)
 
         if not ca or not client_cert or not server_cert:
-            status.add(WaitingStatus("Waiting for certificates"))
+            status.add(ops.WaitingStatus("Waiting for certificates"))
             return
 
         kubernetes_snaps.write_certificates(
@@ -596,16 +582,11 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             server_key=server_cert.key,
         )
 
+    @status.on_error(ops.WaitingStatus("Waiting for etcd"))
     def write_etcd_client_credentials(self):
         """Write etcd client credentials from the etcd relation."""
-        if not self.etcd.relation:
-            status.add(BlockedStatus("Missing relation to etcd"))
-            return
-
-        if not self.etcd.is_ready:
-            status.add(WaitingStatus("Waiting for etcd"))
-            return
-
+        assert self.etcd.relation, "Relation to etcd is missing"
+        assert self.etcd.is_ready, "Relation to etcd is not yet ready"
         creds = self.etcd.get_client_credentials()
 
         kubernetes_snaps.write_etcd_client_credentials(
@@ -640,16 +621,16 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
         kube_system_re = re.compile(r"Waiting for (?:\d+ )?kube-system pods? to start")
         pre_status = self.unit.status
-        if isinstance(pre_status, ActiveStatus) or kube_system_re.match(pre_status.message):
+        if isinstance(pre_status, ops.ActiveStatus) or kube_system_re.match(pre_status.message):
             with status.context(self.unit):
                 unready = get_kube_system_pods_not_running(self)
                 if unready is None:
-                    status.add(WaitingStatus("Waiting for kube-system pods to start"))
+                    status.add(ops.WaitingStatus("Waiting for kube-system pods to start"))
                 elif unready:
                     plural = "s" if len(unready) > 1 else ""
                     msg = "Waiting for {} kube-system pod{} to start"
                     msg = msg.format(len(unready), plural)
-                    status.add(WaitingStatus(msg))
+                    status.add(ops.WaitingStatus(msg))
 
 
 if __name__ == "__main__":  # pragma: nocover
