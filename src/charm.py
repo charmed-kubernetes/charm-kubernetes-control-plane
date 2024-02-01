@@ -487,7 +487,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     @status.on_error(ops.WaitingStatus("Waiting for certificate authority"))
     def request_certificates(self):
         """Request client and server certificates."""
-        assert self.certificates.relation
+        assert self.certificates.relation, "Certifcates relation doesn't yet exist"
 
         bind_addrs = kubernetes_snaps.get_bind_addresses()
         common_name = kubernetes_snaps.get_public_address()
@@ -585,7 +585,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     @status.on_error(ops.WaitingStatus("Waiting for etcd"))
     def write_etcd_client_credentials(self):
         """Write etcd client credentials from the etcd relation."""
-        assert self.etcd.relation and self.etcd.is_ready
+        assert self.etcd.relation, "Relation to etcd is missing"
+        assert self.etcd.is_ready, "Relation to etcd is not yet ready"
         creds = self.etcd.get_client_credentials()
 
         kubernetes_snaps.write_etcd_client_credentials(
