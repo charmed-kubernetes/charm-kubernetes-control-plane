@@ -18,9 +18,8 @@ tags:
   - master  # wokeignore:rule=master
   - control-plane
 subordinate: false
-series:
-  - jammy
-  - focal
+assumes:
+  - juju >= 3.1
 peers:
   coordinator:
     # LP:2049953 needed for upgrading from < 1.29
