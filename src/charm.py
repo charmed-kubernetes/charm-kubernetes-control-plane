@@ -137,15 +137,10 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         kubernetes_snaps.set_default_cni_conf_file(self.cni.cni_conf_file)
 
     def configure_controller_manager(self):
-        cluster_name = self.get_cluster_name()
-        if not cluster_name:
-            status.add(ops.WaitingStatus("Waiting for cluster name"))
-            return
-
         status.add(ops.MaintenanceStatus("Configuring Controller Manager"))
         kubernetes_snaps.configure_controller_manager(
             cluster_cidr=self.cni.cidr,
-            cluster_name=cluster_name,
+            cluster_name=self.get_cluster_name(),
             extra_args_config=self.model.config["controller-manager-extra-args"],
             kubeconfig="/root/cdk/kubecontrollermanagerconfig",
             service_cidr=self.model.config["service-cidr"],
@@ -383,16 +378,16 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             }
             self.tokens.send_token(request, tokens)
 
-    def get_cluster_name(self):
+    @status.on_error(ops.WaitingStatus("Waiting for cluster name"))
+    def get_cluster_name(self) -> str:
         peer_relation = self.model.get_relation("peer")
+        assert peer_relation, "Peer relation not ready"
         cluster_name = peer_relation.data[self.app].get("cluster-name")
 
         if cluster_name:
             return cluster_name
 
-        if not self.unit.is_leader():
-            status.add(ops.WaitingStatus("Waiting for cluster name from leader"))
-            return None
+        assert self.unit.is_leader(), "Waiting for cluster name from leader"
 
         # Check for old cluster name in leader data
         cluster_name = leader_data.get("cluster_tag")
