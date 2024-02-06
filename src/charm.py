@@ -17,6 +17,7 @@ import auth_webhook
 import charms.contextual_status as status
 import leader_data
 import ops
+import tenacity
 import yaml
 from cdk_addons import CdkAddons
 from charms import kubernetes_snaps
@@ -268,6 +269,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             kubeconfig="/root/cdk/kubeschedulerconfig",
         )
 
+    @status.on_error(ops.WaitingStatus("Waiting for Auth Tokens"), tenacity.RetryError)
     def create_kubeconfigs(self):
         status.add(ops.MaintenanceStatus("Creating kubeconfigs"))
         ca = self.certificates.ca
