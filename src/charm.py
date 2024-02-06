@@ -543,17 +543,18 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self._set_workload_version()
         self._check_kube_system()
 
+    @status.on_error(ops.WaitingStatus("Waiting for service-account-key"))
     def write_service_account_key(self):
+        status.add(ops.MaintenanceStatus("Preparing Service Account Key"))
         peer_relation = self.model.get_relation("peer")
-        key = peer_relation.data[self.app].get("service-account-key")
+        assert peer_relation, "Peer relation isn't available"
 
+        key = peer_relation.data[self.app].get("service-account-key")
         if key:
             kubernetes_snaps.write_service_account_key(key)
             return
 
-        if not self.unit.is_leader():
-            status.add(ops.WaitingStatus("Waiting for key from leader"))
-            return
+        assert self.unit.is_leader(), "Follower {self.unit.name} has yet to receive the key"
 
         # Check for old key in leader data
         key = leader_data.get("/root/cdk/serviceaccount.key")
