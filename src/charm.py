@@ -549,7 +549,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             kubernetes_snaps.write_service_account_key(key)
             return
 
-        assert self.unit.is_leader(), "Follower {self.unit.name} has yet to receive the key"
+        assert self.unit.is_leader(), f"Follower {self.unit.name} has yet to receive the key"
 
         # Check for old key in leader data
         key = leader_data.get("/root/cdk/serviceaccount.key")
