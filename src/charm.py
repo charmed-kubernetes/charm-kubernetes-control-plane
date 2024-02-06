@@ -137,15 +137,10 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         kubernetes_snaps.set_default_cni_conf_file(self.cni.cni_conf_file)
 
     def configure_controller_manager(self):
-        cluster_name = self.get_cluster_name()
-        if not cluster_name:
-            status.add(ops.WaitingStatus("Waiting for cluster name"))
-            return
-
         status.add(ops.MaintenanceStatus("Configuring Controller Manager"))
         kubernetes_snaps.configure_controller_manager(
             cluster_cidr=self.cni.cidr,
-            cluster_name=cluster_name,
+            cluster_name=self.get_cluster_name(),
             extra_args_config=self.model.config["controller-manager-extra-args"],
             kubeconfig="/root/cdk/kubecontrollermanagerconfig",
             service_cidr=self.model.config["service-cidr"],
@@ -383,16 +378,16 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             }
             self.tokens.send_token(request, tokens)
 
-    def get_cluster_name(self):
+    @status.on_error(ops.WaitingStatus("Waiting for cluster name"))
+    def get_cluster_name(self) -> str:
         peer_relation = self.model.get_relation("peer")
+        assert peer_relation, "Peer relation not ready"
         cluster_name = peer_relation.data[self.app].get("cluster-name")
 
         if cluster_name:
             return cluster_name
 
-        if not self.unit.is_leader():
-            status.add(ops.WaitingStatus("Waiting for cluster name from leader"))
-            return None
+        assert self.unit.is_leader(), "Waiting for cluster name from leader"
 
         # Check for old cluster name in leader data
         cluster_name = leader_data.get("cluster_tag")
@@ -543,17 +538,18 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self._set_workload_version()
         self._check_kube_system()
 
+    @status.on_error(ops.WaitingStatus("Waiting for service-account-key"))
     def write_service_account_key(self):
+        status.add(ops.MaintenanceStatus("Preparing Service Account Key"))
         peer_relation = self.model.get_relation("peer")
-        key = peer_relation.data[self.app].get("service-account-key")
+        assert peer_relation, "Peer relation isn't available"
 
+        key = peer_relation.data[self.app].get("service-account-key")
         if key:
             kubernetes_snaps.write_service_account_key(key)
             return
 
-        if not self.unit.is_leader():
-            status.add(ops.WaitingStatus("Waiting for key from leader"))
-            return
+        assert self.unit.is_leader(), "Follower {self.unit.name} has yet to receive the key"
 
         # Check for old key in leader data
         key = leader_data.get("/root/cdk/serviceaccount.key")
@@ -565,16 +561,16 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         key = kubernetes_snaps.create_service_account_key()
         peer_relation.data[self.app]["service-account-key"] = key
 
+    @status.on_error(ops.WaitingStatus("Waiting for certificates"))
     def write_certificates(self):
         """Write certificates from the certificates relation."""
         common_name = kubernetes_snaps.get_public_address()
         ca = self.certificates.ca
         client_cert = self.certificates.client_certs_map.get("system:kube-apiserver")
         server_cert = self.certificates.server_certs_map.get(common_name)
-
-        if not ca or not client_cert or not server_cert:
-            status.add(ops.WaitingStatus("Waiting for certificates"))
-            return
+        assert ca, "CA Certificate not ready"
+        assert client_cert, "Client Cert not ready"
+        assert server_cert, "Server Cert not ready"
 
         kubernetes_snaps.write_certificates(
             ca=ca,
