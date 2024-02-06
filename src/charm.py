@@ -561,16 +561,16 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         key = kubernetes_snaps.create_service_account_key()
         peer_relation.data[self.app]["service-account-key"] = key
 
+    @status.on_error(ops.WaitingStatus("Waiting for certificates"))
     def write_certificates(self):
         """Write certificates from the certificates relation."""
         common_name = kubernetes_snaps.get_public_address()
         ca = self.certificates.ca
         client_cert = self.certificates.client_certs_map.get("system:kube-apiserver")
         server_cert = self.certificates.server_certs_map.get(common_name)
-
-        if not ca or not client_cert or not server_cert:
-            status.add(ops.WaitingStatus("Waiting for certificates"))
-            return
+        assert ca, "CA Certificate not ready"
+        assert client_cert, "Client Cert not ready"
+        assert server_cert, "Server Cert not ready"
 
         kubernetes_snaps.write_certificates(
             ca=ca,
