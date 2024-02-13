@@ -12,6 +12,7 @@ import socket
 import subprocess
 from pathlib import Path
 from subprocess import CalledProcessError
+from typing import Callable
 
 import auth_webhook
 import charms.contextual_status as status
@@ -82,7 +83,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
         self.framework.observe(self.on.upgrade_action, self.on_upgrade_action)
 
-    @status.on_error(ops.WaitingStatus("Waiting on valid ceritifcate data"))
+    @status.on_error(ops.WaitingStatus("Waiting on valid certificate data"))
     def api_dependencies_ready(self):
         common_name = kubernetes_snaps.get_public_address()
         ca = self.certificates.ca
@@ -476,12 +477,14 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.generate_tokens()
             self.configure_observability()
             self.apply_node_labels()
-            self.open_ports()
+            self.manage_ports(self.unit.open_port)
+        else:
+            self.manage_ports(self.unit.close_port)
 
-    @status.on_error(ops.WaitingStatus("Waiting to open port"))
-    def open_ports(self):
-        """Open control plane ports needed for remote access to the cluster."""
-        self.unit.open_port("tcp", self.APISERVER_PORT)
+    @status.on_error(ops.WaitingStatus("Waiting to manage port"))
+    def manage_ports(self, port_action: Callable):
+        """Open/close control plane ports needed for remote access to the cluster."""
+        port_action("tcp", self.APISERVER_PORT)
 
     def apply_node_labels(self):
         """Request client and server certificates."""

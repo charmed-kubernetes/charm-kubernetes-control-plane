@@ -45,15 +45,15 @@ def harness():
 @patch("charm.KubernetesControlPlaneCharm.configure_apiserver_kubelet_api_admin")
 @patch("charm.KubernetesControlPlaneCharm.install_cni_binaries")
 @patch("charm.KubernetesControlPlaneCharm.get_cloud_name")
+@patch("charm.KubernetesControlPlaneCharm.manage_ports")
 @patch("charms.node_base.LabelMaker.active_labels")
 @patch("charms.node_base.LabelMaker.set_label")
 @patch("charms.node_base.LabelMaker.remove_label")
-@patch("ops.Unit.open_port")
 def test_active(
-    open_port,
     remove_label,
     set_label,
     active_labels,
+    manage_ports,
     get_cloud_name,
     install_cni_binaries,
     configure_apiserver_kubelet_api_admin,
@@ -224,6 +224,7 @@ def test_active(
         ca="test-etcd-ca", cert="test-etcd-client-cert", key="test-etcd-client-key"
     )
     write_service_account_key.assert_called_once_with("test-service-account-key")
+    manage_ports.assert_called_once_with(harness.charm.unit.open_port)
 
     assert len(set_label.mock_calls) == 3
     set_label.assert_has_calls(
@@ -235,4 +236,21 @@ def test_active(
         any_order=False,
     )
     remove_label.assert_called_once_with("juju.io/cloud")
-    open_port.assert_called_once_with("tcp", 6443)
+
+
+@patch("ops.Unit.close_port")
+@patch("ops.Unit.open_port")
+def test_manage_ports(
+    mock_open,
+    mock_close,
+    harness,
+):
+    """Verify manage_ports opens/closes as expected."""
+    port_params = ["tcp", 6443]
+    harness.begin()
+
+    harness.charm.manage_ports(mock_open)
+    mock_open.assert_called_once_with(*port_params)
+
+    harness.charm.manage_ports(mock_close)
+    mock_close.assert_called_once_with(*port_params)
