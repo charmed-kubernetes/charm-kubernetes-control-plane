@@ -47,6 +47,8 @@ OBSERVABILITY_ROLE = "system:cos"
 class KubernetesControlPlaneCharm(ops.CharmBase):
     """Charmed Operator for Kubernetes Control Plane."""
 
+    APISERVER_PORT = 6443
+
     def __init__(self, *args):
         super().__init__(*args)
         self.cdk_addons = CdkAddons(self)
@@ -239,20 +241,24 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         if self.lb_external.is_available:
             req = self.lb_external.get_request("api-server-external")
             req.protocol = req.protocols.tcp
-            req.port_mapping = {443: 6443}
+            req.port_mapping = {443: self.APISERVER_PORT}
             req.public = True
             if not req.health_checks:
-                req.add_health_check(protocol=req.protocols.http, port=6443, path="/livez")
+                req.add_health_check(
+                    protocol=req.protocols.http, port=self.APISERVER_PORT, path="/livez"
+                )
             self.lb_external.send_request(req)
             check_status(self.lb_external, "loadbalancer-external")
 
         if self.lb_internal.is_available:
             req = self.lb_internal.get_request("api-server-internal")
             req.protocol = req.protocols.tcp
-            req.port_mapping = {6443: 6443}
+            req.port_mapping = {6443: self.APISERVER_PORT}
             req.public = False
             if not req.health_checks:
-                req.add_health_check(protocol=req.protocols.http, port=6443, path="/livez")
+                req.add_health_check(
+                    protocol=req.protocols.http, port=self.APISERVER_PORT, path="/livez"
+                )
             self.lb_internal.send_request(req)
 
             check_status(self.lb_internal, "loadbalancer-internal")
@@ -470,6 +476,14 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.generate_tokens()
             self.configure_observability()
             self.apply_node_labels()
+            self.open_ports()
+
+    def open_ports(self):
+        """Open control plane ports needed for remote access to the cluster."""
+        try:
+            self.unit.open_port("tcp", self.APISERVER_PORT)
+        except ops.ModelError:
+            log.warning(f"Failed to open port {self.APISERVER_PORT}. Will retry.")
 
     def apply_node_labels(self):
         """Request client and server certificates."""
