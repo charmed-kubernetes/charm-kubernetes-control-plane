@@ -486,6 +486,14 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.generate_tokens()
             self.configure_observability()
             self.apply_node_labels()
+            self.open_ports()
+
+    def open_ports(self):
+        """Open control plane ports needed for remote access to the cluster."""
+        try:
+            self.unit.open_port("tcp", 6443)
+        except ModelError:
+            log.warning("Failed to open the apiserver port. Will retry.")
 
     def apply_node_labels(self):
         """Request client and server certificates."""
