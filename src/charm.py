@@ -478,12 +478,10 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.apply_node_labels()
             self.open_ports()
 
+    @status.on_error(ops.WaitingStatus("Waiting to open port"))
     def open_ports(self):
         """Open control plane ports needed for remote access to the cluster."""
-        try:
-            self.unit.open_port("tcp", self.APISERVER_PORT)
-        except ops.ModelError:
-            log.warning(f"Failed to open port {self.APISERVER_PORT}. Will retry.")
+        self.unit.open_port("tcp", self.APISERVER_PORT)
 
     def apply_node_labels(self):
         """Request client and server certificates."""
