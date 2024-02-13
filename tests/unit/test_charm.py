@@ -48,7 +48,9 @@ def harness():
 @patch("charms.node_base.LabelMaker.active_labels")
 @patch("charms.node_base.LabelMaker.set_label")
 @patch("charms.node_base.LabelMaker.remove_label")
+@patch("ops.Unit.open_port")
 def test_active(
+    open_port,
     remove_label,
     set_label,
     active_labels,
@@ -233,3 +235,4 @@ def test_active(
         any_order=False,
     )
     remove_label.assert_called_once_with("juju.io/cloud")
+    open_port.assert_called_once_with("tcp", 6443)
