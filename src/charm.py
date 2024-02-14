@@ -12,6 +12,7 @@ import socket
 import subprocess
 from pathlib import Path
 from subprocess import CalledProcessError
+from typing import Callable
 
 import auth_webhook
 import charms.contextual_status as status
@@ -47,6 +48,8 @@ OBSERVABILITY_ROLE = "system:cos"
 class KubernetesControlPlaneCharm(ops.CharmBase):
     """Charmed Operator for Kubernetes Control Plane."""
 
+    APISERVER_PORT = 6443
+
     def __init__(self, *args):
         super().__init__(*args)
         self.cdk_addons = CdkAddons(self)
@@ -80,7 +83,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
         self.framework.observe(self.on.upgrade_action, self.on_upgrade_action)
 
-    @status.on_error(ops.WaitingStatus("Waiting on valid ceritifcate data"))
+    @status.on_error(ops.WaitingStatus("Waiting on valid certificate data"))
     def api_dependencies_ready(self):
         common_name = kubernetes_snaps.get_public_address()
         ca = self.certificates.ca
@@ -239,20 +242,24 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         if self.lb_external.is_available:
             req = self.lb_external.get_request("api-server-external")
             req.protocol = req.protocols.tcp
-            req.port_mapping = {443: 6443}
+            req.port_mapping = {443: self.APISERVER_PORT}
             req.public = True
             if not req.health_checks:
-                req.add_health_check(protocol=req.protocols.http, port=6443, path="/livez")
+                req.add_health_check(
+                    protocol=req.protocols.http, port=self.APISERVER_PORT, path="/livez"
+                )
             self.lb_external.send_request(req)
             check_status(self.lb_external, "loadbalancer-external")
 
         if self.lb_internal.is_available:
             req = self.lb_internal.get_request("api-server-internal")
             req.protocol = req.protocols.tcp
-            req.port_mapping = {6443: 6443}
+            req.port_mapping = {6443: self.APISERVER_PORT}
             req.public = False
             if not req.health_checks:
-                req.add_health_check(protocol=req.protocols.http, port=6443, path="/livez")
+                req.add_health_check(
+                    protocol=req.protocols.http, port=self.APISERVER_PORT, path="/livez"
+                )
             self.lb_internal.send_request(req)
 
             check_status(self.lb_internal, "loadbalancer-internal")
@@ -470,6 +477,14 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.generate_tokens()
             self.configure_observability()
             self.apply_node_labels()
+            self.manage_ports(self.unit.open_port)
+        else:
+            self.manage_ports(self.unit.close_port)
+
+    @status.on_error(ops.WaitingStatus("Waiting to manage port"))
+    def manage_ports(self, port_action: Callable):
+        """Open/close control plane ports needed for remote access to the cluster."""
+        port_action("tcp", self.APISERVER_PORT)
 
     def apply_node_labels(self):
         """Request client and server certificates."""
