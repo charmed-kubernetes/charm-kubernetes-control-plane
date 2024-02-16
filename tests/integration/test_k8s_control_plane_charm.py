@@ -49,7 +49,16 @@ async def test_build_and_deploy(ops_test: OpsTest):
 
 
 async def test_status(ops_test):
-    worker_app = ops_test.model.applications["kubernetes-control-plane"]
-    k8s_version_str = worker_app.data["workload-version"]
+    cp = ops_test.model.applications["kubernetes-control-plane"]
+    k8s_version_str = cp.data["workload-version"]
     assert k8s_version_str, "Workload version is unset"
     assert tuple(int(i) for i in k8s_version_str.split(".")[:2]) >= (1, 26)
+
+
+async def test_getkubeconfig(ops_test: OpsTest):
+    cp = ops_test.model.applications["kubernetes-control-plane"]
+    actions = await cp.get_actions()
+    assert "get-kubeconfig" in actions
+    action = await cp.units[0].run_action("get-kubeconfig")
+    result = await action.wait()
+    assert result.results["kubeconfig"]

@@ -4,6 +4,7 @@
 
 """Charmed Machine Operator for Kubernetes Control Plane."""
 
+import json
 import logging
 import os
 import re
@@ -79,6 +80,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.framework.observe(self.on.update_status, self.update_status)
 
         self.framework.observe(self.on.upgrade_action, self.on_upgrade_action)
+        self.framework.observe(self.on.get_kubeconfig_action, self.get_kubeconfig)
 
     def api_dependencies_ready(self):
         common_name = kubernetes_snaps.get_public_address()
@@ -457,6 +459,17 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         with status.context(self.unit):
             channel = self.model.config.get("channel")
             kubernetes_snaps.upgrade_snaps(channel=channel, event=event, control_plane=True)
+
+    def get_kubeconfig(self, event: ops.ActionEvent):
+        try:
+            result = kubectl("config", "view", "-o", "json", "--raw")
+            # JSON format verification
+            kubeconfig = json.dumps(json.loads(result))
+            event.set_results({"kubeconfig": kubeconfig})
+        except json.JSONDecodeError as e:
+            event.fail("Failed to parse kubeconfig: {}".format(str(e)))
+        except Exception as e:
+            event.fail("Failed to retrieve kubeconfig: {}".format(str(e)))
 
     def reconcile(self, event):
         """Reconcile state change events."""

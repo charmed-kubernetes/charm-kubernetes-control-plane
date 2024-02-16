@@ -1,2 +1,4 @@
 upgrade:
     description: Upgrade the Kubernetes snaps
+get-kubeconfig:
+  description: Retrieve Kubernetes cluster config, including credentials
