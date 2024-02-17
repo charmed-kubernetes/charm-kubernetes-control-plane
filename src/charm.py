@@ -510,10 +510,15 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         else:
             self.manage_ports(self.unit.close_port)
 
-    @status.on_error(ops.WaitingStatus("Waiting to manage port"))
     def manage_ports(self, port_action: Callable):
         """Open/close control plane ports needed for remote access to the cluster."""
-        port_action("tcp", self.APISERVER_PORT)
+        try:
+            port_action("tcp", self.APISERVER_PORT)
+        except ModelError:
+            msg = f"Waiting to manage port {self.APISERVER_PORT}."
+            status.add(WaitingStatus(msg))
+            log.exception(msg)
+            return
 
     def apply_node_labels(self):
         """Request client and server certificates."""
