@@ -469,7 +469,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def get_kubeconfig(self, event: ops.ActionEvent):
         try:
-            result = kubectl("config", "view", "-o", "json", "--raw")
+            result = kubectl("config", "view", "-o", "json", "--raw", external=True)
             # JSON format verification
             kubeconfig = json.dumps(json.loads(result))
             event.set_results({"kubeconfig": kubeconfig})
