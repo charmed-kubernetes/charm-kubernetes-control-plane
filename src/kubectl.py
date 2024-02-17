@@ -13,12 +13,17 @@ def get_service_ip(name, namespace):
 
 
 @retry(stop=stop_after_delay(60), wait=wait_exponential())
-def kubectl(*args):
+def kubectl(*args, external=False):
     """Run a kubectl cli command with a config file.
+
+    By default, this function uses the root kubeconfig that points to the local apiserver.
+    Setting the 'external' parameter to 'True' will use the ubuntu config which points to
+    the external cluster endpoint.
 
     Returns stdout and throws an error if the command fails.
     """
-    command = ["kubectl", "--kubeconfig=/root/.kube/config"] + list(args)
+    cfg = "/home/ubuntu/config" if external else "/root/.kube/config"
+    command = ["kubectl", f"--kubeconfig={cfg}"] + list(args)
     log.info("Executing {}".format(command))
     try:
         return check_output(command).decode("utf-8")
