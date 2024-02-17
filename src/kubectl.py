@@ -23,7 +23,7 @@ def kubectl(*args, external=False):
     Returns stdout and throws an error if the command fails.
     """
     cfg = "/home/ubuntu/config" if external else "/root/.kube/config"
-    command = ["kubectl", f"--kubeconfig={cfg}"] + list(args)
+    command = ["kubectl", f"--kubeconfig={cfg}", *args]
     log.info("Executing {}".format(command))
     try:
         return check_output(command).decode("utf-8")
