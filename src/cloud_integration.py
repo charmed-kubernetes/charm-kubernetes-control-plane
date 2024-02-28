@@ -1,3 +1,8 @@
+# Copyright 2024 Canonical
+# See LICENSE file for licensing details.
+
+"""Cloud Integration for Charmed Kubernetes Worker."""
+
 import logging
 
 import charms.contextual_status as status
@@ -21,22 +26,29 @@ class CloudIntegration:
     """
 
     def __init__(self, charm: ops.CharmBase) -> None:
+        """Integrate with all possible clouds."""
         self.charm = charm
         self.aws = AWSIntegrationRequires(charm)
-        self.gcp = None # GCPIntegrationRequires(charm)
-        self.azure = None # AzureIntegrationRequires(charm)
+        self.gcp = None  # GCPIntegrationRequires(charm)
+        self.azure = None  # AzureIntegrationRequires(charm)
 
     def integrate(self):
         """Request tags and permissions for a control-plane node."""
         cluster_tag = self.charm.get_cluster_name()
         cloud_name = self.charm.get_cloud_name()
-        cloud_support = {"aws": self.aws,}
-        
+        cloud_support = {
+            "aws": self.aws,
+        }
+
         if not (cloud := cloud_support.get(cloud_name)):
-            log.error("Skipping Cloud integration: unsupported cloud %s", )
+            log.error(
+                "Skipping Cloud integration: unsupported cloud %s",
+            )
 
         if not cloud.relation:
-            log.info("Skipping Cloud integration: Needs an active %s relation to integrate.", cloud_name)
+            log.info(
+                "Skipping Cloud integration: Needs an active %s relation to integrate.", cloud_name
+            )
             return
 
         status.add(ops.MaintenanceStatus(f"Integrate with {cloud}"))

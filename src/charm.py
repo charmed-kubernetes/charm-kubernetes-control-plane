@@ -21,7 +21,6 @@ import leader_data
 import ops
 import tenacity
 import yaml
-from cloud_integration import CloudIntegration
 from cdk_addons import CdkAddons
 from charms import kubernetes_snaps
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
@@ -33,6 +32,7 @@ from charms.interface_tokens import TokensProvider
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.node_base import LabelMaker
 from charms.reconciler import Reconciler
+from cloud_integration import CloudIntegration
 from cos_integration import COSIntegration
 from hacluster import HACluster
 from k8s_api_endpoints import K8sApiEndpoints
@@ -391,6 +391,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     @status.on_error(ops.WaitingStatus("Waiting for cluster name"))
     def get_cluster_name(self) -> str:
+        """Get the cluster name from the kube-control relation."""
         peer_relation = self.model.get_relation("peer")
         assert peer_relation, "Peer relation not ready"
         cluster_name = peer_relation.data[self.app].get("cluster-name")
