@@ -44,6 +44,7 @@ class CloudIntegration:
             log.error(
                 "Skipping Cloud integration: unsupported cloud %s",
             )
+            return
 
         if not cloud.relation:
             log.info(
