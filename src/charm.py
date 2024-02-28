@@ -21,6 +21,7 @@ import leader_data
 import ops
 import tenacity
 import yaml
+from cloud_integration import CloudIntegration
 from cdk_addons import CdkAddons
 from charms import kubernetes_snaps
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
@@ -77,6 +78,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.kube_dns = KubeDnsRequires(self, endpoint="dns-provider")
         self.lb_external = LBProvider(self, "loadbalancer-external")
         self.lb_internal = LBProvider(self, "loadbalancer-internal")
+        self.cloud_integration = CloudIntegration(self)
         self.external_cloud_provider = ExternalCloudProvider(self, "external-cloud-provider")
         self.reconciler = Reconciler(self, self.reconcile)
         self.tokens = TokensProvider(self, endpoint="tokens")
@@ -419,7 +421,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         return self.kube_dns.port or 53
 
     def get_cloud_name(self) -> str:
-        return self.external_cloud_provider.name
+        return self.external_cloud_provider.name or ""
 
     def get_node_name(self) -> str:
         fqdn = self.external_cloud_provider.name == "aws" and self.external_cloud_provider.has_xcp
@@ -493,6 +495,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.manage_ports(self.unit.open_port)
         else:
             self.manage_ports(self.unit.close_port)
+        self.cloud_integration.integrate()
 
     @status.on_error(ops.WaitingStatus("Waiting to manage port"))
     def manage_ports(self, port_action: Callable):
