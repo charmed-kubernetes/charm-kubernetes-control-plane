@@ -1,11 +1,8 @@
 import logging
 from dataclasses import dataclass
-from subprocess import CalledProcessError
-from typing import Dict, List
+from typing import Any, Dict, List, Optional, Sequence, Union
 
-import auth_webhook
 from ops import CharmBase
-from tenacity import RetryError
 
 log = logging.getLogger(__name__)
 
@@ -25,13 +22,15 @@ class JobConfig:
         target (str): The network address of the target component along with the port.
                       Format is 'hostname:port' (e.g., 'localhost:6443').
         relabel_configs (List[Dict[str, str]]): Additional configurations for relabeling.
+        static_config (Optional[List[Any]]): Static configs to override the default ones.
     """
 
     name: str
     metrics_path: str
     scheme: str
     target: str
-    relabel_configs: List[Dict[str, str]]
+    relabel_configs: List[Dict[str, Union[str, Sequence[str]]]]
+    static_configs: Optional[List[Any]] = None
 
 
 class COSIntegration:
@@ -45,39 +44,61 @@ class COSIntegration:
     """
 
     def __init__(self, charm: CharmBase) -> None:
+        """Initialize a COSIntegration instance.
+
+        Args:
+            charm (CharmBase): A charm object representing the current charm.
+        """
         self.charm = charm
 
-    def _create_scrape_job(self, config: JobConfig, node_name: str, token: str) -> dict:
+    def _create_scrape_job(
+        self, config: JobConfig, node_name: str, token: str, cluster_name: str
+    ) -> Dict:
+        """Create a scrape job configuration.
+
+        Args:
+            config (JobConfig): The configuration for the scrape job.
+            node_name (str): The name of the node.
+            token (str): The token for authorization.
+            cluster_name (str): The name of the cluster.
+
+        Returns:
+            Dict: The scrape job configuration.
+        """
         return {
             "tls_config": {"insecure_skip_verify": True},
             "authorization": {"credentials": token},
             "job_name": config.name,
             "metrics_path": config.metrics_path,
             "scheme": config.scheme,
-            "static_configs": [
+            "static_configs": config.static_configs
+            or [
                 {
                     "targets": [config.target],
-                    "labels": {"node": node_name, "cluster": self.charm.get_cluster_name()},
+                    "labels": {"node": node_name, "cluster": cluster_name},
                 }
             ],
             "relabel_configs": config.relabel_configs,
         }
 
-    def get_metrics_endpoints(self) -> list:
-        """Return the metrics endpoints for K8s components."""
+    def get_metrics_endpoints(self, node_name: str, token: str, cluster_name: str) -> List[Dict]:
+        """Retrieve Prometheus scrape job configurations for Kubernetes components.
+
+        Args:
+            node_name (str): The name of the node.
+            token (str): The authentication token.
+            cluster_name (str): The name of the cluster.
+
+        Returns:
+            List[Dict]: A list of Prometheus scrape job configurations.
+        """
         log.info("Building Prometheus scraping jobs.")
 
-        try:
-            node_name = self.charm.get_node_name()
-            cos_user = f"system:cos:{node_name}"
-            token = auth_webhook.get_token(cos_user)
-        except (CalledProcessError, RetryError):
-            log.error("Failed to retrieve observability token.")
-            return []
-
-        if not token:
-            log.info("COS Token not yet available")
-            return []
+        instance_relabel = {
+            "source_labels": ["instance"],
+            "target_label": "instance",
+            "replacement": node_name,
+        }
 
         kubernetes_jobs = [
             JobConfig(
@@ -97,7 +118,8 @@ class COSIntegration:
                         "source_labels": ["job"],
                         "target_label": "job",
                         "replacement": "apiserver",
-                    }
+                    },
+                    instance_relabel,
                 ],
             ),
             JobConfig(
@@ -105,14 +127,17 @@ class COSIntegration:
                 "/metrics",
                 "https",
                 "localhost:10259",
-                [{"target_label": "job", "replacement": "kube-scheduler"}],
+                [{"target_label": "job", "replacement": "kube-scheduler"}, instance_relabel],
             ),
             JobConfig(
                 "kube-controller-manager",
                 "/metrics",
                 "https",
                 "localhost:10257",
-                [{"target_label": "job", "replacement": "kube-controller-manager"}],
+                [
+                    {"target_label": "job", "replacement": "kube-controller-manager"},
+                    instance_relabel,
+                ],
             ),
         ]
         kubelet_metrics_paths = [
@@ -131,6 +156,7 @@ class COSIntegration:
                 [
                     {"target_label": "metrics_path", "replacement": path},
                     {"target_label": "job", "replacement": "kubelet"},
+                    instance_relabel,
                 ],
             )
             for path in kubelet_metrics_paths
@@ -146,10 +172,16 @@ class COSIntegration:
                 [
                     {"target_label": "job", "replacement": "kube-state-metrics"},
                 ],
+                [
+                    {
+                        "targets": ["localhost:6443"],
+                        "labels": {"cluster": cluster_name},
+                    }
+                ],
             )
         ]
 
         return [
-            self._create_scrape_job(job, node_name, token)
+            self._create_scrape_job(job, node_name, token, cluster_name)
             for job in kubernetes_jobs + kubelet_jobs + kube_state_metrics
         ]

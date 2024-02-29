@@ -63,9 +63,14 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.cos_agent = COSAgentProvider(
             self,
             relation_name="cos-agent",
-            scrape_configs=self.cos_integration.get_metrics_endpoints,
+            scrape_configs=self.get_scrape_jobs,
             refresh_events=[
+                self.on.tokens_relation_joined,
+                self.on.tokens_relation_changed,
+                self.on.peer_relation_joined,
                 self.on.peer_relation_changed,
+                self.on.kube_control_relation_joined,
+                self.on.kube_control_relation_changed,
                 self.on.upgrade_charm,
             ],
         )
@@ -424,6 +429,20 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def get_node_name(self) -> str:
         fqdn = self.external_cloud_provider.name == "aws" and self.external_cloud_provider.has_xcp
         return kubernetes_snaps.get_node_name(fqdn=fqdn)
+
+    def get_scrape_jobs(self):
+        try:
+            node_name = self.get_node_name()
+            cos_user = f"system:cos:{node_name}"
+            token = auth_webhook.get_token(cos_user)
+            cluster_name = self.get_cluster_name()
+            if not token or not cluster_name:
+                log.info("COS token or cluster name not yet available.")
+                return []
+            return self.cos_integration.get_metrics_endpoints(node_name, token, cluster_name)
+        except (CalledProcessError, tenacity.RetryError):
+            log.info("Failed to retrieve COS token.")
+            return []
 
     @status.on_error(ops.BlockedStatus("cni-plugins resource missing or invalid"))
     def install_cni_binaries(self):
