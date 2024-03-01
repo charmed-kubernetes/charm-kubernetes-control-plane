@@ -52,22 +52,11 @@ class CloudIntegration:
 
         status.add(ops.MaintenanceStatus(f"Integrate with {cloud_name}"))
         if cloud_name == "aws":
-            cloud.tag_instance(
-                {
-                    f"kubernetes.io/cluster/{cluster_tag}": "owned",
-                    "k8s.io/role/master": "true",  # wokeignore:rule=master
-                }
-            )
-            cloud.tag_instance_security_group(
-                {
-                    f"kubernetes.io/cluster/{cluster_tag}": "owned",
-                }
-            )
-            cloud.tag_instance_subnet(
-                {
-                    f"kubernetes.io/cluster/{cluster_tag}": "owned",
-                }
-            )
+            aws_cluster_tag = {f"kubernetes.io/cluster/{cluster_tag}": "owned"}
+            # wokeignore:rule=master
+            cloud.tag_instance(aws_cluster_tag | {"k8s.io/role/master": "true"})
+            cloud.tag_instance_security_group(aws_cluster_tag)
+            cloud.tag_instance_subnet(aws_cluster_tag)
             cloud.enable_object_storage_management(["kubernetes-*"])
             cloud.enable_load_balancer_management()
 
