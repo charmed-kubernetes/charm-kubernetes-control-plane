@@ -32,7 +32,8 @@ class CloudIntegration:
         self.gcp = None  # GCPIntegrationRequires(charm)
         self.azure = None  # AzureIntegrationRequires(charm)
 
-    def integrate(self):
+    @status.on_error(ops.WaitingStatus("Waiting for cloud-integration"))
+    def integrate(self, event: ops.EventBase):
         """Request tags and permissions for a control-plane node."""
         cluster_tag = self.charm.get_cluster_name()
         cloud_name = self.charm.get_cloud_name()
@@ -87,3 +88,4 @@ class CloudIntegration:
         cloud.enable_network_management()
         cloud.enable_dns_management()
         cloud.enable_block_storage_management()
+        assert cloud.evaluate_relation(event) is None

@@ -496,7 +496,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.manage_ports(self.unit.open_port)
         else:
             self.manage_ports(self.unit.close_port)
-        self.cloud_integration.integrate()
+        self.cloud_integration.integrate(event)
 
     @status.on_error(ops.WaitingStatus("Waiting to manage port"))
     def manage_ports(self, port_action: Callable):
