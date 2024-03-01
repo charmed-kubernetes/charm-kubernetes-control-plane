@@ -41,9 +41,7 @@ class CloudIntegration:
         }
 
         if not (cloud := cloud_support.get(cloud_name)):
-            log.error(
-                "Skipping Cloud integration: unsupported cloud %s",
-            )
+            log.error("Skipping Cloud integration: unsupported cloud %s", cloud_name)
             return
 
         if not cloud.relation:
@@ -52,7 +50,7 @@ class CloudIntegration:
             )
             return
 
-        status.add(ops.MaintenanceStatus(f"Integrate with {cloud}"))
+        status.add(ops.MaintenanceStatus(f"Integrate with {cloud_name}"))
         if cloud_name == "aws":
             cloud.tag_instance(
                 {
