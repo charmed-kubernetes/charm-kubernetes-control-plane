@@ -1,7 +1,7 @@
 # Copyright 2024 Canonical
 # See LICENSE file for licensing details.
 
-"""Cloud Integration for Charmed Kubernetes Worker."""
+"""Cloud Integration for Charmed Kubernetes Control Plane."""
 
 import logging
 
