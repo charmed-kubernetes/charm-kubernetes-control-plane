@@ -32,6 +32,7 @@ from charms.interface_tokens import TokensProvider
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.node_base import LabelMaker
 from charms.reconciler import Reconciler
+from cloud_integration import CloudIntegration
 from cos_integration import COSIntegration
 from hacluster import HACluster
 from k8s_api_endpoints import K8sApiEndpoints
@@ -82,6 +83,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.kube_dns = KubeDnsRequires(self, endpoint="dns-provider")
         self.lb_external = LBProvider(self, "loadbalancer-external")
         self.lb_internal = LBProvider(self, "loadbalancer-internal")
+        self.cloud_integration = CloudIntegration(self)
         self.external_cloud_provider = ExternalCloudProvider(self, "external-cloud-provider")
         self.reconciler = Reconciler(self, self.reconcile)
         self.tokens = TokensProvider(self, endpoint="tokens")
@@ -394,6 +396,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     @status.on_error(ops.WaitingStatus("Waiting for cluster name"))
     def get_cluster_name(self) -> str:
+        """Get the cluster name from the kube-control relation."""
         peer_relation = self.model.get_relation("peer")
         assert peer_relation, "Peer relation not ready"
         cluster_name = peer_relation.data[self.app].get("cluster-name")
@@ -424,7 +427,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         return self.kube_dns.port or 53
 
     def get_cloud_name(self) -> str:
-        return self.external_cloud_provider.name
+        return self.external_cloud_provider.name or ""
 
     def get_node_name(self) -> str:
         fqdn = self.external_cloud_provider.name == "aws" and self.external_cloud_provider.has_xcp
@@ -512,6 +515,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.manage_ports(self.unit.open_port)
         else:
             self.manage_ports(self.unit.close_port)
+        self.cloud_integration.integrate(event)
 
     @status.on_error(ops.WaitingStatus("Waiting to manage port"))
     def manage_ports(self, port_action: Callable):
