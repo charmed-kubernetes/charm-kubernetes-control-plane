@@ -85,7 +85,7 @@ options:
       "RBAC", "Node", "Webhook", "ABAC", "AlwaysDeny" and "AlwaysAllow".
   channel:
     type: string
-    default: "edge"
+    default: "latest/edge"
     description: |
       Snap channel to install Kubernetes control plane services from
   controller-manager-extra-args:
