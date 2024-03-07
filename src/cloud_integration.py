@@ -10,6 +10,8 @@ import charms.contextual_status as status
 import ops
 from ops.interface_aws.requires import AWSIntegrationRequires
 from ops.interface_gcp.requires import GCPIntegrationRequires
+from ops.interface_azure.requires import AzureIntegrationRequires
+
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +34,7 @@ class CloudIntegration:
         self.charm = charm
         self.aws = AWSIntegrationRequires(charm)
         self.gcp = GCPIntegrationRequires(charm)
-        self.azure = None  # AzureIntegrationRequires(charm)
+        self.azure = AzureIntegrationRequires(charm)
 
     @property
     def cloud(self) -> Union[None, AWSIntegrationRequires, GCPIntegrationRequires]:
@@ -41,6 +43,7 @@ class CloudIntegration:
         cloud_support = {
             "aws": self.aws,
             "gce": self.gcp,
+            "azure": self.azure
         }
         if not (cloud := cloud_support.get(cloud_name)):
             log.error("Skipping Cloud integration: unsupported cloud %s", cloud_name)
