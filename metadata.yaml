@@ -44,6 +44,8 @@ requires:
     interface: aws-integration
   gcp:
     interface: gcp-integration
+  azure:
+    interface: azure-integration
   certificates:
     interface: tls-certificates
   dns-provider:
