@@ -18,6 +18,6 @@ ops.interface_kube_control @ git+https://github.com/charmed-kubernetes/interface
 ops.interface_tls_certificates @ git+https://github.com/charmed-kubernetes/interface-tls-certificates@main#subdirectory=ops
 ops.interface_aws @ git+https://github.com/charmed-kubernetes/interface-aws-integration@main#subdirectory=ops
 ops.interface_gcp @ git+https://github.com/charmed-kubernetes/interface-gcp-integration@main#subdirectory=ops
-ops.interface_azure @ git+https://github.com/charmed-kubernetes/interface-azure-integration@KU-438/azure-ops-integration#subdirectory=ops
+ops.interface_azure @ git+https://github.com/charmed-kubernetes/interface-azure-integration@main#subdirectory=ops
 pydantic < 2
 tenacity
