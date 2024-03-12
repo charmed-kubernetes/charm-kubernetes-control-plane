@@ -45,6 +45,7 @@ from kubectl import kubectl
 from loadbalancer_interface import LBProvider
 from ops.interface_kube_control import KubeControlProvides
 from ops.interface_tls_certificates import CertificatesRequires
+from vault_kv import VaultKV
 
 log = logging.getLogger(__name__)
 
@@ -89,9 +90,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.lb_internal = LBProvider(self, "loadbalancer-internal")
         self.cloud_integration = CloudIntegration(self)
         self.external_cloud_provider = ExternalCloudProvider(self, "external-cloud-provider")
-        self.reconciler = Reconciler(self, self.reconcile)
         self.tokens = TokensProvider(self, endpoint="tokens")
-        self.framework.observe(self.on.update_status, self.update_status)
+        self.vault_kv = VaultKV(self)
 
         # register charm actions
         actions = [
@@ -107,6 +107,11 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         ]
         for action in actions:
             self.framework.observe(action, self.charm_actions)
+
+        self.reconciler = Reconciler(self, self.reconcile)
+        self.framework.observe(self.on.update_status, self.update_status)
+        self.framework.observe(self.vault_kv.created, self.reconciler.reconcile)
+        self.framework.observe(self.vault_kv.cleared, self.reconciler.reconcile)
 
     def charm_actions(self, event: ops.ActionEvent):
         action_map = {
