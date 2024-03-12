@@ -110,8 +110,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
         self.reconciler = Reconciler(self, self.reconcile)
         self.framework.observe(self.on.update_status, self.update_status)
-        self.framework.observe(self.vault_kv.created, self.reconciler.reconcile)
-        self.framework.observe(self.vault_kv.cleared, self.reconciler.reconcile)
+        self.framework.observe(self.vault_kv.changed, self.reconciler.reconcile)
 
     def charm_actions(self, event: ops.ActionEvent):
         action_map = {
