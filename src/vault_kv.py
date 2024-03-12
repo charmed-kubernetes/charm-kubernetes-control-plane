@@ -4,8 +4,7 @@ import logging
 import socket
 from functools import cached_property
 from hashlib import md5
-from ipaddress import IPv4Address, IPv6Address
-from typing import List, Mapping, Optional, Union
+from typing import List, Mapping, Optional
 
 import hvac
 import ops
@@ -18,7 +17,13 @@ log.addHandler(ch)
 SECRETS_BACKEND_FORMAT = "charm-{model-uuid}-{app}"
 
 
+# Adapted from charms.reactive
 class _UnitsView:
+    """Creates a view of a relation data bags.
+
+    Prioritizes data in lowest relation-id, then unit name
+    """
+
     def __init__(self, relations: List[ops.Relation]) -> None:
         self.relations = relations
 
@@ -31,46 +36,43 @@ class _UnitsView:
         return combined
 
 
-class VaultNotReadyError(Exception):
-    """Exception indicating that Vault was accessed before it was ready."""
-
-
 # Yanked from charmhelpers
 # https://github.com/juju/charm-helpers/blob/b78107dc750644b1d868ff4a61748086783e02bd/charmhelpers/contrib/openstack/vaultlocker.py#L155C1-L184C41
 def retrieve_secret_id(url, token) -> str:
-    """Retrieve a response-wrapped secret_id from Vault
+    """Retrieve a response-wrapped secret_id from Vault.
 
     :param url: URL to Vault Server
     :ptype url: str
     :param token: One shot Token to use
     :ptype token: str
     :returns: secret_id to use for Vault Access
-    :rtype: str"""
-
+    :rtype: str
+    """
     client = hvac.Client(url=url, token=token, adapter=hvac.adapters.Request)
     response = client.sys.unwrap()
     if response.status_code == 200:
         data = response.json()
-        return data['data']['secret_id']
+        return data["data"]["secret_id"]
 
 
-class _Singleton(type):
-    # metaclass to make a class a singleton
-    def __call__(cls, *args, **kwargs):
-        if not isinstance(getattr(cls, "_singleton_instance", None), cls):
-            cls._singleton_instance = super().__call__(*args, **kwargs)
-        return cls._singleton_instance
+class VaultNotReadyError(Exception):
+    """Exception indicating that Vault was accessed before it was ready."""
 
 
-class _VaultBaseKV(dict, metaclass=_Singleton):
-    _kwds = {}  # set by subclasses
-    _path = None  # set by subclasses
-    _vault_kv: "VaultKV" = None # set by subclasses
+class _VaultBaseKV(dict):
+    def __init__(self, config, path):
+        self._config = {}
+        self._path = path
+        self.update_config(config)
+        super().__init__()
 
-    def __init__(self):
-        response = self._read_path(self._path)
-        data = response["data"] if response else {}
-        super().__init__(data)
+    def update_config(self, new_config):
+        all_keys = new_config.keys() | self._config.keys()
+        if any(new_config.get(key) != self._config.get(key) for key in all_keys):
+            self._config = new_config
+            response = self._read_path(self._path)
+            data = response["data"] if response else {}
+            self.update(**data)
 
     def _read_path(self, path: str):
         """Get an kv path.
@@ -109,10 +111,6 @@ class _VaultBaseKV(dict, metaclass=_Singleton):
         ) as ex:
             raise VaultNotReadyError() from ex
 
-    @cached_property
-    def _config(self):
-        return self._vault_kv.get_vault_config(**self._kwds)
-
     def __setitem__(self, key, value):
         log.info("Writing data to vault")
         self._client.write(self._path, **{key: value})
@@ -138,12 +136,9 @@ class VaultUnitKV(_VaultBaseKV):
     Note: This class is a singleton.
     """
 
-    def __init__(self, vault_kv: "VaultKV", *_, **kwds):
-        self._kwds = kwds
-        self._vault_kv = vault_kv
-        unit_num = vault_kv.charm.unit.name.split("/")[1]
-        self._path = f"{self._config['secret_backend']}/kv/unit/{unit_num}"
-        super().__init__()
+    def __init__(self, config: dict, unit_num: int):
+        path = f"{config['secret_backend']}/kv/unit/{unit_num}"
+        super().__init__(config, path)
 
 
 class VaultAppKV(_VaultBaseKV):
@@ -166,16 +161,11 @@ class VaultAppKV(_VaultBaseKV):
     Note: This class is a singleton.
     """
 
-    def __init__(self, vault_kv: "VaultKV", *_, **kwds):
-        self._kwds = kwds
-        self._vault_kv = vault_kv
-        # self._kwds attribute must be set first
-        # as _config attribute is based off its values
-        backend = self._config["secret_backend"]
-        unit_num = vault_kv.charm.unit.name.split("/")[1]
-        self._path = f"{backend}/kv/app"
+    def __init__(self, config: dict, unit_num: int):
+        backend = config["secret_backend"]
+        path = f"{backend}/kv/app"
         self._hash_path = f"{backend}/kv/app-hashes/{unit_num}"
-        super().__init__()
+        super().__init__(config, path)
         self._load_hashes()
 
     def _load_hashes(self):
@@ -197,20 +187,9 @@ class VaultAppKV(_VaultBaseKV):
         self._manage_events(key)
 
     def _manage_events(self, key):
-        flag_any_changed = "layer.vault-kv.app-kv.changed"
-        flag_key_changed = f"layer.vault-kv.app-kv.changed.{key}"
-        flag_key_set = f"layer.vault-kv.app-kv.set.{key}"
-        if self.is_changed(key):
-            # clear then set flag to ensure triggers are run even if the main
-            # flag was never cleared
-            self._vault_kv.clear_event(flag_any_changed)
-            self._vault_kv.create_event(flag_any_changed)
-            self._vault_kv.clear_event(flag_key_changed)
-            self._vault_kv.create_event(flag_key_changed)
-        if self.get(key) is not None:
-            self._vault_kv.create_event(flag_key_set)
-        else:
-            self._vault_kv.clear_event(flag_key_set)
+        callback = self._config.get("on_change")
+        if self.is_changed(key) and callable(callback):
+            callback(dict(**self), key)
 
     def is_changed(self, key):
         """Determine if the value for the given key has changed.
@@ -241,44 +220,94 @@ class VaultAppKV(_VaultBaseKV):
         self._old_hashes.clear()
         self._old_hashes.update(self._new_hashes)
 
+    def sum_hashes(self, new=True) -> str:
+        """Sum up the hash values."""
+        to_sum = self._new_hashes if new else self._old_hashes
+        return str(sum(int(digest, base=16) for digest in to_sum.values()))
 
-class VaultKVEvent(ops.EventBase):
-    """Base class for VaultKV event sources."""
 
-    def __init__(self, handle: ops.Handle, key:str):
+class VaultKVChanged(ops.EventBase):
+    """VaultKV key changed event."""
+
+    def __init__(self, handle: ops.Handle, scope: dict, key: str):
         super().__init__(handle)
+        self.scope = scope
         self.key = key
 
 
-class VaultKVCreated(VaultKVEvent):
-    """This event is triggered when VaultKV detects a new key in the app kv database in vault."""
-
-
-class VaultKVCleared(VaultKVEvent):
-    """This event is triggered when VaultKV has a key removed from the app kv database in vault."""
-
-
 class VaultKV(ops.Object):
-    """Handles requesting from the key-value vault datastore."""
+    """Handles requesting from the key-value vault datastore.
+
+    The Charm should have a peer relation in order for leader units
+    to notify peers of changes to the VaultAppKV
+    """
 
     _stored = ops.StoredState()
-    created = ops.EventSource(VaultKVCreated)
-    cleared = ops.EventSource(VaultKVCleared)
+    changed = ops.EventSource(VaultKVChanged)
 
-    def __init__(self, charm: ops.CharmBase, endpoint: str = "vault-kv"):
+    def __init__(
+        self, charm: ops.CharmBase, endpoint: str = "vault-kv", peer: str = "peer", **kwds
+    ):
         super().__init__(charm, f"layer.{endpoint}")
         self.charm = charm
+        self.peer_relation = peer
+        self._app_kv = None
+        self._kwds = kwds
         self.requires = VaultKVRequires(charm, endpoint)
         self._stored.set_default(token=str(""))
         self._stored.set_default(secret_id=str(""))
 
-    def clear_event(self, key: str):
-        """Emit event callback when key is cleared."""
-        self.cleared.emit(key)
+        events = charm.on[endpoint]
+        self.framework.observe(events.relation_joined, self._request_vault_access)
+        self.framework.observe(events.relation_changed, self._update_vault_config)
+        self.framework.observe(self.framework.on.commit, self._on_commit)
 
-    def create_event(self, key: str):
+    @property
+    def app_kv(self) -> VaultAppKV:
+        if self._app_kv:
+            return self._app_kv
+
+        config = self.get_vault_config(**self._kwds)
+        self._app_kv = VaultAppKV(config, self.charm.unit.name.split("/")[1])
+        for key in self._app_kv.keys():
+            # pylint: disable-next=protected-access
+            self._app_kv._manage_events(key)
+
+        return self._app_kv
+
+    def _on_commit(self, _: ops.CommitEvent):
+        """At hook end, ensure the app hash is consistent in VaultKV."""
+        try:
+            app_kv = self.app_kv
+            if app_kv.any_changed():
+                peer_relation = self.charm.model.get_relation(self.peer_relation)
+                if self.charm.unit.is_leader() and peer_relation:
+                    """force hooks to run on non-leader units"""
+                    val = app_kv.sum_hashes()
+                    peer_relation.data[self.charm.unit]["vault-kv-nonce"] = val
+                # Update the local unit hashes at successful exit
+                app_kv.update_hashes()
+        except VaultNotReadyError:
+            return
+
+    def _update_vault_config(self, _: ops.RelationChangedEvent):
+        current_secret_id = self._stored.secret_id
+        updated_secret_id = self._get_secret_id(self.requires)
+        if current_secret_id == updated_secret_id:
+            return
+        try:
+            self.app_kv.update_config(self.get_vault_config(**self._kwds))
+        except VaultNotReadyError:
+            return
+
+    def _request_vault_access(self, _: ops.RelationJoinedEvent):
+        backend_name = self._get_secret_backend()
+        # backend can't be isolated or VaultAppKV won't work; see issue #2
+        self.requires.request_secret_backend(backend_name, isolated=False)
+
+    def emit_changed_event(self, scope: dict, key: str):
         """Emit event callback when key is created."""
-        self.created.emit(key)
+        self.changed.emit(scope, key)
 
     def get_vault_config(self, **kwds):
         """
@@ -293,6 +322,7 @@ class VaultKV(ops.Object):
         * secret_backend
         * role_id
         * secret_id
+        * on_change
 
         Note: This data is cached in [UnitData][] so anything with access to that
         could access Vault as this application.
@@ -313,6 +343,7 @@ class VaultKV(ops.Object):
             "secret_backend": self._get_secret_backend(**kwds),
             "role_id": vault.unit_role_id,
             "secret_id": self._get_secret_id(vault),
+            "on_change": self.emit_changed_event,
         }
 
     def _get_secret_backend(self, backend_format: str = None, **_):
@@ -342,7 +373,7 @@ class VaultKV(ops.Object):
             ) as ex:
                 raise VaultNotReadyError() from ex
 
-            # update the token in the unitdata.kv now that its been
+            # update the token in the StoredData now that its been
             # successfully used to retrieve the secret_id
             self._stored.token = token
             self._stored.secret_id = secret_id
@@ -369,13 +400,6 @@ class VaultKVRequires(ops.Object):
         return _UnitsView(self.relations)
 
     @property
-    def endpoint_address(self) -> Optional[Union[IPv4Address, IPv6Address, str]]:
-        """Determine the local endpoint network address."""
-        binding = self.model.get_binding(self.endpoint)
-        if binding:
-            return binding.network.bind_address
-
-    @property
     def _unit_name(self):
         return f"{self.model.uuid}-{self.unit.name}"
 
@@ -388,10 +412,13 @@ class VaultKVRequires(ops.Object):
         :type isolated: bool
         """
         for relation in self.relations:
+            access_address = ""
+            if binding := self.model.get_binding(relation):
+                access_address = binding.network.bind_address
             relation.data[self.unit]["secret_backend"] = name
-            relation.data[self.unit]["access_address"] = self.endpoint_address
+            relation.data[self.unit]["access_address"] = str(access_address)
             relation.data[self.unit]["hostname"] = socket.gethostname()
-            relation.data[self.unit]["isolated"] = isolated
+            relation.data[self.unit]["isolated"] = json.dumps(isolated)
             relation.data[self.unit]["unit_name"] = self._unit_name
 
     @property
