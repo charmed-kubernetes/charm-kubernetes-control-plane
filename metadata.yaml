@@ -64,6 +64,8 @@ requires:
     interface: loadbalancer
   external-cloud-provider:
     interface: external_cloud_provider
+  vault-kv:
+    interface: vault-kv
 resources:
   cni-plugins:
     type: file

@@ -21,3 +21,17 @@ ops.interface_gcp @ git+https://github.com/charmed-kubernetes/interface-gcp-inte
 ops.interface_azure @ git+https://github.com/charmed-kubernetes/interface-azure-integration@main#subdirectory=ops
 pydantic < 2
 tenacity
+
+
+# layer-kv
+hvac
+netifaces
+psutil
+poetry-core>=1.0.0,<2
+
+# needed as a dep of hvac
+# it comes with a useful compatibility listing
+# Lifted from https://github.com/jaraco/zipp#compatibility
+zipp<3.3;python_version < '3.9'
+zipp<3.5;python_version < '3.11'
+zipp<3.9;python_version < '3.12'

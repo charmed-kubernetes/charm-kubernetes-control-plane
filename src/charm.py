@@ -41,6 +41,7 @@ from kubectl import kubectl
 from loadbalancer_interface import LBProvider
 from ops.interface_kube_control import KubeControlProvides
 from ops.interface_tls_certificates import CertificatesRequires
+from vault_kv import VaultKV
 
 log = logging.getLogger(__name__)
 
@@ -85,12 +86,15 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.lb_internal = LBProvider(self, "loadbalancer-internal")
         self.cloud_integration = CloudIntegration(self)
         self.external_cloud_provider = ExternalCloudProvider(self, "external-cloud-provider")
-        self.reconciler = Reconciler(self, self.reconcile)
         self.tokens = TokensProvider(self, endpoint="tokens")
-        self.framework.observe(self.on.update_status, self.update_status)
+        self.vault_kv = VaultKV(self)
 
+        self.reconciler = Reconciler(self, self.reconcile)
+        self.framework.observe(self.on.update_status, self.update_status)
         self.framework.observe(self.on.upgrade_action, self.on_upgrade_action)
         self.framework.observe(self.on.get_kubeconfig_action, self.get_kubeconfig)
+        self.framework.observe(self.vault_kv.created, self.reconciler.reconcile)
+        self.framework.observe(self.vault_kv.cleared, self.reconciler.reconcile)
 
     @status.on_error(ops.WaitingStatus("Waiting on valid certificate data"))
     def api_dependencies_ready(self):
