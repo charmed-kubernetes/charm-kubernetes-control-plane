@@ -6,7 +6,8 @@ import ops
 import ops.testing
 import pytest
 from charm import KubernetesControlPlaneCharm
-from vault_kv import VaultNotReadyError, retrieve_secret_id
+
+from lib.vault_kv import VaultNotReadyError, retrieve_secret_id
 
 
 @pytest.fixture
@@ -21,7 +22,7 @@ def harness():
 
 @pytest.fixture(autouse=True)
 def mock_retrieve_secret_id():
-    with mock.patch("vault_kv.retrieve_secret_id") as as_mock:
+    with mock.patch("lib.vault_kv.retrieve_secret_id") as as_mock:
         as_mock.return_value = "secret-from-token-value"
         yield as_mock
 
@@ -42,7 +43,7 @@ def vault_kv(harness):
         },
     )
     harness.add_relation("peer", "kubernetes-control-plane")
-    yield harness.charm.vault_kv
+    yield harness.charm.encryption_at_rest.vault_kv
 
 
 @pytest.fixture(params=["", "charm-{app}", "charm-{model-uuid}-{app}"])
@@ -83,7 +84,7 @@ def test_get_vault_config_success(mock_retrieve_secret_id, vault_kv, backend_for
     }
 
 
-def test_get_vault_config_fails_get_secret_id(mock_retrieve_secret_id, harness, vault_kv):
+def test_get_vault_config_fails_get_secret_id(mock_retrieve_secret_id, vault_kv):
     """Confirm vault failures transitions to VaultNotReady.
 
     Also confirm the kv storage and data_changed hash is only updated on

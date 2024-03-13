@@ -38,6 +38,7 @@ from charms.node_base import LabelMaker
 from charms.reconciler import Reconciler
 from cloud_integration import CloudIntegration
 from cos_integration import COSIntegration
+from encryption_at_rest import EncryptionAtRest
 from hacluster import HACluster
 from k8s_api_endpoints import K8sApiEndpoints
 from k8s_kube_system import get_kube_system_pods_not_running
@@ -45,7 +46,6 @@ from kubectl import kubectl
 from loadbalancer_interface import LBProvider
 from ops.interface_kube_control import KubeControlProvides
 from ops.interface_tls_certificates import CertificatesRequires
-from vault_kv import VaultKV
 
 log = logging.getLogger(__name__)
 
@@ -91,7 +91,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.cloud_integration = CloudIntegration(self)
         self.external_cloud_provider = ExternalCloudProvider(self, "external-cloud-provider")
         self.tokens = TokensProvider(self, endpoint="tokens")
-        self.vault_kv = VaultKV(self)
+        self.encryption_at_rest = EncryptionAtRest(self)
 
         # register charm actions
         actions = [
@@ -110,7 +110,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
         self.reconciler = Reconciler(self, self.reconcile)
         self.framework.observe(self.on.update_status, self.update_status)
-        self.framework.observe(self.vault_kv.changed, self.reconciler.reconcile)
+        self.framework.observe(self.encryption_at_rest.vault_kv.changed, self.reconciler.reconcile)
 
     def charm_actions(self, event: ops.ActionEvent):
         action_map = {
