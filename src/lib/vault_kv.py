@@ -4,16 +4,13 @@ import logging
 import socket
 from functools import cached_property
 from hashlib import md5
-from typing import List, Mapping, Optional
+from typing import Any, List, Mapping, Optional
 
 import hvac
 import ops
 import requests
 
-ch = logging.StreamHandler()
-ch.setFormatter(logging.Formatter("vault-kv.log: " + logging.BASIC_FORMAT))
 log = logging.getLogger(__name__)
-log.addHandler(ch)
 SECRETS_BACKEND_FORMAT = "charm-{model-uuid}-{app}"
 
 
@@ -34,6 +31,13 @@ class _UnitsView:
             for unit in sorted(rel.units, key=lambda u: u.name, reverse=True):
                 combined.update(**rel.data[unit])
         return combined
+
+
+def from_json(s: Optional[str]) -> Optional[Any]:
+    try:
+        return json.loads(s)
+    except (json.decoder.JSONDecodeError, TypeError):
+        return s
 
 
 # Yanked from charmhelpers
@@ -235,6 +239,10 @@ class VaultKVChanged(ops.EventBase):
         self.key = key
 
 
+class VaultConfigUpdated(ops.EventBase):
+    """Vault Config has updated."""
+
+
 class VaultKV(ops.Object):
     """Handles requesting from the key-value vault datastore.
 
@@ -244,6 +252,7 @@ class VaultKV(ops.Object):
 
     _stored = ops.StoredState()
     changed = ops.EventSource(VaultKVChanged)
+    new_config = ops.EventSource(VaultConfigUpdated)
 
     def __init__(
         self, charm: ops.CharmBase, endpoint: str = "vault-kv", peer: str = "peer", **kwds
@@ -292,13 +301,14 @@ class VaultKV(ops.Object):
 
     def _update_vault_config(self, _: ops.RelationChangedEvent):
         current_secret_id = self._stored.secret_id
-        updated_secret_id = self._get_secret_id(self.requires)
-        if current_secret_id == updated_secret_id:
-            return
         try:
+            updated_secret_id = self._get_secret_id()
+            if current_secret_id == updated_secret_id:
+                return
             self.app_kv.update_config(self.get_vault_config(**self._kwds))
         except VaultNotReadyError:
             return
+        self.new_config.emit()
 
     def _request_vault_access(self, _: ops.RelationJoinedEvent):
         backend_name = self._get_secret_backend()
@@ -342,7 +352,7 @@ class VaultKV(ops.Object):
             "vault_url": vault.vault_url,
             "secret_backend": self._get_secret_backend(**kwds),
             "role_id": vault.unit_role_id,
-            "secret_id": self._get_secret_id(vault),
+            "secret_id": self._get_secret_id(),
             "on_change": self.emit_changed_event,
         }
 
@@ -354,14 +364,14 @@ class VaultKV(ops.Object):
         fmt = backend_format if backend_format else SECRETS_BACKEND_FORMAT
         return fmt.format(**variables)
 
-    def _get_secret_id(self, vault: "VaultKVRequires"):
-        token = vault.unit_token
+    def _get_secret_id(self):
+        token = self.requires.unit_token
         if self._stored.token != token:
             log.info("Changed unit_token, getting new secret_id")
             # token is one-shot, but if it changes it might mean that we're
             # being told to rotate the secret ID, or we might not have fetched
             # one yet
-            vault_url = vault.vault_url
+            vault_url = self.requires.vault_url
             try:
                 secret_id = retrieve_secret_id(vault_url, token)
             except (
@@ -430,7 +440,7 @@ class VaultKVRequires(ops.Object):
         """
         for key in [self._unit_name, self.unit.name]:
             role_key = "{}_role_id".format(key)
-            value = self._all_joined_units.received.get(role_key)
+            value = from_json(self._all_joined_units.received.get(role_key))
             if value:
                 return value
 
@@ -443,7 +453,7 @@ class VaultKVRequires(ops.Object):
         """
         for key in [self._unit_name, self.unit.name]:
             token_key = "{}_token".format(key)
-            value = self._all_joined_units.received.get(token_key)
+            value = from_json(self._all_joined_units.received.get(token_key))
             if value:
                 return value
 
@@ -459,7 +469,7 @@ class VaultKVRequires(ops.Object):
             token_key = "{}_token".format(key)
             for relation in self.relations:
                 for unit in relation.units:
-                    token = relation.data[unit].get(token_key)
+                    token = from_json(relation.data[unit].get(token_key))
                     if token:
                         tokens.add(token)
 
@@ -472,7 +482,7 @@ class VaultKVRequires(ops.Object):
         :returns vault_url: URL to access vault
         :rtype vault_url: str
         """
-        return self._all_joined_units.received.get("vault_url")
+        return from_json(self._all_joined_units.received.get("vault_url"))
 
     @property
     def vault_ca(self):
@@ -481,6 +491,6 @@ class VaultKVRequires(ops.Object):
         :returns vault_ca: Vault CA Certificate data
         :rtype vault_ca: str
         """
-        encoded_ca = self._all_joined_units.received.get("vault_ca")
+        encoded_ca = from_json(self._all_joined_units.received.get("vault_ca"))
         if encoded_ca:
             return base64.b64decode(encoded_ca)
