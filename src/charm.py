@@ -513,6 +513,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.configure_auth_webhook()
         self.configure_loadbalancers()
         if self.api_dependencies_ready():
+            self.encryption_at_rest.prepare()
             self.configure_apiserver()
             self.create_kubeconfigs()
             self.configure_controller_manager()
