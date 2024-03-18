@@ -1,13 +1,14 @@
 import base64
+import hashlib
 import json
 import logging
 import socket
 from functools import cached_property
-from hashlib import md5
 from typing import Any, List, Mapping, Optional
 
 import hvac
 import ops
+import sqlite3
 import requests
 
 log = logging.getLogger(__name__)
@@ -38,6 +39,46 @@ def from_json(s: Optional[str]) -> Optional[Any]:
         return json.loads(s)
     except (json.decoder.JSONDecodeError, TypeError):
         return s
+
+
+def _kv_read(conn: sqlite3.Connection, key: str, default: Optional[Any] = None) -> Optional[Any]:
+    """Read from a possible kv table in the .unit-state.db.
+
+    If this is an upgrade from a reactive charm, this kv table will exist.
+    If this is a fresh installed, this table won't exist, and this method returns the default
+    """
+    c = conn.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name='kv'")
+    result = c.fetchone()[0]
+    if result == 1:
+        c.execute("SELECT data FROM kv WHERE key=?", [key])
+        result = c.fetchone()
+    if not result:
+        return default
+    return from_json(result[0])
+
+
+def _reactive_secret_id(conn: sqlite3.Connection) -> Optional[str]:
+    """Read from kv table"""
+    return _kv_read(conn, "layer.vault-kv.secret_id")
+
+
+def _reactive_is_data_changed(
+    conn: sqlite3.Connection, data_id: str, data: Any, hash_type: str = "md5"
+):
+    """Check if the given set of data has changed since the last time
+    `data_changed` was called.
+
+    That is, this is a non-destructive way to check if the data has changed.
+
+    :param str data_id: Unique identifier for this set of data.
+    :param data: JSON-serializable data.
+    :param str hash_type: Any hash algorithm supported by :mod:`hashlib`.
+    """
+    alg = getattr(hashlib, hash_type)
+    serialized = json.dumps(data, sort_keys=True).encode("utf8")
+    old_hash = _kv_read(conn, f"reactive.data_changed.{data_id}")
+    new_hash = alg(serialized).hexdigest()
+    return old_hash != new_hash
 
 
 # Yanked from charmhelpers
@@ -98,11 +139,7 @@ class _VaultBaseKV(dict):
         after which a new client will need to be authenticated.
         """
         try:
-            log.info(
-                "Logging %s in to {%s}",
-                type(self).__name__,
-                self._config["vault_url"],
-            )
+            log.info("Logging %s in to %s", type(self).__name__, self._config["vault_url"])
             client = hvac.Client(url=self._config["vault_url"])
             client.auth.approle.login(self._config["role_id"], secret_id=self._config["secret_id"])
             return client
@@ -161,8 +198,6 @@ class VaultAppKV(_VaultBaseKV):
     data.  Therefore, only the leader should set data here.  This is not
     enforced, but data changed by non-leaders will not trigger hooks on other
     units, so they may not be notified of changes in a timely fashion.
-
-    Note: This class is a singleton.
     """
 
     def __init__(self, config: dict, unit_num: int):
@@ -182,7 +217,7 @@ class VaultAppKV(_VaultBaseKV):
 
     def _rehash(self, key):
         serialized = json.dumps(self[key], sort_keys=True).encode("utf8")
-        self._new_hashes[key] = md5(serialized).hexdigest()
+        self._new_hashes[key] = hashlib.md5(serialized).hexdigest()
 
     def __setitem__(self, key, value):
         """Set value in app data."""
@@ -263,8 +298,8 @@ class VaultKV(ops.Object):
         self._app_kv = None
         self._kwds = kwds
         self.requires = VaultKVRequires(charm, endpoint)
-        self._stored.set_default(token=str(""))
-        self._stored.set_default(secret_id=str(""))
+        self._stored.set_default(token=None)
+        self._stored.set_default(secret_id=None)
 
         events = charm.on[endpoint]
         self.framework.observe(events.relation_joined, self._request_vault_access)
@@ -300,7 +335,7 @@ class VaultKV(ops.Object):
             return
 
     def _update_vault_config(self, _: ops.RelationChangedEvent):
-        current_secret_id = self._stored.secret_id
+        current_secret_id = self._stored_secret_id()
         try:
             updated_secret_id = self._get_secret_id()
             if current_secret_id == updated_secret_id:
@@ -364,9 +399,35 @@ class VaultKV(ops.Object):
         fmt = backend_format if backend_format else SECRETS_BACKEND_FORMAT
         return fmt.format(**variables)
 
+    def _one_shot_token(self) -> Optional[str]:
+        """Determine if the current token in the relation-data is an unused one-shot token."""
+        rel_token = self.requires.unit_token
+        if rel_token is None:
+            # relation has yet to set a token, return a new invalid token
+            log.info("vault-kv relation has yet to provide a one-shot token")
+            return ""
+        elif self._stored.token is not None:
+            # stored token has been set, compare with the relation token
+            if self._stored.token != rel_token:
+                # the relation-token is different from the stored-token
+                log.info("vault-kv provided a new one-shot token")
+                return rel_token
+        elif _reactive_is_data_changed(
+            self.framework._storage._db, "layer.vault-kv.token", rel_token
+        ):
+            # If hash is different from when the charm was reactive
+            log.info("vault-kv is providing a new one-shot token")
+            return rel_token
+
+    def _stored_secret_id(self):
+        """Uplift reactive secret-id if the ops version is unset"""
+        if self._stored.secret_id is None:
+            if old_secret_id := _reactive_secret_id(self.framework._storage._db):
+                self._stored.secret_id = old_secret_id
+        return self._stored.secret_id
+
     def _get_secret_id(self):
-        token = self.requires.unit_token
-        if self._stored.token != token:
+        if token := self._one_shot_token():
             log.info("Changed unit_token, getting new secret_id")
             # token is one-shot, but if it changes it might mean that we're
             # being told to rotate the secret ID, or we might not have fetched
@@ -388,7 +449,7 @@ class VaultKV(ops.Object):
             self._stored.token = token
             self._stored.secret_id = secret_id
         else:
-            secret_id = self._stored.secret_id
+            secret_id = self._stored_secret_id()
         return secret_id
 
 

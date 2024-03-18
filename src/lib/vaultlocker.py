@@ -57,7 +57,8 @@ def mkfs_xfs(device: os.PathLike, force: bool = False, inode_size=None):
     :ptype: force: boolean
     :param inode_size: XFS inode size in bytes; if set to 0 or None,
         the value used will be the XFS system default
-    :ptype inode_size: int"""
+    :ptype inode_size: int
+    """
     cmd = ["mkfs.xfs"]
     if force:
         cmd.append("-f")
@@ -135,7 +136,8 @@ class VaultLocker(ops.Object):
         :param context: Dict of data from vault-kv relation
         :ptype: context: dict
         :param priority: Priority of alternative configuration
-        :ptype: priority: int"""
+        :ptype: priority: int
+        """
         charm_vl_path = Path(f"/var/lib/charm/{self.charm.app.name}/vaultlocker.conf")
         charm_vl_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         charm_vl_path.write_text(VAULTLOCKER_CFG.format(**context))
@@ -206,7 +208,7 @@ class VaultLocker(ops.Object):
             if mountpoint:
                 mapped_device = self.decrypted_device(device)
                 log.info("Creating filesystem on %s (%s)", mapped_device, device)
-                # If this fails, it's probalby due to the size of the loopback
+                # If this fails, it's probably due to the size of the loopback
                 #    backing file that is defined by the `dd`.
                 mkfs_xfs(mapped_device)
                 Path(mountpoint).mkdir(mode=0o755, parents=True, exist_ok=True)

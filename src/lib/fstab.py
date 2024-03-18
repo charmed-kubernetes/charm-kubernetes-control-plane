@@ -92,7 +92,7 @@ class Fstab(io.FileIO):
     def remove_entry(self, entry):
         self.seek(0)
 
-        lines = [l.decode("us-ascii") for l in self.readlines()]
+        lines = [ln.decode("us-ascii") for ln in self.readlines()]
 
         found = False
         for index, line in enumerate(lines):

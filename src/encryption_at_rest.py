@@ -8,10 +8,11 @@ import yaml
 from auth_webhook import token_generator
 from charms import kubernetes_snaps
 
-from lib.vault_kv import VaultKV, VaultNotReadyError
+from lib.vault_kv import VaultKV, VaultNotReadyError, VaultKVChanged
 from lib.vaultlocker import VaultLocker, VaultLockerError
 
 log = logging.getLogger(__name__)
+ENCRYPTION_KEY = "encryption_key"
 
 
 class EncryptionAtRest(ops.Object):
@@ -21,62 +22,76 @@ class EncryptionAtRest(ops.Object):
         self.vault_kv = VaultKV(charm)
         self.vaultlocker = VaultLocker(charm, self.vault_kv)
         self.encrypt_config = kubernetes_snaps.encryption_config_path()
+        self.framework.observe(self.vault_kv.changed, self.write_encryption_config)
 
-    def prepare_encryption(self):
+    def prepare(self):
         if not self.vault_kv.requires.relations:
             return
 
         self.vaultlocker.prepare()
-        self.create_secure_storage()
         if self.charm.unit.is_leader():
-            key = self.generate_encryption_key()
-            self.vault_kv.app_kv["encryption_key"] = key
+            self._generate_encryption_key()
 
-    def create_secure_storage(self):
-        encryption_conf_dir = self.encrypt_config.parent
-        encryption_conf_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-        try:
-            self.vaultlocker.create_encrypted_loop_mount(encryption_conf_dir)
-        except VaultLockerError:
-            # One common cause of this would be deploying on lxd.
-            # Should this be more fatal?
-            log.exception("Unable to create encrypted mount for storing encryption config.")
-            raise
-        else:
-            self._write_encryption_config()
-
-    def generate_encryption_key(self) -> str:
+    def _generate_encryption_key(self) -> str:
         try:
             app_kv = self.vault_kv.app_kv
-            app_kv["encryption_key"] = token_generator(32)
+            if ENCRYPTION_KEY not in app_kv:
+                app_kv[ENCRYPTION_KEY] = token_generator(32)
         except VaultNotReadyError:
             # will be retried because the flag layer.vault-kv.app-kv.set.encryption_key remains unset
             log.exception("Failed to store application encryption_key.")
-            raise
-
-    def _read_encryption_secret(self) -> Optional[str]:
-        config = self._read_encryption_config()
-        if not config:
-            log.error("Failed to read encryption_key file.")
-            raise
-        try:
-            b64_secret = config["resources"][0]["providers"][0]["aescbc"]["keys"][0]["secret"]
-            return base64.b64decode(b64_secret).decode("utf8")
-        except (KeyError, IndexError, ValueError):
-            log.exception("Failed to read and decode encryption_key secret.")
             raise
 
     def _read_encryption_config(self) -> Optional[Mapping]:
         if self.encrypt_config.exists():
             return yaml.safe_load(self.encrypt_config.read_text())
 
-    def _write_encryption_config(self):
+    def _read_encryption_secret(self) -> Optional[str]:
+        config = self._read_encryption_config()
+        if not config:
+            log.error("Failed to read encryption_config file.")
+            return None
         try:
-            app_kv = self.vault_kv.VaultAppKV()
-            secret = app_kv["encryption_key"]
-        except VaultNotReadyError:
-            log.exception("Failed to retrieve application encryption_key.")
-            raise
+            b64_secret = config["resources"][0]["providers"][0]["aescbc"]["keys"][0]["secret"]
+            return base64.b64decode(b64_secret).decode("utf8")
+        except (KeyError, IndexError, ValueError):
+            log.error("Failed to read and decode encryption_key secret.")
+            return None
+
+    def write_encryption_config(self, event: ops.EventBase = None):
+        if not self.vault_kv.requires.relations:
+            log.info("VaultKV not in use")
+            return
+
+        if not self.encrypt_config.exists():
+            log.info("encryption-config doesn't exist on this unit")
+            encryption_conf_dir = self.encrypt_config.parent
+            encryption_conf_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+            try:
+                self.vaultlocker.create_encrypted_loop_mount(encryption_conf_dir)
+            except VaultLockerError:
+                # One common cause of this would be deploying on lxd.
+                # Should this be more fatal?
+                log.exception("Unable to create encrypted mount for storing encryption config.")
+                raise
+
+        if isinstance(event, VaultKVChanged):
+            secret: str = event.scope.get(event.key)
+            if event.key != ENCRYPTION_KEY or not secret:
+                log.info("No encryption-key available to write encryption-key")
+                return
+        else:
+            try:
+                secret = self.vault_kv.get(ENCRYPTION_KEY)
+            except VaultNotReadyError:
+                log.exception("Failed to retrieve application encryption_key.")
+                return
+
+        if secret == self._read_encryption_secret():
+            log.info("No change to encryption configuration necessary.")
+            return
+
+        log.info("Writing encryption-config for api-server to use")
         secret = base64.b64encode(secret.encode("utf8")).decode("utf8")
         template = Path("templates/encryption-config.yaml").read_text()
         config = yaml.safe_load(template)
