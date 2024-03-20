@@ -34,6 +34,7 @@ from charms.node_base import LabelMaker
 from charms.reconciler import Reconciler
 from cloud_integration import CloudIntegration
 from cos_integration import COSIntegration
+from encryption_at_rest import EncryptionAtRest
 from hacluster import HACluster
 from k8s_api_endpoints import K8sApiEndpoints
 from k8s_kube_system import get_kube_system_pods_not_running
@@ -85,10 +86,11 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.lb_internal = LBProvider(self, "loadbalancer-internal")
         self.cloud_integration = CloudIntegration(self)
         self.external_cloud_provider = ExternalCloudProvider(self, "external-cloud-provider")
-        self.reconciler = Reconciler(self, self.reconcile)
         self.tokens = TokensProvider(self, endpoint="tokens")
-        self.framework.observe(self.on.update_status, self.update_status)
+        self.encryption_at_rest = EncryptionAtRest(self)
 
+        self.reconciler = Reconciler(self, self.reconcile)
+        self.framework.observe(self.on.update_status, self.update_status)
         self.framework.observe(self.on.upgrade_action, self.on_upgrade_action)
         self.framework.observe(self.on.get_kubeconfig_action, self.get_kubeconfig)
 
@@ -496,6 +498,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.configure_auth_webhook()
         self.configure_loadbalancers()
         if self.api_dependencies_ready():
+            self.encryption_at_rest.prepare()
             self.configure_apiserver()
             self.create_kubeconfigs()
             self.configure_controller_manager()
