@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 from typing import Mapping, Optional
 
+import charms.contextual_status as status
 import ops
 import yaml
 from auth_webhook import token_generator
@@ -25,14 +26,20 @@ class EncryptionAtRest(ops.Object):
         self.vaultlocker = VaultLocker(charm, self.vault_kv)
         self.encrypt_config = kubernetes_snaps.encryption_config_path()
 
+    @status.on_error(ops.WaitingStatus("Waiting for Vault"))
     def prepare(self):
         if not self.vault_kv.requires.relations:
             return
 
-        self.vaultlocker.prepare()
-        if self.charm.unit.is_leader():
-            self._generate_encryption_key()
-        self._write_encryption_config()
+        try:
+            self.vaultlocker.prepare()
+            if self.charm.unit.is_leader():
+                self._generate_encryption_key()
+            self._write_encryption_config()
+        except VaultNotReadyError as ex:
+            if not ex.retriable:
+                status.add(ops.BlockedStatus("Can't access Vault - try refresh-secrets"))
+            raise
 
     def _generate_encryption_key(self) -> str:
         try:
@@ -40,7 +47,7 @@ class EncryptionAtRest(ops.Object):
             if ENCRYPTION_KEY not in app_kv:
                 app_kv[ENCRYPTION_KEY] = token_generator(32)
         except VaultNotReadyError:
-            log.exception("Failed to store application encryption_key.")
+            log.error("Failed to store application encryption_key.")
             raise
 
     def _read_encryption_config(self) -> Optional[Mapping]:
@@ -75,8 +82,8 @@ class EncryptionAtRest(ops.Object):
         try:
             secret: str = self.vault_kv.app_kv.get(ENCRYPTION_KEY)
         except VaultNotReadyError:
-            log.exception("Failed to retrieve application encryption_key.")
-            return
+            log.error("Failed to retrieve application encryption_key.")
+            raise
 
         if secret == self._read_encryption_secret():
             log.info("No change to encryption configuration necessary.")

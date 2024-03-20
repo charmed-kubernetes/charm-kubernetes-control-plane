@@ -102,6 +102,14 @@ def retrieve_secret_id(url, token) -> str:
 class VaultNotReadyError(Exception):
     """Exception indicating that Vault was accessed before it was ready."""
 
+    retriable: bool = True
+
+
+class VaultInvalidAccessError(VaultNotReadyError):
+    """Exception indicating that Vault cannot be accessed with the current keys."""
+
+    retriable: bool = False
+
 
 class _VaultBaseKV(dict):
     def __init__(self, config, path):
@@ -128,7 +136,7 @@ class _VaultBaseKV(dict):
         try:
             return self._client.read(path)
         except hvac.exceptions.Forbidden as ex:
-            raise VaultNotReadyError() from ex
+            raise VaultNotReadyError(f"Failed to read path={path}") from ex
 
     @property
     def _client(self):
@@ -137,9 +145,10 @@ class _VaultBaseKV(dict):
         The authentication token for the client is only valid for 60 seconds,
         after which a new client will need to be authenticated.
         """
+        url = self._config["vault_url"]
         try:
-            log.info("Logging %s into %s", type(self).__name__, self._config["vault_url"])
-            client = hvac.Client(url=self._config["vault_url"])
+            log.info("Logging %s into %s", type(self).__name__, url)
+            client = hvac.Client(url=url)
             client.auth.approle.login(self._config["role_id"], secret_id=self._config["secret_id"])
             return client
         except (
@@ -149,7 +158,9 @@ class _VaultBaseKV(dict):
             hvac.exceptions.BadGateway,
             hvac.exceptions.InternalServerError,
         ) as ex:
-            raise VaultNotReadyError() from ex
+            raise VaultNotReadyError(f"Failed to login to {url}") from ex
+        except hvac.exceptions.InvalidRequest as ex:
+            raise VaultInvalidAccessError("Invalid role-id or secret-id") from ex
 
     def __setitem__(self, key, value):
         log.info("Writing data to vault")
@@ -223,6 +234,12 @@ class VaultAppKV(_VaultBaseKV):
         super().__setitem__(key, value)
         self._rehash(key)
         self._manage_events(key)
+
+    def notify(self):
+        """Notifies the current values of all the keys in the dict."""
+        for key in self.keys():
+            # pylint: disable-next=protected-access
+            self._manage_events(key)
 
     def _manage_events(self, key):
         callback = self._config.get("on_change")
@@ -312,10 +329,7 @@ class VaultKV(ops.Object):
 
         config = self.get_vault_config(**self._kwds)
         self._app_kv = VaultAppKV(config, self.charm.unit.name.split("/")[1])
-        for key in self._app_kv.keys():
-            # pylint: disable-next=protected-access
-            self._app_kv._manage_events(key)
-
+        self._app_kv.notify()
         return self._app_kv
 
     def _on_commit(self, _: ops.CommitEvent):
@@ -381,7 +395,7 @@ class VaultKV(ops.Object):
         """  # noqa
         vault = self.requires
         if not (vault.vault_url and vault.unit_role_id and vault.unit_token):
-            raise VaultNotReadyError()
+            raise VaultNotReadyError("vault-kv relation is missing attributes")
         return {
             "vault_url": vault.vault_url,
             "secret_backend": self._get_secret_backend(**kwds),
@@ -409,13 +423,13 @@ class VaultKV(ops.Object):
             # stored token has been set, compare with the relation token
             if self._stored.token != rel_token:
                 # the relation-token is different from the stored-token
-                log.info("vault-kv provided a new one-shot token")
+                log.info("vault-kv is providing a new one-shot token (ops)")
                 return rel_token
         elif _reactive_is_data_changed(
             self.framework._storage._db, "layer.vault-kv.token", rel_token
         ):
             # If hash is different from when the charm was reactive
-            log.info("vault-kv is providing a new one-shot token")
+            log.info("vault-kv is providing a new one-shot token (reactive-upgrade)")
             return rel_token
 
     def _stored_secret_id(self):
@@ -441,7 +455,9 @@ class VaultKV(ops.Object):
                 hvac.exceptions.BadGateway,
                 hvac.exceptions.InternalServerError,
             ) as ex:
-                raise VaultNotReadyError() from ex
+                raise VaultNotReadyError("Failed to retrieve secret-id at {vault_url}") from ex
+            except hvac.exceptions.InvalidRequest as ex:
+                raise VaultInvalidAccessError("Invalid one-shot token") from ex
 
             # update the token in the StoredData now that its been
             # successfully used to retrieve the secret_id
