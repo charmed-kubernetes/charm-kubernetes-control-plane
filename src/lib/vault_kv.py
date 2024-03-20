@@ -3,12 +3,12 @@ import hashlib
 import json
 import logging
 import socket
+import sqlite3
 from functools import cached_property
 from typing import Any, List, Mapping, Optional
 
 import hvac
 import ops
-import sqlite3
 import requests
 
 log = logging.getLogger(__name__)
@@ -58,15 +58,14 @@ def _kv_read(conn: sqlite3.Connection, key: str, default: Optional[Any] = None) 
 
 
 def _reactive_secret_id(conn: sqlite3.Connection) -> Optional[str]:
-    """Read from kv table"""
+    """Read from kv table."""
     return _kv_read(conn, "layer.vault-kv.secret_id")
 
 
 def _reactive_is_data_changed(
     conn: sqlite3.Connection, data_id: str, data: Any, hash_type: str = "md5"
 ):
-    """Check if the given set of data has changed since the last time
-    `data_changed` was called.
+    """Check if the given set of data has changed since stored in the .unit-state.db kv table.
 
     That is, this is a non-destructive way to check if the data has changed.
 
@@ -139,7 +138,7 @@ class _VaultBaseKV(dict):
         after which a new client will need to be authenticated.
         """
         try:
-            log.info("Logging %s in to %s", type(self).__name__, self._config["vault_url"])
+            log.info("Logging %s into %s", type(self).__name__, self._config["vault_url"])
             client = hvac.Client(url=self._config["vault_url"])
             client.auth.approle.login(self._config["role_id"], secret_id=self._config["secret_id"])
             return client
@@ -420,7 +419,7 @@ class VaultKV(ops.Object):
             return rel_token
 
     def _stored_secret_id(self):
-        """Uplift reactive secret-id if the ops version is unset"""
+        """Uplift reactive secret-id if the ops version is unset."""
         if self._stored.secret_id is None:
             if old_secret_id := _reactive_secret_id(self.framework._storage._db):
                 self._stored.secret_id = old_secret_id

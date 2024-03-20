@@ -28,16 +28,7 @@ def mock_retrieve_secret_id():
         yield as_mock
 
 
-@pytest.fixture
-def write_encryption_config(harness):
-    with mock.patch.object(
-        harness.charm.encryption_at_rest, "write_encryption_config"
-    ) as callback:
-        yield callback
-
-
 @pytest.fixture(autouse=True)
-@pytest.mark.usefixtures("write_encryption_config")
 def vault_kv(harness):
     """Mock vault kv endpoint."""
     harness.set_leader(True)
@@ -54,8 +45,7 @@ def vault_kv(harness):
     )
     harness.add_relation("peer", "kubernetes-control-plane")
 
-    with mock.patch.object(harness.charm.encryption_at_rest, "write_encryption_config"):
-        yield harness.charm.encryption_at_rest.vault_kv
+    yield harness.charm.encryption_at_rest.vault_kv
 
 
 @pytest.fixture(params=["", "charm-{app}", "charm-{model-uuid}-{app}"])
@@ -115,7 +105,7 @@ def test_get_vault_config_fails_get_secret_id(mock_retrieve_secret_id, vault_kv)
 
 
 @mock.patch("hvac.Client", autospec=True)
-def test_vault_app_kv(mock_client, vault_kv, write_encryption_config, backend_format):
+def test_vault_app_kv(mock_client, vault_kv, backend_format):
     mock_client().read.side_effect = [
         {"data": {"gettable": "static"}},
         {"data": {"gettable": hashlib.md5(b'"static"').hexdigest()}},  # hash
@@ -132,22 +122,17 @@ def test_vault_app_kv(mock_client, vault_kv, write_encryption_config, backend_fo
     # Nothing yet set
     assert kv.keys() == {"gettable"}
     mock_client().write.assert_not_called()
-    write_encryption_config.assert_not_called()
 
     kv["settable"] = "value"
     mock_client().write.assert_called_once_with(
         f"{backend_format.expected}/kv/app", settable="value"
     )
     mock_client().write.reset_mock()
-    write_encryption_config.assert_called_once()
-    write_encryption_config.reset_mock()
 
     kv.set("settable", "new-value")
     mock_client().write.assert_called_once_with(
         f"{backend_format.expected}/kv/app", settable="new-value"
     )
-    write_encryption_config.assert_called_once()
-    write_encryption_config.reset_mock()
 
     assert dict(kv.items()) == {"settable": "new-value", "gettable": "static"}
 
@@ -157,7 +142,6 @@ def test_vault_app_kv(mock_client, vault_kv, write_encryption_config, backend_fo
     kv.update_config(new_config)
     mock_client().read.assert_called_once_with(f"{backend_format.expected}/kv/app")
     assert dict(kv.items()) == {"settable": "new-value", "gettable": "static"}
-    write_encryption_config.assert_not_called()
 
     mock_client().write.reset_mock()
     event = mock.MagicMock()
