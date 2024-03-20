@@ -22,12 +22,10 @@ __author__ = "Jorge Niedbalski R. <jorge.niedbalski@canonical.com>"
 
 
 class Fstab(io.FileIO):
-    """This class extends file in order to implement a file reader/writer
-    for file `/etc/fstab`
-    """
+    """This class extends file in order to implement a file reader/writer for file `/etc/fstab`."""
 
     class Entry(object):
-        """Entry class represents a non-comment line on the `/etc/fstab` file"""
+        """Entry class represents a non-comment line on the `/etc/fstab` file."""
 
         def __init__(self, device, mountpoint, filesystem, options, d=0, p=0):
             self.device = device
@@ -42,9 +40,11 @@ class Fstab(io.FileIO):
             self.p = int(p)
 
         def __eq__(self, o):
+            """Compare entry with another."""
             return str(self) == str(o)
 
         def __str__(self):
+            """Craft a unique string from the instance's attrs."""
             return "{} {} {} {} {} {}".format(
                 self.device, self.mountpoint, self.filesystem, self.options, self.d, self.p
             )

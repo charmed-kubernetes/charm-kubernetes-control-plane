@@ -93,7 +93,6 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.framework.observe(self.on.update_status, self.update_status)
         self.framework.observe(self.on.upgrade_action, self.on_upgrade_action)
         self.framework.observe(self.on.get_kubeconfig_action, self.get_kubeconfig)
-        self.framework.observe(self.encryption_at_rest.vault_kv.changed, self.reconciler.reconcile)
 
     @status.on_error(ops.WaitingStatus("Waiting on valid certificate data"))
     def api_dependencies_ready(self):

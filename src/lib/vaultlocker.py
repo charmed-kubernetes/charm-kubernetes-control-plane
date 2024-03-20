@@ -2,15 +2,16 @@ import logging
 import os
 import re
 import shutil
+import subprocess
 from pathlib import Path
-from subprocess import CalledProcessError, check_call, check_output
+from typing import Optional
 from uuid import uuid4
 
+import charms.operator_libs_linux.v0.apt as apt
 import ops
 
 from lib.fstab import Fstab
-from lib.vault_kv import VaultKV
-
+from lib.vault_kv import VaultKV, VaultNotReadyError
 
 LOOP_ENVS = Path("/etc/vaultlocker/loop-envs")
 VAULTLOCKER_CFG = """[vault]
@@ -30,24 +31,38 @@ def is_block_device(path: os.PathLike) -> bool:
 def is_device_mounted(dev: os.PathLike) -> bool:
     device: Path = Path(dev)
     try:
-        out = check_output(["lsblk", "-P", device]).decode()
-    except CalledProcessError:
+        out = subprocess.check_output(["lsblk", "-P", device]).decode()
+    except subprocess.CalledProcessError:
         return False
-    return bool(re.search(r'MOUNTPOINT=".+"', out))
+    return bool(re.search(r'MOUNTPOINTS=".+"', out))
+
+
+def vaultlocker_exec(*args):
+    """Execute vaultlocker command in an isolated environment.
+
+    Run without the PYTHONPATH env so that any pip packages in the charm
+    don't influence vaultlocker's python paths.
+    """
+    restore = {e: v for e in ["PYTHONPATH"] if (v := os.environ.pop(e, None))}
+
+    try:
+        subprocess.check_output(["vaultlocker", *args], stderr=subprocess.PIPE)
+    finally:
+        os.environ.update(**restore)
 
 
 def install_alternative(name: str, target: os.PathLike, source: os.PathLike, priority: int = 50):
-    """Install alternative configuration"""
+    """Install alternative configuration."""
     target = Path(target)
     if target.exists() and not target.is_symlink():
         # Move existing file/directory away before installing
         shutil.move(target, "{}.bak".format(target))
     target.parent.mkdir(parents=True, exist_ok=True)
     cmd = ["update-alternatives", "--force", "--install", target, name, source, str(priority)]
-    check_call(cmd)
+    subprocess.check_output(cmd)
 
 
-def mkfs_xfs(device: os.PathLike, force: bool = False, inode_size=None):
+def mkfs_xfs(device: os.PathLike, force: bool = False, inode_size: Optional[int] = None):
     """Format device with XFS filesystem.
 
     By default this should fail if the device already has a filesystem on it.
@@ -74,18 +89,18 @@ def mkfs_xfs(device: os.PathLike, force: bool = False, inode_size=None):
         log.info("Using XFS filesystem with system default inode size.")
 
     cmd += [device]
-    check_call(cmd)
+    subprocess.check_output(cmd)
 
 
 def mount(device, mountpoint, options=None, persist=False, filesystem="ext3"):
-    """Mount a filesystem at a particular mountpoint"""
+    """Mount a filesystem at a particular mountpoint."""
     cmd_args = ["mount"]
     if options is not None:
         cmd_args.extend(["-o", options])
     cmd_args.extend([device, mountpoint])
     try:
-        check_output(cmd_args)
-    except CalledProcessError:
+        subprocess.check_output(cmd_args)
+    except subprocess.CalledProcessError:
         log.exception("Error mounting %s at %s", device, mountpoint)
         return False
 
@@ -97,11 +112,10 @@ def mount(device, mountpoint, options=None, persist=False, filesystem="ext3"):
 class VaultLockerError(Exception):
     """Wrapper for exceptions raised when configuring VaultLocker."""
 
-    def __init__(self, msg, *args, **kwargs):
-        super().__init__(msg.format(*args, **kwargs))
-
 
 class VaultLocker(ops.Object):
+    """Manage installation and configuration of vaultlocker, used to make encrypted drives."""
+
     _stored = ops.StoredState()
 
     def __init__(self, charm: ops.CharmBase, vault_kv: VaultKV):
@@ -112,17 +126,26 @@ class VaultLocker(ops.Object):
         self.framework.observe(vault_kv.new_config, self.configure)
 
     def prepare(self):
-        self.apt_install()
+        """Ready the unit to host vaultlocker service."""
+        if not self.vault_kv.requires.relations:
+            log.warning("No vault-kv relation available yet.")
+            return
         self.configure()
-        self.auto_encrypt()
-
-    def apt_install(self):
-        check_call(["apt", "update"])
-        check_call(["apt", "install", "vaultlocker"])
 
     def configure(self, _: ops.EventBase = None):
         # write VaultLocker config file
-        self.write_vaultlocker_conf(self.vault_kv.get_vault_config())
+        try:
+            apt.update()
+            apt.add_package("vaultlocker")
+        except (apt.PackageNotFoundError, apt.PackageError):
+            logging.exception("Failed to install vaultlocker")
+
+        try:
+            self.write_vaultlocker_conf(self.vault_kv.get_vault_config())
+        except VaultNotReadyError:
+            log.exception("Failed to retrieve vault configuration.")
+            return
+
         # create location for loop device service envs
         LOOP_ENVS.mkdir(parents=True, exist_ok=True)
         # create loop device service template
@@ -131,7 +154,7 @@ class VaultLocker(ops.Object):
         )
 
     def write_vaultlocker_conf(self, context, priority=100):
-        """Write vaultlocker configuration to disk and install alternative
+        """Write vaultlocker configuration to disk and install alternative.
 
         :param context: Dict of data from vault-kv relation
         :ptype: context: dict
@@ -145,6 +168,14 @@ class VaultLocker(ops.Object):
         install_alternative(
             "vaultlocker.conf", "/etc/vaultlocker/vaultlocker.conf", charm_vl_path, priority
         )
+
+    '''
+    These features require adjustments to the StorageMeta fields which are
+    not defined by ops.StorageMeta or even documented https://juju.is/docs/sdk/storage
+
+    the fields "vaultlocker-encrypt" and "vaultlocker-mountbase" fields of
+    a storage metadata item are undefined and therefore this feature
+    is locked to reactive charms
 
     def auto_encrypt(self):
         for id, meta in self.charm.meta.storages.items():
@@ -169,9 +200,9 @@ class VaultLocker(ops.Object):
         ``{mountbase}/{storage_name}``.
         """
         storage_metadata = self.charm.meta.storages[storage_name]
-        if storage_metadata["type"] != "block":
-            raise VaultLockerError("Cannot encrypt non-block storage: {}", storage_name)
-        multiple = "multiple" in storage_metadata
+        if storage_metadata.type != "block":
+            raise VaultLockerError(f"Cannot encrypt non-block storage: {storage_name}")
+        multiple = storage_metadata.multiple_range
         for storage_meta in self.charm.meta.storages.values():
             if not storage_meta.storage_name.startswith(storage_name + "/"):
                 continue
@@ -183,12 +214,22 @@ class VaultLocker(ops.Object):
             else:
                 mountpoint = None
             self.encrypt_device(storage_location, mountpoint)
-            # set_flag('layer.vaultlocker.{}.ready'.format(storage_meta.storage_name))
-            # set_flag('layer.vaultlocker.{}.ready'.format(storage_name))
+    '''
+
+    def _decrypted_device(self, device):
+        """Return the mapped device name for the decrypted version of the encrypted device.
+
+        This mapped device name is what should be used for mounting the device.
+        """
+        uuid = self._stored.uuids.get(device)
+        if not uuid:
+            return None
+        return f"/dev/mapper/crypt-{uuid}"
 
     def encrypt_device(self, device, mountpoint=None, uuid=None):
-        """Set up encryption for the given block device, and optionally create and
-        mount an XFS filesystem on the encrypted device.
+        """Set up encryption for the given block device.
+
+        Optionally create and mount an XFS filesystem on the encrypted device.
 
         If ``mountpoint`` is not given, the device will not be formatted or
         mounted.  When interacting with or mounting the device manually, the
@@ -196,17 +237,17 @@ class VaultLocker(ops.Object):
         should be used in place of the raw device name.
         """
         if not is_block_device(device):
-            raise VaultLockerError("Cannot encrypt non-block device: {}", device)
+            raise VaultLockerError(f"Cannot encrypt non-block device: {device}")
         if is_device_mounted(device):
-            raise VaultLockerError("Cannot encrypt mounted device: {}", device)
+            raise VaultLockerError(f"Cannot encrypt mounted device: {device}")
         log.info("Encrypting device: %s", device)
         if uuid is None:
             uuid = str(uuid4())
         try:
-            check_call(["vaultlocker", "encrypt", "--uuid", uuid, device])
+            vaultlocker_exec("encrypt", "--uuid", uuid, device)
             self._stored.uuids[device] = uuid
             if mountpoint:
-                mapped_device = self.decrypted_device(device)
+                mapped_device = self._decrypted_device(device)
                 log.info("Creating filesystem on %s (%s)", mapped_device, device)
                 # If this fails, it's probably due to the size of the loopback
                 #    backing file that is defined by the `dd`.
@@ -218,7 +259,8 @@ class VaultLocker(ops.Object):
                 fs_opts = [
                     "defaults",
                     "nofail",
-                    f"x-systemd.requires=vaultlocker-decrypt@{uuid}.service" "comment=vaultlocker",
+                    f"x-systemd.requires=vaultlocker-decrypt@{uuid}.service",
+                    "comment=vaultlocker",
                 ]
                 mount(
                     mapped_device,
@@ -227,37 +269,20 @@ class VaultLocker(ops.Object):
                     persist=True,
                     filesystem="xfs",
                 )
-        except (CalledProcessError, OSError) as e:
+        except (subprocess.CalledProcessError, OSError) as e:
             raise VaultLockerError("Error configuring VaultLocker") from e
 
-    def decrypted_device(self, device):
-        """Returns the mapped device name for the decrypted version of the encrypted
-        device.
-
-        This mapped device name is what should be used for mounting the device.
-        """
-        uuid = self._stored.uuids.get(device)
-        if not uuid:
-            return None
-        return f"/dev/mapper/crypt-{uuid}"
-
-    def create_encrypted_loop_mount(
-        self, mount_path, block_size="1M", block_count=20, backing_file=None
-    ):
-        """Creates a persistent loop device, encrypts it, formats it as XFS, and
-        mounts it at the given `mount_path`.
+    def create_encrypted_loop_mount(self, mountpoint, uuid=None, backing_file=None):
+        """Create a persistent loop device, encrypted, formatted to XFS, and mounted.
 
         A backing file will be created under `/var/lib/vaultlocker/backing_files`,
-        in a UUID named file, according to `block_size` and `block_count`
-        parameters, which map to `bs` and `count` of the `dd` command.  Note that
-        the backing file must be a bit over 16M to allow for the XFS file system
-        plus some additional metadata needed for the encryption.  It is not
-        recommended to go below the default of 20M (20 blocks, 1M each).
+        in a UUID named file
 
         The `backing_file` parameter can be used to change the location where the
         backing file is created.
         """
-        uuid = str(uuid4())
+        if not uuid:
+            uuid = str(uuid4())
         if backing_file is None:
             backing_file = Path("/var/lib/vaultlocker/backing_files") / uuid
             backing_file.parent.mkdir(parents=True, exist_ok=True)
@@ -268,14 +293,16 @@ class VaultLocker(ops.Object):
 
         try:
             # ensure loop devices are enabled
-            check_call(["modprobe", "loop"])
+            subprocess.check_output(["modprobe", "loop"])
             # create the backing file filled with random data
-            check_call(["dd", "if=/dev/urandom", "of={}".format(backing_file), "bs=8M", "count=4"])
+            subprocess.check_output(
+                ["dd", "if=/dev/urandom", "of={}".format(backing_file), "bs=8M", "count=4"]
+            )
             # claim an unused loop device
-            output = check_output(["losetup", "--show", "-f", str(backing_file)])
+            output = subprocess.check_output(["losetup", "--show", "-f", str(backing_file)])
             device_name = output.decode("utf8").strip()
             # encrypt the new loop device
-            self.encrypt_device(device_name, str(mount_path), uuid)
+            self.encrypt_device(device_name, mountpoint, uuid)
             # setup the service to ensure loop device is restored after reboot
             (LOOP_ENVS / uuid).write_text(
                 "".join(
@@ -284,6 +311,8 @@ class VaultLocker(ops.Object):
                     ]
                 )
             )
-            check_call(["systemctl", "enable", "vaultlocker-loop@{}.service".format(uuid)])
-        except (CalledProcessError, OSError) as e:
+            subprocess.check_output(
+                ["systemctl", "enable", "vaultlocker-loop@{}.service".format(uuid)]
+            )
+        except (subprocess.CalledProcessError, OSError) as e:
             raise VaultLockerError("Error configuring VaultLocker") from e
