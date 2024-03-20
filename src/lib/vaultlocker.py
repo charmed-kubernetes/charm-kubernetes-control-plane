@@ -143,8 +143,8 @@ class VaultLocker(ops.Object):
         try:
             self.write_vaultlocker_conf(self.vault_kv.get_vault_config())
         except VaultNotReadyError:
-            log.exception("Failed to retrieve vault configuration.")
-            return
+            log.error("Failed to retrieve vault configuration.")
+            raise
 
         # create location for loop device service envs
         LOOP_ENVS.mkdir(parents=True, exist_ok=True)
