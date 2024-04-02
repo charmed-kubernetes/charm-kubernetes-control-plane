@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import random
@@ -6,12 +5,14 @@ import re
 import string
 import tempfile
 from base64 import b64decode, b64encode
+from dataclasses import dataclass
 from subprocess import CalledProcessError, check_call, check_output
+from typing import Mapping
 
 import charms.contextual_status as status
 import yaml
 from jinja2 import Environment, FileSystemLoader
-from kubectl import kubectl
+from kubectl import kubectl, kubectl_get
 from ops import MaintenanceStatus
 
 auth_secret_ns = "kube-system"
@@ -25,6 +26,14 @@ auth_webhook_svc = "/etc/systemd/system/{}.service".format(auth_webhook_svc_name
 log_dir = "/var/log/kubernetes"
 
 log = logging.getLogger(__name__)
+
+
+@dataclass
+class Secret:
+    """Wrap a kubectl secret."""
+
+    secret_id: str
+    password: str
 
 
 def configure(
@@ -70,6 +79,10 @@ def configure(
     render("auth-webhook.logrotate", "/etc/logrotate.d/auth-webhook", context)
     render("auth-webhook.service", auth_webhook_svc, context)
     restart()
+
+
+def delete_token(secret_id: str):
+    kubectl("delete", "secret", "-n", auth_secret_ns, secret_id, "--ignore-not-found=true")
 
 
 def create_token(uid, username, groups=[]):
@@ -126,22 +139,18 @@ def generate_rfc1123(length=10):
     return rand_str
 
 
-def get_token(username):
-    """Get the password for the given user from the secret that CK created."""
-    secrets = json.loads(
-        kubectl(
-            "get",
-            "secrets",
-            "-n",
-            auth_secret_ns,
-            "--field-selector",
-            "type={}".format(auth_secret_type),
-            "-o",
-            "json",
-        )
+def get_secrets():
+    """Get all the secrets that CK created."""
+    output = kubectl_get(
+        "get",
+        "secrets",
+        "-n",
+        auth_secret_ns,
+        "--field-selector",
+        "type={}".format(auth_secret_type),
     )
-
-    for secret in secrets.get("items", []):
+    secrets: Mapping[str, Secret] = {}
+    for secret in output.get("items", []):
         try:
             data_b64 = secret["data"]
             password_b64 = data_b64["password"].encode("utf-8")
@@ -152,9 +161,15 @@ def get_token(username):
 
         password = b64decode(password_b64).decode("utf-8")
         secret_user = b64decode(username_b64).decode("utf-8")
-        if username == secret_user:
-            return password
+        secrets[secret_user] = Secret(secret["metadata"]["name"], password)
+    return secrets
 
+
+def get_token(username):
+    """Get the password for the given user from the secret that CK created."""
+    for secret_user, properties in get_secrets().items():
+        if username == secret_user:
+            return properties.password
     return None
 
 

@@ -4,7 +4,7 @@
 
 """Charmed Machine Operator for Kubernetes Control Plane."""
 
-import json
+import functools
 import logging
 import os
 import re
@@ -15,6 +15,10 @@ from pathlib import Path
 from subprocess import CalledProcessError
 from typing import Callable
 
+import actions.kubectl
+import actions.namespace
+import actions.upgrade
+import actions.users
 import auth_webhook
 import charms.contextual_status as status
 import leader_data
@@ -89,8 +93,34 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.tokens = TokensProvider(self, endpoint="tokens")
         self.framework.observe(self.on.update_status, self.update_status)
 
-        self.framework.observe(self.on.upgrade_action, self.on_upgrade_action)
-        self.framework.observe(self.on.get_kubeconfig_action, self.get_kubeconfig)
+        # register charm actions
+        actions = [
+            self.on.upgrade_action,
+            self.on.get_kubeconfig_action,
+            self.on.apply_manifest_action,
+            self.on.user_create_action,
+            self.on.user_delete_action,
+            self.on.user_list_action,
+            self.on.namespace_create_action,
+            self.on.namespace_delete_action,
+            self.on.namespace_list_action,
+        ]
+        for action in actions:
+            self.framework.observe(action, self.charm_actions)
+
+    def charm_actions(self, event: ops.ActionEvent):
+        action_map = {
+            "upgrade": actions.upgrade.upgrade_action,
+            "get-kubeconfig": actions.kubectl.get_kubeconfig,
+            "apply-manifest": actions.kubectl.apply_manifest,
+            "user-create": functools.partial(actions.users.user_create, self),
+            "user-delete": actions.users.user_delete,
+            "user-list": actions.users.user_list,
+            "namespace-create": actions.namespace.namespace_create,
+            "namespace-delete": actions.namespace.namespace_delete,
+            "namespace-list": actions.namespace.namespace_list,
+        }
+        return action_map[event.id](event)
 
     @status.on_error(ops.WaitingStatus("Waiting on valid certificate data"))
     def api_dependencies_ready(self):
@@ -466,23 +496,6 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             raise
 
         log.info(f"Extracted 'cni-plugins' to {unpack_path}")
-
-    def on_upgrade_action(self, event):
-        """Handle the upgrade action."""
-        with status.context(self.unit):
-            channel = self.model.config.get("channel")
-            kubernetes_snaps.upgrade_snaps(channel=channel, event=event, control_plane=True)
-
-    def get_kubeconfig(self, event: ops.ActionEvent):
-        try:
-            result = kubectl("config", "view", "-o", "json", "--raw", external=True)
-            # JSON format verification
-            kubeconfig = json.dumps(json.loads(result))
-            event.set_results({"kubeconfig": kubeconfig})
-        except json.JSONDecodeError as e:
-            event.fail("Failed to parse kubeconfig: {}".format(str(e)))
-        except Exception as e:
-            event.fail("Failed to retrieve kubeconfig: {}".format(str(e)))
 
     def reconcile(self, event):
         """Reconcile state change events."""
