@@ -142,7 +142,6 @@ def generate_rfc1123(length=10):
 def get_secrets():
     """Get all the secrets that CK created."""
     output = kubectl_get(
-        "get",
         "secrets",
         "-n",
         auth_secret_ns,

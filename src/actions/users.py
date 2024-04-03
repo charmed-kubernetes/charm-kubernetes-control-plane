@@ -27,8 +27,8 @@ def protect_resources(name: str, event: ops.ActionEvent) -> bool:
 
 def user_list(event: ops.ActionEvent):
     """Return a dict of 'username: secret_id' for Charmed Kubernetes users."""
-    secrets = list(get_secrets())
-    event.set_results({"users": ", ".join(secrets)})
+    secrets = get_secrets()
+    event.set_results({"users": ", ".join(list(secrets))})
     return secrets
 
 
@@ -38,7 +38,7 @@ def user_create(charm, event: ops.ActionEvent):
     if not protect_resources(user, event):
         return
 
-    users = user_list()
+    users = user_list(event)
     if user in list(users):
         event.fail('User "{}" already exists.'.format(user))
         return
@@ -74,7 +74,7 @@ def user_create(charm, event: ops.ActionEvent):
 
     # Tell the people what they've won
     fetch_cmd = "juju scp {}:{} .".format(event.framework.model.unit.name, kubeconfig_path)
-    event.set_result(
+    event.set_results(
         {
             "msg": 'User "{}" created.'.format(user),
             "users": ", ".join(list(users) + [user]),
@@ -88,14 +88,14 @@ def user_delete(event: ops.ActionEvent):
     if not protect_resources(user, event):
         return
 
-    users = user_list()
+    users = user_list(event)
     if user not in list(users):
         event.fail('User "{}" does not exist.'.format(user))
         return
 
     # Delete the secret
-    secret_id = users[user]
-    delete_token(secret_id)
+    secret = users[user]
+    delete_token(secret.secret_id)
 
     event.set_results(
         {

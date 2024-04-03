@@ -15,7 +15,7 @@ from pathlib import Path
 from subprocess import CalledProcessError
 from typing import Callable
 
-import actions.kubectl
+import actions.general
 import actions.namespace
 import actions.upgrade
 import actions.users
@@ -110,17 +110,17 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def charm_actions(self, event: ops.ActionEvent):
         action_map = {
-            "upgrade": actions.upgrade.upgrade_action,
-            "get-kubeconfig": actions.kubectl.get_kubeconfig,
-            "apply-manifest": actions.kubectl.apply_manifest,
-            "user-create": functools.partial(actions.users.user_create, self),
-            "user-delete": actions.users.user_delete,
-            "user-list": actions.users.user_list,
-            "namespace-create": actions.namespace.namespace_create,
-            "namespace-delete": actions.namespace.namespace_delete,
-            "namespace-list": actions.namespace.namespace_list,
+            "upgrade_action": actions.upgrade.upgrade_action,
+            "get_kubeconfig_action": actions.general.get_kubeconfig,
+            "apply_manifest_action": actions.general.apply_manifest,
+            "user_create_action": functools.partial(actions.users.user_create, self),
+            "user_delete_action": actions.users.user_delete,
+            "user_list_action": actions.users.user_list,
+            "namespace_create_action": actions.namespace.namespace_create,
+            "namespace_delete_action": actions.namespace.namespace_delete,
+            "namespace_list_action": actions.namespace.namespace_list,
         }
-        return action_map[event.id](event)
+        return action_map[event.handle.kind](event)
 
     @status.on_error(ops.WaitingStatus("Waiting on valid certificate data"))
     def api_dependencies_ready(self):

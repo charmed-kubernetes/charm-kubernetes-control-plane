@@ -31,7 +31,7 @@ def apply_manifest(event: ops.ActionEvent):
         event.set_results(
             {
                 "summary": "Manifest applied.",
-                "output": output.decode("utf-8"),
+                "output": output,
             }
         )
     except subprocess.CalledProcessError as e:

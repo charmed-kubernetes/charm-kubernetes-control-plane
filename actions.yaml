@@ -1,7 +1,7 @@
 get-kubeconfig:
   description: Retrieve Kubernetes cluster config, including credentials
 upgrade:
-    description: Upgrade the Kubernetes snaps
+  description: Upgrade the Kubernetes snaps
 user-create:
   description: Create a new user
   params:
@@ -51,7 +51,9 @@ namespace-delete:
   required:
     - name
 apply-manifest:
-  description: Apply JSON formatted Kubernetes manifest to cluster
+  description: |
+    Apply JSON formatted Kubernetes manifest to cluster.
+    juju run this action using `--string-args`
   params:
     json:
       type: string
