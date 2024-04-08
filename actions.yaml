@@ -1,4 +1,63 @@
-upgrade:
-    description: Upgrade the Kubernetes snaps
 get-kubeconfig:
   description: Retrieve Kubernetes cluster config, including credentials
+upgrade:
+  description: Upgrade the Kubernetes snaps
+user-create:
+  description: Create a new user
+  params:
+    name:
+      type: string
+      description: |
+        Username for the new user. This value must only contain alphanumeric
+        characters, ':', '@', '-' or '.'.
+      minLength: 2
+    groups:
+      type: string
+      description: |
+        Optional comma-separated list of groups eg. 'system:masters,managers'
+  required:
+    - name
+user-delete:
+  description: Delete an existing user
+  params:
+    name:
+      type: string
+      description: Username of the user to delete
+      minLength: 2
+  required:
+    - name
+user-list:
+  description: List existing users
+restart:
+  description: Restart the Kubernetes control-plane services on demand.
+namespace-list:
+  description: List existing k8s namespaces
+namespace-create:
+  description: Create new namespace
+  params:
+    name:
+      type: string
+      description: Namespace name eg. staging
+      minLength: 2
+  required:
+    - name
+namespace-delete:
+  description: Delete namespace
+  params:
+    name:
+      type: string
+      description: Namespace name eg. staging
+      minLength: 2
+  required:
+    - name
+apply-manifest:
+  description: |
+    Apply JSON formatted Kubernetes manifest to cluster.
+    juju run this action using `--string-args`
+  params:
+    json:
+      type: string
+      description: The content of the manifest to deploy in JSON format
+      minLength: 2
+  required:
+  - json
