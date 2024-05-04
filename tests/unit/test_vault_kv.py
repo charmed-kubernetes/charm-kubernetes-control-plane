@@ -7,8 +7,8 @@ import ops
 import ops.testing
 import pytest
 from charm import KubernetesControlPlaneCharm
-
-from lib.vault_kv import VaultNotReadyError, retrieve_secret_id
+from encryption.reactive import retrieve_secret_id
+from encryption.vault_kv import VaultNotReadyError
 
 
 @pytest.fixture
@@ -23,7 +23,7 @@ def harness():
 
 @pytest.fixture(autouse=True)
 def mock_retrieve_secret_id():
-    with mock.patch("lib.vault_kv.retrieve_secret_id") as as_mock:
+    with mock.patch("encryption.reactive.retrieve_secret_id") as as_mock:
         as_mock.return_value = "secret-from-token-value"
         yield as_mock
 
@@ -69,21 +69,22 @@ def backend_format(request, vault_kv):
 
 def test_get_vault_config_success(mock_retrieve_secret_id, vault_kv, backend_format):
     """Confirm vault config can be retrieved with valid relation data."""
-    vault_config = vault_kv.get_vault_config(backend_format=backend_format)
-    vault_kv_ifc = vault_kv.requires
+    with mock.patch.object(vault_kv, "changed"):
+        vault_config = vault_kv.get_vault_config(backend_format=backend_format)
+        vault_kv_ifc = vault_kv.requires
 
-    mock_retrieve_secret_id.assert_called_once_with(
-        vault_kv_ifc.vault_url, vault_kv_ifc.unit_token
-    )
-    assert vault_kv._stored.token == "some-secret-token-value"
-    assert vault_kv._stored.secret_id == "secret-from-token-value"
-    assert vault_config == {
-        "vault_url": vault_kv_ifc.vault_url,
-        "secret_backend": backend_format.expected,
-        "role_id": vault_kv_ifc.unit_role_id,
-        "secret_id": "secret-from-token-value",
-        "on_change": vault_kv.emit_changed_event,
-    }
+        mock_retrieve_secret_id.assert_called_once_with(
+            vault_kv_ifc.vault_url, vault_kv_ifc.unit_token
+        )
+        assert vault_kv._stored.token == "some-secret-token-value"
+        assert vault_kv._stored.secret_id == "secret-from-token-value"
+        assert vault_config == {
+            "vault_url": vault_kv_ifc.vault_url,
+            "secret_backend": backend_format.expected,
+            "role_id": vault_kv_ifc.unit_role_id,
+            "secret_id": "secret-from-token-value",
+            "on_change": vault_kv.changed.emit,
+        }
 
 
 def test_get_vault_config_fails_get_secret_id(mock_retrieve_secret_id, vault_kv):
@@ -129,7 +130,7 @@ def test_vault_app_kv(mock_client, vault_kv, backend_format):
     )
     mock_client().write.reset_mock()
 
-    kv.set("settable", "new-value")
+    kv["settable"] = "new-value"
     mock_client().write.assert_called_once_with(
         f"{backend_format.expected}/kv/app", settable="new-value"
     )

@@ -8,9 +8,8 @@ import ops
 import yaml
 from auth_webhook import token_generator
 from charms import kubernetes_snaps
-
-from lib.vault_kv import VaultKV, VaultNotReadyError
-from lib.vaultlocker import VaultLocker, VaultLockerError
+from encryption.vault_kv import VaultKV, VaultNotReadyError
+from encryption.vaultlocker import VaultLocker, VaultLockerError
 
 log = logging.getLogger(__name__)
 ENCRYPTION_KEY = "encryption_key"
@@ -32,12 +31,12 @@ class EncryptionAtRest(ops.Object):
             return
 
         try:
-            self.vaultlocker.prepare()
+            self.vaultlocker.configure()
             if self.charm.unit.is_leader():
                 self._generate_encryption_key()
             self._write_encryption_config()
         except VaultNotReadyError as ex:
-            if not ex.retriable:
+            if not ex.can_retry:
                 status.add(ops.BlockedStatus("Can't access Vault - try refresh-secrets"))
             raise
 

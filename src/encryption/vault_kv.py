@@ -3,112 +3,28 @@ import hashlib
 import json
 import logging
 import socket
-import sqlite3
 from functools import cached_property
-from typing import Any, List, Mapping, Optional
+from typing import List, Optional
 
 import hvac
 import ops
 import requests
+from encryption import reactive
 
 log = logging.getLogger(__name__)
 SECRETS_BACKEND_FORMAT = "charm-{model-uuid}-{app}"
 
 
-# Adapted from charms.reactive
-class _UnitsView:
-    """Creates a view of a relation data bags.
-
-    Prioritizes data in lowest relation-id, then unit name
-    """
-
-    def __init__(self, relations: List[ops.Relation]) -> None:
-        self.relations = relations
-
-    @cached_property
-    def received(self) -> Mapping[str, str]:
-        combined = {}
-        for rel in sorted(self.relations, key=lambda r: r.id, reverse=True):
-            for unit in sorted(rel.units, key=lambda u: u.name, reverse=True):
-                combined.update(**rel.data[unit])
-        return combined
-
-
-def from_json(s: Optional[str]) -> Optional[Any]:
-    try:
-        return json.loads(s)
-    except (json.decoder.JSONDecodeError, TypeError):
-        return s
-
-
-def _kv_read(conn: sqlite3.Connection, key: str, default: Optional[Any] = None) -> Optional[Any]:
-    """Read from a possible kv table in the .unit-state.db.
-
-    If this is an upgrade from a reactive charm, this kv table will exist.
-    If this is a fresh installed, this table won't exist, and this method returns the default
-    """
-    c = conn.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name='kv'")
-    result = c.fetchone()[0]
-    if result == 1:
-        c.execute("SELECT data FROM kv WHERE key=?", [key])
-        result = c.fetchone()
-    if not result:
-        return default
-    return from_json(result[0])
-
-
-def _reactive_secret_id(conn: sqlite3.Connection) -> Optional[str]:
-    """Read from kv table."""
-    return _kv_read(conn, "layer.vault-kv.secret_id")
-
-
-def _reactive_is_data_changed(
-    conn: sqlite3.Connection, data_id: str, data: Any, hash_type: str = "md5"
-):
-    """Check if the given set of data has changed since stored in the .unit-state.db kv table.
-
-    That is, this is a non-destructive way to check if the data has changed.
-
-    :param str data_id: Unique identifier for this set of data.
-    :param data: JSON-serializable data.
-    :param str hash_type: Any hash algorithm supported by :mod:`hashlib`.
-    """
-    alg = getattr(hashlib, hash_type)
-    serialized = json.dumps(data, sort_keys=True).encode("utf8")
-    old_hash = _kv_read(conn, f"reactive.data_changed.{data_id}")
-    new_hash = alg(serialized).hexdigest()
-    return old_hash != new_hash
-
-
-# Yanked from charmhelpers
-# https://github.com/juju/charm-helpers/blob/b78107dc750644b1d868ff4a61748086783e02bd/charmhelpers/contrib/openstack/vaultlocker.py#L155C1-L184C41
-def retrieve_secret_id(url, token) -> str:
-    """Retrieve a response-wrapped secret_id from Vault.
-
-    :param url: URL to Vault Server
-    :ptype url: str
-    :param token: One shot Token to use
-    :ptype token: str
-    :returns: secret_id to use for Vault Access
-    :rtype: str
-    """
-    client = hvac.Client(url=url, token=token, adapter=hvac.adapters.Request)
-    response = client.sys.unwrap()
-    if response.status_code == 200:
-        data = response.json()
-        return data["data"]["secret_id"]
-
-
 class VaultNotReadyError(Exception):
     """Exception indicating that Vault was accessed before it was ready."""
 
-    retriable: bool = True
+    can_retry: bool = True
 
 
 class VaultInvalidAccessError(VaultNotReadyError):
     """Exception indicating that Vault cannot be accessed with the current keys."""
 
-    retriable: bool = False
+    can_retry: bool = False
 
 
 class _VaultBaseKV(dict):
@@ -118,7 +34,7 @@ class _VaultBaseKV(dict):
         self.update_config(config)
         super().__init__()
 
-    def update_config(self, new_config):
+    def update_config(self, new_config: dict):
         all_keys = new_config.keys() | self._config.keys()
         if any(new_config.get(key) != self._config.get(key) for key in all_keys):
             self._config = new_config
@@ -163,33 +79,9 @@ class _VaultBaseKV(dict):
             raise VaultInvalidAccessError("Invalid role-id or secret-id") from ex
 
     def __setitem__(self, key, value):
-        log.info("Writing data to vault")
+        log.info("Writing key=%s to vault", key)
         self._client.write(self._path, **{key: value})
         super().__setitem__(key, value)
-
-    def set(self, key, value):
-        """Alias in case a KV-like interface is preferred."""
-        self[key] = value
-
-
-class VaultUnitKV(_VaultBaseKV):
-    """A simplified interface for storing unit data in Vault.
-
-    The data is scoped to the current unit.
-
-    Keys must be strings, but data can be structured as long as it is
-    JSON-serializable.
-
-    This class can be used as a dict, or you can use `self.get` and `self.set`
-    for a more KV-like interface. When values are set, via either style, they
-    are immediately persisted to Vault. Values are also cached in memory.
-
-    Note: This class is a singleton.
-    """
-
-    def __init__(self, config: dict, unit_num: int):
-        path = f"{config['secret_backend']}/kv/unit/{unit_num}"
-        super().__init__(config, path)
 
 
 class VaultAppKV(_VaultBaseKV):
@@ -313,6 +205,7 @@ class VaultKV(ops.Object):
         self.peer_relation = peer
         self._app_kv = None
         self._kwds = kwds
+        self._unit_kv = reactive.UnitKV(charm, f"layer.{endpoint}.unitkv")
         self.requires = VaultKVRequires(charm, endpoint)
         self._stored.set_default(token=None)
         self._stored.set_default(secret_id=None)
@@ -353,6 +246,7 @@ class VaultKV(ops.Object):
             updated_secret_id = self._get_secret_id()
             if current_secret_id == updated_secret_id:
                 return
+            log.info("Updating vault config")
             self.app_kv.update_config(self.get_vault_config(**self._kwds))
         except VaultNotReadyError:
             return
@@ -363,13 +257,8 @@ class VaultKV(ops.Object):
         # backend can't be isolated or VaultAppKV won't work; see issue #2
         self.requires.request_secret_backend(backend_name, isolated=False)
 
-    def emit_changed_event(self, scope: dict, key: str):
-        """Emit event callback when key is created."""
-        self.changed.emit(scope, key)
-
     def get_vault_config(self, **kwds):
-        """
-        Get the config data needed for this application to access Vault.
+        """Get the config data needed for this application to access Vault.
 
         This is only needed if you're using another application, such as
         VaultLocker, using the secrets backend provided by this layer.
@@ -392,7 +281,7 @@ class VaultKV(ops.Object):
         `VaultNotReady`.
 
         [UnitData]: https://charm-helpers.readthedocs.io/en/latest/api/charmhelpers.core.unitdata.html
-        """  # noqa
+        """
         vault = self.requires
         if not (vault.vault_url and vault.unit_role_id and vault.unit_token):
             raise VaultNotReadyError("vault-kv relation is missing attributes")
@@ -401,7 +290,7 @@ class VaultKV(ops.Object):
             "secret_backend": self._get_secret_backend(**kwds),
             "role_id": vault.unit_role_id,
             "secret_id": self._get_secret_id(),
-            "on_change": self.emit_changed_event,
+            "on_change": self.changed.emit,
         }
 
     def _get_secret_backend(self, backend_format: str = None, **_):
@@ -415,7 +304,7 @@ class VaultKV(ops.Object):
     def _one_shot_token(self) -> Optional[str]:
         """Determine if the current token in the relation-data is an unused one-shot token."""
         rel_token = self.requires.unit_token
-        if rel_token is None:
+        if not rel_token:
             # relation has yet to set a token, return a new invalid token
             log.info("vault-kv relation has yet to provide a one-shot token")
             return ""
@@ -425,9 +314,7 @@ class VaultKV(ops.Object):
                 # the relation-token is different from the stored-token
                 log.info("vault-kv is providing a new one-shot token (ops)")
                 return rel_token
-        elif _reactive_is_data_changed(
-            self.framework._storage._db, "layer.vault-kv.token", rel_token
-        ):
+        elif reactive.is_data_changed(self._unit_kv, "layer.vault-kv.token", rel_token):
             # If hash is different from when the charm was reactive
             log.info("vault-kv is providing a new one-shot token (reactive-upgrade)")
             return rel_token
@@ -435,7 +322,7 @@ class VaultKV(ops.Object):
     def _stored_secret_id(self):
         """Uplift reactive secret-id if the ops version is unset."""
         if self._stored.secret_id is None:
-            if old_secret_id := _reactive_secret_id(self.framework._storage._db):
+            if old_secret_id := self._unit_kv.read("layer.vault-kv.secret_id"):
                 self._stored.secret_id = old_secret_id
         return self._stored.secret_id
 
@@ -447,7 +334,7 @@ class VaultKV(ops.Object):
             # one yet
             vault_url = self.requires.vault_url
             try:
-                secret_id = retrieve_secret_id(vault_url, token)
+                secret_id = reactive.retrieve_secret_id(vault_url, token)
             except (
                 requests.exceptions.ConnectionError,
                 hvac.exceptions.VaultDown,
@@ -461,6 +348,7 @@ class VaultKV(ops.Object):
 
             # update the token in the StoredData now that its been
             # successfully used to retrieve the secret_id
+            log.info("Successfully used one_shot_token to collect token")
             self._stored.token = token
             self._stored.secret_id = secret_id
         else:
@@ -482,11 +370,11 @@ class VaultKVRequires(ops.Object):
         return self.model.relations[self.endpoint]
 
     @cached_property
-    def _all_joined_units(self) -> _UnitsView:
-        return _UnitsView(self.relations)
+    def _all_joined_units(self) -> reactive.UnitsView:
+        return reactive.UnitsView(self.relations)
 
     @property
-    def _unit_name(self):
+    def _unit_name(self) -> str:
         return f"{self.model.uuid}-{self.unit.name}"
 
     def request_secret_backend(self, name, isolated=True):
@@ -508,65 +396,57 @@ class VaultKVRequires(ops.Object):
             relation.data[self.unit]["unit_name"] = self._unit_name
 
     @property
-    def unit_role_id(self) -> str:
+    def unit_role_id(self) -> Optional[str]:
         """Retrieve the AppRole ID for this application unit or None.
 
         :returns role_id: AppRole ID for unit
-        :rtype role_id: str
         """
         for key in [self._unit_name, self.unit.name]:
             role_key = "{}_role_id".format(key)
-            value = from_json(self._all_joined_units.received.get(role_key))
-            if value:
+            if value := reactive.try_json(self._all_joined_units.received.get(role_key)):
                 return value
+        log.warning("VaultKVRequires: unit role-id not yet available.")
 
     @property
     def unit_token(self) -> Optional[str]:
         """Retrieve the one-shot token for secret_id retrieval on this unit.
 
         :returns token: Vault one-shot token for secret_id response
-        :rtype token: str
         """
         for key in [self._unit_name, self.unit.name]:
             token_key = "{}_token".format(key)
-            value = from_json(self._all_joined_units.received.get(token_key))
-            if value:
+            if value := reactive.try_json(self._all_joined_units.received.get(token_key)):
                 return value
+        log.warning("VaultKVRequires: unit token not yet available.")
 
     @property
     def all_unit_tokens(self) -> List[str]:
         """Retrieve the one-shot token(s) for secret_id retrieval on this app.
 
-        :returns token: Vault one-shot token for secret_id response
-        :rtype token: str
+        :returns token: Unique list of vault one-shot token for secret_id response
         """
         tokens = set()
         for key in [self._unit_name, self.unit.name]:
             token_key = "{}_token".format(key)
             for relation in self.relations:
                 for unit in relation.units:
-                    token = from_json(relation.data[unit].get(token_key))
-                    if token:
+                    if token := reactive.try_json(relation.data[unit].get(token_key)):
                         tokens.add(token)
-
         return list(tokens)
 
     @property
-    def vault_url(self):
+    def vault_url(self) -> Optional[str]:
         """Retrieve the URL to access Vault.
 
         :returns vault_url: URL to access vault
-        :rtype vault_url: str
         """
-        return from_json(self._all_joined_units.received.get("vault_url"))
+        return reactive.try_json(self._all_joined_units.received.get("vault_url"))
 
     @property
-    def vault_ca(self):
+    def vault_ca(self) -> Optional[str]:
         """Retrieve the CA published by Vault.
 
         :returns vault_ca: Vault CA Certificate data
-        :rtype vault_ca: str
         """
-        encoded_ca = from_json(self._all_joined_units.received.get("vault_ca"))
-        if encoded_ca:
+        if encoded_ca := reactive.try_json(self._all_joined_units.received.get("vault_ca")):
             return base64.b64decode(encoded_ca)
