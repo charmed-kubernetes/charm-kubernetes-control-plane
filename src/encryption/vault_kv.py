@@ -254,14 +254,13 @@ class VaultKV(ops.Object):
 
     def _request_vault_access(self, _: ops.RelationJoinedEvent):
         backend_name = self._get_secret_backend()
-        # backend can't be isolated or VaultAppKV won't work; see issue #2
-        self.requires.request_secret_backend(backend_name, isolated=False)
+        self.requires.request_secret_backend(backend_name)
 
     def get_vault_config(self, **kwds):
         """Get the config data needed for this application to access Vault.
 
         This is only needed if you're using another application, such as
-        VaultLocker, using the secrets backend provided by this layer.
+        VaultLocker, using the secrets backend provided by this library.
 
         Returns a dictionary containing the following keys:
 
@@ -271,16 +270,15 @@ class VaultKV(ops.Object):
         * secret_id
         * on_change
 
-        Note: This data is cached in [UnitData][] so anything with access to that
-        could access Vault as this application.
+        Note: The secret_id is stored in the charm's unit.db along with the
+        last used one-shot-token.  When the token changes, a new secret_id is
+        fetched from vault.
 
         If any of this data changes (such as the secret_id being rotated), this
-        layer will set the `layer.vault-kv.config.changed` flag.
+        layer will emit a custom event VaultKVChanged.
 
         If this is called before the Vault relation is available, it will raise
         `VaultNotReady`.
-
-        [UnitData]: https://charm-helpers.readthedocs.io/en/latest/api/charmhelpers.core.unitdata.html
         """
         vault = self.requires
         if not (vault.vault_url and vault.unit_role_id and vault.unit_token):
@@ -377,13 +375,11 @@ class VaultKVRequires(ops.Object):
     def _unit_name(self) -> str:
         return f"{self.model.uuid}-{self.unit.name}"
 
-    def request_secret_backend(self, name, isolated=True):
+    def request_secret_backend(self, name):
         """Request creation and access to a secret backend.
 
         :param name: name of secret backend to create/access
         :type name: str
-        :param isolated: enforce isolation in backend between units
-        :type isolated: bool
         """
         for relation in self.relations:
             access_address = ""
@@ -392,7 +388,7 @@ class VaultKVRequires(ops.Object):
             relation.data[self.unit]["secret_backend"] = name
             relation.data[self.unit]["access_address"] = str(access_address)
             relation.data[self.unit]["hostname"] = socket.gethostname()
-            relation.data[self.unit]["isolated"] = json.dumps(isolated)
+            relation.data[self.unit]["isolated"] = json.dumps(False)
             relation.data[self.unit]["unit_name"] = self._unit_name
 
     @property

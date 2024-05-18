@@ -166,52 +166,18 @@ class VaultLocker(ops.Object):
         vl.chmod(0o600)
         _install_alternative("vaultlocker.conf", "/etc/vaultlocker/vaultlocker.conf", vl, prio)
 
-    '''
-    These features require adjustments to the StorageMeta fields which are
+    """
+    A feature supporting auto encrypting juju storage was not ported
+    to ops because they require adjustments to the StorageMeta fields which are
     not defined by ops.StorageMeta or even documented https://juju.is/docs/sdk/storage
 
     the fields "vaultlocker-encrypt" and "vaultlocker-mountbase" fields of
     a storage metadata item are undefined and therefore this feature
-    is locked to reactive charms
+    is locked to reactive charms.
 
-    def auto_encrypt(self):
-        for id, meta in self.charm.meta.storages.items():
-            if meta.get("vaultlocker-encrypt", False):
-                mountbase = meta.get("vaultlocker-mountbase")
-                self.encrypt_storage(id, mountbase)
-
-    def encrypt_storage(self, storage_name, mountbase=None):
-        """Set up encryption for the given Juju storage entry, and optionally create
-        and mount XFS filesystems on the encrypted storage entry location(s).
-
-        Note that the storage entry **must** be defined with ``type: block``.
-
-        If ``mountbase`` is not given, the location(s) will not be formatted or
-        mounted.  When interacting with or mounting the location(s) manually, the
-        name returned by :func:`decrypted_device` called on the storage entry's
-        location should be used in place of the raw location.
-
-        If the storage is defined as ``multiple``, the individual locations
-        will be mounted at ``{mountbase}/{storage_name}/{num}`` where ``{num}``
-        is based on the storage ID.  Otherwise, the storage will mounted at
-        ``{mountbase}/{storage_name}``.
-        """
-        storage_metadata = self.charm.meta.storages[storage_name]
-        if storage_metadata.type != "block":
-            raise VaultLockerError(f"Cannot encrypt non-block storage: {storage_name}")
-        multiple = storage_metadata.multiple_range
-        for storage_meta in self.charm.meta.storages.values():
-            if not storage_meta.storage_name.startswith(storage_name + "/"):
-                continue
-            storage_location = storage_meta.location
-            if mountbase and multiple:
-                mountpoint = Path(mountbase) / storage_meta.storage_name
-            elif mountbase:
-                mountpoint = Path(mountbase) / storage_name
-            else:
-                mountpoint = None
-            self.encrypt_device(storage_location, mountpoint)
-    '''
+    the method auto_encrypt(self) originated in [layer/vaultlocker](https://github.com/juju-solutions/layer-vaultlocker/blob/2c4c16cd9e4254494d79aac1d17eacf1620d1b0f/reactive/vaultlocker.py#L41-L49)
+    the method encrypt_storage(self, ...) originated in [lib.vaultlocker](https://github.com/juju-solutions/layer-vaultlocker/blob/2c4c16cd9e4254494d79aac1d17eacf1620d1b0f/lib/charms/layer/vaultlocker.py#L32-L67)
+    """
 
     def _encrypt_device(self, device, mountpoint=None, uuid=None):
         """Set up encryption for the given block device.
