@@ -4,7 +4,7 @@ on: [pull_request]
 jobs:
   call-inclusive-naming-check:
     name: Inclusive Naming
-    uses: canonical-web-and-design/Inclusive-naming/.github/workflows/woke.yaml@main
+    uses: canonical/inclusive-naming/.github/workflows/woke.yaml@main
     with:
       fail-on-error: "true"
 
