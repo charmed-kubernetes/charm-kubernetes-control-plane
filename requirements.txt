@@ -1,23 +1,23 @@
-aiohttp>=3.7.4,<3.8.0
-charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status
-charm-lib-interface-container-runtime @ git+https://github.com/charmed-kubernetes/charm-lib-interface-container-runtime
-charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider
-charm-lib-interface-kube-dns @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kube-dns
-charm-lib-interface-kubernetes-cni @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kubernetes-cni
-charm-lib-interface-tokens @ git+https://github.com/charmed-kubernetes/charm-lib-interface-tokens
-charm-lib-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps@main
-charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@main#subdirectory=ops
-charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler
+charm-lib-contextual-status @ git+https://github.com/charmed-kubernetes/charm-lib-contextual-status@release_1.30
+charm-lib-interface-container-runtime @ git+https://github.com/charmed-kubernetes/charm-lib-interface-container-runtime@release_1.30
+charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider@release_1.30
+charm-lib-interface-kube-dns @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kube-dns@release_1.30
+charm-lib-interface-kubernetes-cni @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kubernetes-cni@release_1.30
+charm-lib-interface-tokens @ git+https://github.com/charmed-kubernetes/charm-lib-interface-tokens@release_1.30
+charm-lib-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps@release_1.30
+charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@release_1.30#subdirectory=ops
+charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@release_1.30
+interface_hacluster @ git+https://github.com/charmed-kubernetes/charm-interface-hacluster@release_1.30
+ops.interface_kube_control @ git+https://github.com/charmed-kubernetes/interface-kube-control@release_1.30#subdirectory=ops
+ops.interface_tls_certificates @ git+https://github.com/charmed-kubernetes/interface-tls-certificates@release_1.30#subdirectory=ops
+ops.interface_aws @ git+https://github.com/charmed-kubernetes/interface-aws-integration@release_1.30#subdirectory=ops
+ops.interface_gcp @ git+https://github.com/charmed-kubernetes/interface-gcp-integration@release_1.30#subdirectory=ops
+ops.interface_azure @ git+https://github.com/charmed-kubernetes/interface-azure-integration@release_1.30#subdirectory=ops
+aiohttp == 3.7.4
 cosl == 0.0.7
-gunicorn >= 20.0.0,<21.0.0
-interface_hacluster @ git+https://github.com/charmed-kubernetes/charm-interface-hacluster
-jinja2
-loadbalancer_interface
-ops >= 2.2.0
-ops.interface_kube_control @ git+https://github.com/charmed-kubernetes/interface-kube-control@main#subdirectory=ops
-ops.interface_tls_certificates @ git+https://github.com/charmed-kubernetes/interface-tls-certificates@main#subdirectory=ops
-ops.interface_aws @ git+https://github.com/charmed-kubernetes/interface-aws-integration@main#subdirectory=ops
-ops.interface_gcp @ git+https://github.com/charmed-kubernetes/interface-gcp-integration@main#subdirectory=ops
-ops.interface_azure @ git+https://github.com/charmed-kubernetes/interface-azure-integration@main#subdirectory=ops
-pydantic < 2
-tenacity
+gunicorn == 20.1.0
+jinja2 == 3.1.3
+loadbalancer_interface == 1.2.0
+ops == 2.12.0
+pydantic == 1.10.15
+tenacity == 8.2.3
