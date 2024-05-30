@@ -76,7 +76,7 @@ def test_get_vault_config_success(mock_retrieve_secret_id, vault_kv, backend_for
         mock_retrieve_secret_id.assert_called_once_with(
             vault_kv_ifc.vault_url, vault_kv_ifc.unit_token
         )
-        assert vault_kv._stored.token == "some-secret-token-value"
+        assert vault_kv._stored.token_hash == "502d4af9f5d1e89c42c20de9d3916db9"
         assert vault_kv._stored.secret_id == "secret-from-token-value"
         assert vault_config == {
             "vault_url": vault_kv_ifc.vault_url,
@@ -94,12 +94,12 @@ def test_get_vault_config_fails_get_secret_id(mock_retrieve_secret_id, vault_kv)
     successful retrieval using the one-time token from `secret_id`
     """
     mock_retrieve_secret_id.side_effect = hvac.exceptions.VaultDown()
-    vault_kv._stored.token = "unchanged"
+    vault_kv._stored.token_hash = "unchanged"
     vault_kv_ifc = vault_kv.requires
     with pytest.raises(VaultNotReadyError):
         vault_kv.get_vault_config()
 
-    assert vault_kv._stored.token == "unchanged"
+    assert vault_kv._stored.token_hash == "unchanged"
     mock_retrieve_secret_id.assert_called_once_with(
         vault_kv_ifc.vault_url, vault_kv_ifc.unit_token
     )
