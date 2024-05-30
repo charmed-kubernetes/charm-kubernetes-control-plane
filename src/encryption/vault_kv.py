@@ -27,6 +27,12 @@ class VaultInvalidAccessError(VaultNotReadyError):
     can_retry: bool = False
 
 
+def _hash_value(value: str) -> str:
+    """Hash the value -- a hash can be used in comparison to determine changes."""
+    serialized = json.dumps(value, sort_keys=True).encode("utf8")
+    return hashlib.md5(serialized).hexdigest()
+
+
 class _VaultBaseKV(dict):
     def __init__(self, config, path):
         self._config = {}
@@ -118,8 +124,7 @@ class VaultAppKV(_VaultBaseKV):
             self._rehash(key)
 
     def _rehash(self, key):
-        serialized = json.dumps(self[key], sort_keys=True).encode("utf8")
-        self._new_hashes[key] = hashlib.md5(serialized).hexdigest()
+        self._new_hashes[key] = _hash_value(self[key])
 
     def __setitem__(self, key, value):
         """Set value in app data."""
@@ -207,7 +212,7 @@ class VaultKV(ops.Object):
         self._kwds = kwds
         self._unit_kv = reactive.UnitKV(charm, f"layer.{endpoint}.unitkv")
         self.requires = VaultKVRequires(charm, endpoint)
-        self._stored.set_default(token=None)
+        self._stored.set_default(token_hash=None)
         self._stored.set_default(secret_id=None)
 
         events = charm.on[endpoint]
@@ -225,8 +230,14 @@ class VaultKV(ops.Object):
         self._app_kv.notify()
         return self._app_kv
 
-    def _on_commit(self, _: ops.CommitEvent):
-        """At hook end, ensure the app hash is consistent in VaultKV."""
+    def _on_commit(self, e: ops.CommitEvent):
+        """At hook end, ensure the app hash is consistent in VaultKV.
+
+        By registering the on.commit event, we robbed this object of
+        its natural call to save its own stored state during that event.
+        We just need to call the method here to ensure the data is saved.
+        """
+        self._stored._data.on_commit(e)
         try:
             app_kv = self.app_kv
             if app_kv.any_changed():
@@ -299,28 +310,34 @@ class VaultKV(ops.Object):
         fmt = backend_format if backend_format else SECRETS_BACKEND_FORMAT
         return fmt.format(**variables)
 
-    def _one_shot_token(self) -> Optional[str]:
+    def _one_shot_token(self) -> str:
         """Determine if the current token in the relation-data is an unused one-shot token."""
         rel_token = self.requires.unit_token
         if not rel_token:
             # relation has yet to set a token, return a new invalid token
             log.info("vault-kv relation has yet to provide a one-shot token")
             return ""
-        elif self._stored.token is not None:
-            # stored token has been set, compare with the relation token
-            if self._stored.token != rel_token:
-                # the relation-token is different from the stored-token
-                log.info("vault-kv is providing a new one-shot token (ops)")
-                return rel_token
-        elif reactive.is_data_changed(self._unit_kv, "layer.vault-kv.token", rel_token):
-            # If hash is different from when the charm was reactive
-            log.info("vault-kv is providing a new one-shot token (reactive-upgrade)")
-            return rel_token
+        if self._stored_token_hash() == _hash_value(rel_token):
+            # relation token hash matches the last stored token hash
+            log.info("vault-kv relation token hash matches the stored hash")
+            return ""
+        # the relation-token is different from the stored-token
+        log.info("vault-kv is providing a new one-shot token")
+        return rel_token
+
+    def _stored_token_hash(self):
+        """Uplift reactive token hash if the ops version is unset."""
+        if self._stored.token_hash is None:
+            if old_token_hash := self._unit_kv.read("reactive.data_changed.layer.vault-kv.token"):
+                log.info("vault-kv uplifts token hash from reactive to ops")
+                self._stored.token_hash = old_token_hash
+        return self._stored.token_hash
 
     def _stored_secret_id(self):
         """Uplift reactive secret-id if the ops version is unset."""
         if self._stored.secret_id is None:
             if old_secret_id := self._unit_kv.read("layer.vault-kv.secret_id"):
+                log.info("vault-kv uplifts secret_id from reactive to ops")
                 self._stored.secret_id = old_secret_id
         return self._stored.secret_id
 
@@ -347,7 +364,7 @@ class VaultKV(ops.Object):
             # update the token in the StoredData now that its been
             # successfully used to retrieve the secret_id
             log.info("Successfully used one_shot_token to collect token")
-            self._stored.token = token
+            self._stored.token_hash = _hash_value(token)
             self._stored.secret_id = secret_id
         else:
             secret_id = self._stored_secret_id()
