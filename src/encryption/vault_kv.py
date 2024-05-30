@@ -299,28 +299,34 @@ class VaultKV(ops.Object):
         fmt = backend_format if backend_format else SECRETS_BACKEND_FORMAT
         return fmt.format(**variables)
 
-    def _one_shot_token(self) -> Optional[str]:
+    def _one_shot_token(self) -> str:
         """Determine if the current token in the relation-data is an unused one-shot token."""
         rel_token = self.requires.unit_token
         if not rel_token:
             # relation has yet to set a token, return a new invalid token
             log.info("vault-kv relation has yet to provide a one-shot token")
             return ""
-        elif self._stored.token is not None:
-            # stored token has been set, compare with the relation token
-            if self._stored.token != rel_token:
-                # the relation-token is different from the stored-token
-                log.info("vault-kv is providing a new one-shot token (ops)")
-                return rel_token
-        elif reactive.is_data_changed(self._unit_kv, "layer.vault-kv.token", rel_token):
-            # If hash is different from when the charm was reactive
-            log.info("vault-kv is providing a new one-shot token (reactive-upgrade)")
-            return rel_token
+        if self._stored_token() == rel_token:
+            # relation token matches the last stored token
+            log.info("vault-kv relation token matches stored one-shot token")
+            return ""
+        # the relation-token is different from the stored-token
+        log.info("vault-kv is providing a new one-shot token")
+        return rel_token
+
+    def _stored_token(self):
+        """Uplift reactive token if the ops version is unset."""
+        if self._stored.token is None:
+            if old_token := self._unit_kv.read("layer.vault-kv.token"):
+                log.info("vault-kv uplifts token from reactive to ops")
+                self._stored.token = old_token
+        return self._stored.token
 
     def _stored_secret_id(self):
         """Uplift reactive secret-id if the ops version is unset."""
         if self._stored.secret_id is None:
             if old_secret_id := self._unit_kv.read("layer.vault-kv.secret_id"):
+                log.info("vault-kv uplifts secret_id from reactive to ops")
                 self._stored.secret_id = old_secret_id
         return self._stored.secret_id
 
