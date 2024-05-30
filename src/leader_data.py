@@ -10,4 +10,4 @@ def set(key, value):
 
 def get(key):
     cmd = ["leader-get", key]
-    return check_output(cmd).decode()
+    return check_output(cmd).decode().strip()
