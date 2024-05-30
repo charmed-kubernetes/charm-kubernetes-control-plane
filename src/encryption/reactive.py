@@ -1,4 +1,3 @@
-import hashlib
 import json
 import logging
 import sqlite3
@@ -57,22 +56,6 @@ class UnitsView:
             for unit in sorted(rel.units, key=lambda u: u.name, reverse=True):
                 combined.update(**rel.data[unit])
         return combined
-
-
-def is_data_changed(unit_kv: UnitKV, data_id: str, data: Any, hash_type: str = "md5"):
-    """Check if the given set of data has changed since stored in the .unit-state.db kv table.
-
-    That is, this is a non-destructive way to check if the data has changed.
-
-    :param str data_id: Unique identifier for this set of data.
-    :param data: JSON-serializable data.
-    :param str hash_type: Any hash algorithm supported by :mod:`hashlib`.
-    """
-    alg = getattr(hashlib, hash_type)
-    serialized = json.dumps(data, sort_keys=True).encode("utf8")
-    old_hash = unit_kv.read(f"reactive.data_changed.{data_id}")
-    new_hash = alg(serialized).hexdigest()
-    return old_hash != new_hash
 
 
 # Yanked from charmhelpers
