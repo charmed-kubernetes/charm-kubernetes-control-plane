@@ -225,8 +225,14 @@ class VaultKV(ops.Object):
         self._app_kv.notify()
         return self._app_kv
 
-    def _on_commit(self, _: ops.CommitEvent):
-        """At hook end, ensure the app hash is consistent in VaultKV."""
+    def _on_commit(self, e: ops.CommitEvent):
+        """At hook end, ensure the app hash is consistent in VaultKV.
+
+        By registering the on.commit event, we robbed this object of
+        its natural call to save its own stored state during that event.
+        We just need to call the method here to ensure the data is saved.
+        """
+        self._stored._data.on_commit(e)
         try:
             app_kv = self.app_kv
             if app_kv.any_changed():
