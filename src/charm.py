@@ -5,13 +5,13 @@
 """Charmed Machine Operator for Kubernetes Control Plane."""
 
 import functools
+import hashlib
 import logging
 import os
 import re
 import shlex
 import socket
 import subprocess
-import hashlib
 from pathlib import Path
 from subprocess import CalledProcessError
 from typing import Callable
@@ -117,7 +117,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def _hash_file(self, filename: str):
         """Hash a file using sha256."""
         hash_sha256 = hashlib.sha256()
-        with open(filename, 'rb') as f:
+        with open(filename, "rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
                 hash_sha256.update(chunk)
         return hash_sha256.hexdigest()
@@ -129,7 +129,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         files = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
 
         concat_hashes = "".join([self._hash_file(os.path.join(directory, file)) for file in files])
-        log.info(f"Hash of metrics (%s) rules files: %s", str(len(files)), concat_hashes)
+        log.info("Hash of metrics (%s) rules files: %s", str(len(files)), concat_hashes)
 
         return concat_hashes
 
@@ -150,12 +150,16 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         os.makedirs(output_directory, exist_ok=True)
 
         replace_rules = {
-            f"kubernetesControlPlane-prometheusRule.yaml": {
-                "[[- namespace -]]": "namespace=~\".+\"",
+            "kubernetesControlPlane-prometheusRule.yaml": {
+                "[[- namespace -]]": 'namespace=~".+"',
             },
         }
 
-        input_files = [f for f in os.listdir(input_directory) if os.path.isfile(os.path.join(input_directory, f))]
+        input_files = [
+            f
+            for f in os.listdir(input_directory)
+            if os.path.isfile(os.path.join(input_directory, f))
+        ]
 
         for filename in input_files:
             input_file_path = input_directory / filename
@@ -164,7 +168,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             with open(input_file_path) as input_file:
                 content = input_file.read()
 
-            log.info(f"Writing parsed file to %s", output_directory / filename)
+            log.info("Writing parsed file to %s", output_directory / filename)
 
             with open(output_file_path, "w+") as output_file:
                 try:
@@ -175,8 +179,6 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                     continue
                 finally:
                     output_file.write(content)
-
-
 
     def charm_actions(self, event: ops.ActionEvent):
         action_map = {
