@@ -147,8 +147,6 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         input_directory = Path("./src/prometheus_alert_rules")
         output_directory = Path("./src/prometheus_alert_rules_parsed")
 
-        file_name = "kubernetesControlPlane-prometheusRule.yaml"
-
         os.makedirs(output_directory, exist_ok=True)
 
         replace_rules = {
@@ -157,20 +155,26 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             },
         }
 
-        input_directory_files = [f for f in os.listdir(input_directory) if os.path.isfile(os.path.join(input_directory, f))]
-        for file in input_directory_files:
-            with open(input_directory / file) as input_file:
-                log.info(f"Writing parsed file to %s", output_directory / file)
+        input_files = [f for f in os.listdir(input_directory) if os.path.isfile(os.path.join(input_directory, f))]
+
+        for filename in input_files:
+            input_file_path = input_directory / filename
+            output_file_path = output_directory / filename
+
+            with open(input_file_path) as input_file:
                 content = input_file.read()
-                with open(output_directory / file, "w+") as output_file:
-                    try:
-                        rules = replace_rules[file]
-                        for k, v in rules.items():
-                            content = content.replace(k, v)
-                    except KeyError:
-                        continue
-                    finally:
-                        output_file.write(content)
+
+            log.info(f"Writing parsed file to %s", output_directory / filename)
+
+            with open(output_file_path, "w+") as output_file:
+                try:
+                    rules = replace_rules[filename]
+                    for k, v in rules.items():
+                        content = content.replace(k, v)
+                except KeyError:
+                    continue
+                finally:
+                    output_file.write(content)
 
 
 
