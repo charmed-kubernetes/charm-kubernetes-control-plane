@@ -79,6 +79,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                 self.on.kube_control_relation_joined,
                 self.on.kube_control_relation_changed,
                 self.on.upgrade_charm,
+                self.on._alert_manager_definitions_ready,
             ],
         )
         self.etcd = EtcdReactiveRequires(self)
@@ -106,13 +107,17 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.on.namespace_create_action,
             self.on.namespace_delete_action,
             self.on.namespace_list_action,
+            self.on._alert_manager_definitions_ready,
         ]
         for action in actions:
             self.framework.observe(action, self.charm_actions)
 
+        # First, we parse the rules files and populate the output dir.
+        self._parse_metrics_rules_files()
+
+        # Now we can get the hash of the output rules files.
         self.metrics_rules_hash = self._hash_metrics_rules_files()
 
-        self._parse_metrics_rules_files()
 
     def _hash_file(self, filename: str):
         """Hash a file using sha256."""
@@ -124,7 +129,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def _hash_metrics_rules_files(self):
         """Hash the metrics rules files to determine if they have changed."""
-        directory = "./src/prometheus_alert_rules"
+        directory = "./src/prometheus_alert_rules_parsed"
 
         files = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
 
@@ -151,7 +156,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
         replace_rules = {
             "kubernetesControlPlane-prometheusRule.yaml": {
-                "[[- namespace -]]": 'namespace=~".+"',
+                "[[- namespace -]]": 'namespace=~' + f'"{self.config["namespace"]}"',
             },
         }
 
@@ -191,6 +196,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             "namespace_create_action": actions.namespace.namespace_create,
             "namespace_delete_action": actions.namespace.namespace_delete,
             "namespace_list_action": actions.namespace.namespace_list,
+            "alert_manager_definitions_ready": self._alert_manager_definitions_ready,
         }
         return action_map[event.handle.kind](event)
 
@@ -480,6 +486,16 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         auth_webhook.create_token(
             uid=self.model.unit.name, username=cos_user, groups=[OBSERVABILITY_ROLE]
         )
+
+        self._parse_metrics_rules_files()
+
+        if self._hash_metrics_rules_files_changed():
+            self._parse_metrics_rules_files()
+            self.on.alert_manager_definitions_ready.emit()
+
+    def _alert_manager_definitions_ready(self, event):
+        """Emit the alert manager definitions ready event."""
+        pass
 
     def generate_tokens(self):
         """Generate and send tokens for units that request them."""
