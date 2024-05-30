@@ -69,6 +69,10 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self,
             relation_name="cos-agent",
             scrape_configs=self.get_scrape_jobs,
+<<<<<<< Updated upstream
+=======
+            metrics_rules_dir="./src/prometheus_alert_rules_parsed",
+>>>>>>> Stashed changes
             refresh_events=[
                 self.on.tokens_relation_joined,
                 self.on.tokens_relation_changed,
@@ -108,6 +112,72 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         for action in actions:
             self.framework.observe(action, self.charm_actions)
 
+<<<<<<< Updated upstream
+=======
+        self.metrics_rules_hash = self._hash_metrics_rules_files()
+
+        self._parse_metrics_rules_files()
+
+    def _hash_file(self, filename: str):
+        """Hash a file using sha256."""
+        hash_sha256 = hashlib.sha256()
+        with open(filename, 'rb') as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_sha256.update(chunk)
+        return hash_sha256.hexdigest()
+
+    def _hash_metrics_rules_files(self):
+        """Hash the metrics rules files to determine if they have changed."""
+        directory = "./src/prometheus_alert_rules"
+
+        files = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
+
+        concat_hashes = "".join([self._hash_file(os.path.join(directory, file)) for file in files])
+        log.info(f"Hash of metrics (%s) rules files: %s", str(len(files)), concat_hashes)
+
+        return concat_hashes
+
+    def _hash_metrics_rules_files_changed(self):
+        """Check if the metrics rules files have changed."""
+        new_hash = self._hash_metrics_rules_files()
+        if new_hash != self.metrics_rules_hash:
+            log.info("Metrics rules files have changed")
+            self.metrics_rules_hash = new_hash
+            return True
+        return False
+
+    def _parse_metrics_rules_files(self):
+        """Parse the metrics rules files."""
+        input_directory = Path("./src/prometheus_alert_rules")
+        output_directory = Path("./src/prometheus_alert_rules_parsed")
+
+        file_name = "kubernetesControlPlane-prometheusRule.yaml"
+
+        os.makedirs(output_directory, exist_ok=True)
+
+        replace_rules = {
+            f"kubernetesControlPlane-prometheusRule.yaml": {
+                "[[- namespace -]]": "namespace=~\".+\"",
+            },
+        }
+
+        input_directory_files = [f for f in os.listdir(input_directory) if os.path.isfile(os.path.join(input_directory, f))]
+        for file in input_directory_files:
+            with open(input_directory / file) as input_file:
+                log.info(f"Writing parsed file to %s", output_directory / file)
+                content = input_file.read()
+                with open(output_directory / file, "w+") as output_file:
+                    try:
+                        rules = replace_rules[file]
+                        for k, v in rules.items():
+                            content = content.replace(k, v)
+                    except KeyError:
+                        continue
+                    finally:
+                        output_file.write(content)
+
+
+>>>>>>> Stashed changes
     def charm_actions(self, event: ops.ActionEvent):
         action_map = {
             "upgrade_action": actions.upgrade.upgrade_action,
