@@ -73,8 +73,6 @@ requires:
     interface: external_cloud_provider
   vault-kv:
     interface: vault-kv
-    description: |
-      [Unimplemented]
 resources:
   cni-plugins:
     type: file
