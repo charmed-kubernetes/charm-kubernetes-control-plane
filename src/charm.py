@@ -11,6 +11,7 @@ import re
 import shlex
 import socket
 import subprocess
+import hashlib
 from pathlib import Path
 from subprocess import CalledProcessError
 from typing import Callable
@@ -69,10 +70,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self,
             relation_name="cos-agent",
             scrape_configs=self.get_scrape_jobs,
-<<<<<<< Updated upstream
-=======
             metrics_rules_dir="./src/prometheus_alert_rules_parsed",
->>>>>>> Stashed changes
             refresh_events=[
                 self.on.tokens_relation_joined,
                 self.on.tokens_relation_changed,
@@ -112,8 +110,6 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         for action in actions:
             self.framework.observe(action, self.charm_actions)
 
-<<<<<<< Updated upstream
-=======
         self.metrics_rules_hash = self._hash_metrics_rules_files()
 
         self._parse_metrics_rules_files()
@@ -177,7 +173,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                         output_file.write(content)
 
 
->>>>>>> Stashed changes
+
     def charm_actions(self, event: ops.ActionEvent):
         action_map = {
             "upgrade_action": actions.upgrade.upgrade_action,
