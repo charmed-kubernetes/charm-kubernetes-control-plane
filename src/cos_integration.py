@@ -1,11 +1,11 @@
+import hashlib
 import logging
+import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
 
-import os
 import ops
-import hashlib
-from pathlib import Path
 
 log = logging.getLogger(__name__)
 
@@ -39,7 +39,10 @@ class JobConfig:
 class AlertManagerDefinitionsReadyEvent(ops.EventBase):
     """Event emitted when alert manager definitions are ready."""
 
+
 class COSIntegrationEvents(ops.ObjectEvents):
+    """Manages COSIntegration events."""
+
     definitions_ready = ops.EventSource(AlertManagerDefinitionsReadyEvent)
 
 
@@ -52,6 +55,7 @@ class COSIntegration(ops.Object):
     Attributes:
         charm (CharmBase): Reference to the base charm instance.
     """
+
     on = COSIntegrationEvents()
     stored = ops.StoredState()
 
@@ -102,7 +106,7 @@ class COSIntegration(ops.Object):
 
         replace_rules = {
             "kubernetesControlPlane-prometheusRule.yaml": {
-                "[[- namespace -]]": 'namespace=~' + f'"{self.charm.config["namespace"]}"',
+                "[[- namespace -]]": "namespace=~" + f'"{self.charm.config["namespace"]}"',
             },
         }
 

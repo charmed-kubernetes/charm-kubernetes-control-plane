@@ -5,7 +5,6 @@
 """Charmed Machine Operator for Kubernetes Control Plane."""
 
 import functools
-import hashlib
 import logging
 import os
 import re
@@ -50,6 +49,7 @@ from ops.interface_tls_certificates import CertificatesRequires
 log = logging.getLogger(__name__)
 
 OBSERVABILITY_ROLE = "system:cos"
+
 
 class KubernetesControlPlaneCharm(ops.CharmBase):
     """Charmed Operator for Kubernetes Control Plane."""
@@ -109,7 +109,6 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         ]
         for action in actions:
             self.framework.observe(action, self.charm_actions)
-
 
     def charm_actions(self, event: ops.ActionEvent):
         action_map = {
