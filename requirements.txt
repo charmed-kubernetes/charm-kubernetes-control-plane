@@ -10,9 +10,6 @@ charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-recon
 interface_hacluster @ git+https://github.com/charmed-kubernetes/charm-interface-hacluster@release_1.29
 ops.interface_kube_control @ git+https://github.com/charmed-kubernetes/interface-kube-control@release_1.29#subdirectory=ops
 ops.interface_tls_certificates @ git+https://github.com/charmed-kubernetes/interface-tls-certificates@release_1.29#subdirectory=ops
-ops.interface_aws @ git+https://github.com/charmed-kubernetes/interface-aws-integration@release_1.29#subdirectory=ops
-ops.interface_gcp @ git+https://github.com/charmed-kubernetes/interface-gcp-integration@release_1.29#subdirectory=ops
-ops.interface_azure @ git+https://github.com/charmed-kubernetes/interface-azure-integration@release_1.29#subdirectory=ops
 aiohttp == 3.7.4
 cosl == 0.0.7
 gunicorn == 20.1.0
