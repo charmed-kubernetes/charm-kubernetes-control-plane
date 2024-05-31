@@ -2,7 +2,10 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Union
 
-from ops import CharmBase
+import os
+import ops
+import hashlib
+from pathlib import Path
 
 log = logging.getLogger(__name__)
 
@@ -33,7 +36,14 @@ class JobConfig:
     static_configs: Optional[List[Any]] = None
 
 
-class COSIntegration:
+class AlertManagerDefinitionsReadyEvent(ops.EventBase):
+    """Event emitted when alert manager definitions are ready."""
+
+class COSIntegrationEvents(ops.ObjectEvents):
+    definitions_ready = ops.EventSource(AlertManagerDefinitionsReadyEvent)
+
+
+class COSIntegration(ops.Object):
     """Utility class that handles the integration with COS for Charmed Kubernetes.
 
     This class provides methods to retrieve and configure Prometheus metrics scraping endpoints
@@ -42,14 +52,90 @@ class COSIntegration:
     Attributes:
         charm (CharmBase): Reference to the base charm instance.
     """
+    on = COSIntegrationEvents()
+    stored = ops.StoredState()
 
-    def __init__(self, charm: CharmBase) -> None:
+    def __init__(self, charm: ops.CharmBase) -> None:
         """Initialize a COSIntegration instance.
 
         Args:
-            charm (CharmBase): A charm object representing the current charm.
+            charm (ops.CharmBase): A charm object representing the current charm.
         """
+        super().__init__(charm)
         self.charm = charm
+        self.stored.set_default(metrics_rules_hash=None)
+
+    def _hash_file(self, filename: str):
+        """Hash a file using sha256."""
+        hash_sha256 = hashlib.sha256()
+        with open(filename, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_sha256.update(chunk)
+        return hash_sha256.hexdigest()
+
+    def _hash_metrics_rules_files(self):
+        """Hash the metrics rules files to determine if they have changed."""
+        directory = "./src/prometheus_alert_rules_parsed"
+
+        files = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
+
+        concat_hashes = "".join([self._hash_file(os.path.join(directory, file)) for file in files])
+        log.info("Hash of metrics (%s) rules files: %s", str(len(files)), concat_hashes)
+
+        return concat_hashes
+
+    def _hash_metrics_rules_files_changed(self):
+        """Check if the metrics rules files have changed."""
+        new_hash = self._hash_metrics_rules_files()
+        if new_hash != self.metrics_rules_hash:
+            log.info("Metrics rules files have changed")
+            self.metrics_rules_hash = new_hash
+            return True
+        return False
+
+    def _parse_metrics_rules_files(self):
+        """Parse the metrics rules files."""
+        input_directory = Path("./src/prometheus_alert_rules")
+        output_directory = Path("./src/prometheus_alert_rules_parsed")
+
+        os.makedirs(output_directory, exist_ok=True)
+
+        replace_rules = {
+            "kubernetesControlPlane-prometheusRule.yaml": {
+                "[[- namespace -]]": 'namespace=~' + f'"{self.charm.config["namespace"]}"',
+            },
+        }
+
+        input_files = [
+            f
+            for f in os.listdir(input_directory)
+            if os.path.isfile(os.path.join(input_directory, f))
+        ]
+
+        for filename in input_files:
+            input_file_path = input_directory / filename
+            output_file_path = output_directory / filename
+
+            with open(input_file_path) as input_file:
+                content = input_file.read()
+
+            log.info("Writing parsed file to %s", output_directory / filename)
+
+            with open(output_file_path, "w+") as output_file:
+                try:
+                    rules = replace_rules[filename]
+                    for k, v in rules.items():
+                        content = content.replace(k, v)
+                except KeyError:
+                    continue
+                finally:
+                    output_file.write(content)
+
+    def ensure_metrics_rules(self):
+        self._parse_metrics_rules_files()
+
+        if self._hash_metrics_rules_files_changed():
+            self.on.definitions_ready.emit()
 
     def _create_scrape_job(
         self, config: JobConfig, node_name: str, token: str, cluster_name: str

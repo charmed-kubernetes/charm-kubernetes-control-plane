@@ -51,7 +51,6 @@ log = logging.getLogger(__name__)
 
 OBSERVABILITY_ROLE = "system:cos"
 
-
 class KubernetesControlPlaneCharm(ops.CharmBase):
     """Charmed Operator for Kubernetes Control Plane."""
 
@@ -79,7 +78,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                 self.on.kube_control_relation_joined,
                 self.on.kube_control_relation_changed,
                 self.on.upgrade_charm,
-                self.on._alert_manager_definitions_ready,
+                self.cos_integration.on.definitions_ready,
             ],
         )
         self.etcd = EtcdReactiveRequires(self)
@@ -107,83 +106,11 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.on.namespace_create_action,
             self.on.namespace_delete_action,
             self.on.namespace_list_action,
-            self.on._alert_manager_definitions_ready,
+            self.on.alert_manager_definitions_ready,
         ]
         for action in actions:
             self.framework.observe(action, self.charm_actions)
 
-        # First, we parse the rules files and populate the output dir.
-        self._parse_metrics_rules_files()
-
-        # Now we can get the hash of the output rules files.
-        self.metrics_rules_hash = self._hash_metrics_rules_files()
-
-
-    def _hash_file(self, filename: str):
-        """Hash a file using sha256."""
-        hash_sha256 = hashlib.sha256()
-        with open(filename, "rb") as f:
-            for chunk in iter(lambda: f.read(4096), b""):
-                hash_sha256.update(chunk)
-        return hash_sha256.hexdigest()
-
-    def _hash_metrics_rules_files(self):
-        """Hash the metrics rules files to determine if they have changed."""
-        directory = "./src/prometheus_alert_rules_parsed"
-
-        files = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
-
-        concat_hashes = "".join([self._hash_file(os.path.join(directory, file)) for file in files])
-        log.info("Hash of metrics (%s) rules files: %s", str(len(files)), concat_hashes)
-
-        return concat_hashes
-
-    def _hash_metrics_rules_files_changed(self):
-        """Check if the metrics rules files have changed."""
-        new_hash = self._hash_metrics_rules_files()
-        if new_hash != self.metrics_rules_hash:
-            log.info("Metrics rules files have changed")
-            self.metrics_rules_hash = new_hash
-            return True
-        return False
-
-    def _parse_metrics_rules_files(self):
-        """Parse the metrics rules files."""
-        input_directory = Path("./src/prometheus_alert_rules")
-        output_directory = Path("./src/prometheus_alert_rules_parsed")
-
-        os.makedirs(output_directory, exist_ok=True)
-
-        replace_rules = {
-            "kubernetesControlPlane-prometheusRule.yaml": {
-                "[[- namespace -]]": 'namespace=~' + f'"{self.config["namespace"]}"',
-            },
-        }
-
-        input_files = [
-            f
-            for f in os.listdir(input_directory)
-            if os.path.isfile(os.path.join(input_directory, f))
-        ]
-
-        for filename in input_files:
-            input_file_path = input_directory / filename
-            output_file_path = output_directory / filename
-
-            with open(input_file_path) as input_file:
-                content = input_file.read()
-
-            log.info("Writing parsed file to %s", output_directory / filename)
-
-            with open(output_file_path, "w+") as output_file:
-                try:
-                    rules = replace_rules[filename]
-                    for k, v in rules.items():
-                        content = content.replace(k, v)
-                except KeyError:
-                    continue
-                finally:
-                    output_file.write(content)
 
     def charm_actions(self, event: ops.ActionEvent):
         action_map = {
@@ -196,7 +123,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             "namespace_create_action": actions.namespace.namespace_create,
             "namespace_delete_action": actions.namespace.namespace_delete,
             "namespace_list_action": actions.namespace.namespace_list,
-            "alert_manager_definitions_ready": self._alert_manager_definitions_ready,
+            "alert_manager_definitions_ready": self.alert_manager_definitions_ready,
         }
         return action_map[event.handle.kind](event)
 
@@ -487,13 +414,9 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             uid=self.model.unit.name, username=cos_user, groups=[OBSERVABILITY_ROLE]
         )
 
-        self._parse_metrics_rules_files()
+        self.cos_integration.ensure_metrics_rules()
 
-        if self._hash_metrics_rules_files_changed():
-            self._parse_metrics_rules_files()
-            self.on.alert_manager_definitions_ready.emit()
-
-    def _alert_manager_definitions_ready(self, event):
+    def alert_manager_definitions_ready(self, event):
         """Emit the alert manager definitions ready event."""
         pass
 
