@@ -82,7 +82,7 @@ class COSIntegration(ops.Object):
 
     def _do_hashes_match(self, a: list[hashlib._Hash], b: list[hashlib._Hash]) -> bool:
         """Check if the metrics rules files have changed."""
-        return all([one.digest() == two.digest() for one, two in zip(a, b)])
+        return all(one.digest() == two.digest() for one, two in zip(a, b))
 
     def _parse_metrics_rules_files(self):
         input_directory = Path("./src/prometheus_alert_rules")
