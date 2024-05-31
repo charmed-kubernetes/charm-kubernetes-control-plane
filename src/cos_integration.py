@@ -61,7 +61,7 @@ class COSIntegration(ops.Object):
         Args:
             charm (ops.CharmBase): A charm object representing the current charm.
         """
-        super().__init__(charm)
+        super().__init__(charm, key=None)
         self.charm = charm
         self.stored.set_default(metrics_rules_hash=None)
 
@@ -87,7 +87,7 @@ class COSIntegration(ops.Object):
     def _hash_metrics_rules_files_changed(self):
         """Check if the metrics rules files have changed."""
         new_hash = self._hash_metrics_rules_files()
-        if new_hash != self.metrics_rules_hash:
+        if new_hash != self.stored.metrics_rules_hash:
             log.info("Metrics rules files have changed")
             self.metrics_rules_hash = new_hash
             return True

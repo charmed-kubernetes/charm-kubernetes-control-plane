@@ -106,7 +106,6 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.on.namespace_create_action,
             self.on.namespace_delete_action,
             self.on.namespace_list_action,
-            self.on.alert_manager_definitions_ready,
         ]
         for action in actions:
             self.framework.observe(action, self.charm_actions)
@@ -123,7 +122,6 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             "namespace_create_action": actions.namespace.namespace_create,
             "namespace_delete_action": actions.namespace.namespace_delete,
             "namespace_list_action": actions.namespace.namespace_list,
-            "alert_manager_definitions_ready": self.alert_manager_definitions_ready,
         }
         return action_map[event.handle.kind](event)
 
@@ -415,10 +413,6 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         )
 
         self.cos_integration.ensure_metrics_rules()
-
-    def alert_manager_definitions_ready(self, event):
-        """Emit the alert manager definitions ready event."""
-        pass
 
     def generate_tokens(self):
         """Generate and send tokens for units that request them."""
