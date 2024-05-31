@@ -1,6 +1,5 @@
 import hashlib
 import logging
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
@@ -10,7 +9,8 @@ import ops
 log = logging.getLogger(__name__)
 
 OBSERVABILITY_ROLE = "system:cos"
-
+METRICS_SOURCE_DIR = Path("src/prometheus_alert_rules")
+METRICS_PARSED_DIR = Path("src/prometheus_alert_rules_parsed")
 
 @dataclass
 class JobConfig:
@@ -69,40 +69,30 @@ class COSIntegration(ops.Object):
         self.charm = charm
         self.stored.set_default(metrics_rules_hash=None)
 
-    def _hash_file(self, filename: str):
+    def _hash_file(self, path: Path) -> str:
         """Hash a file using sha256."""
-        hash_sha256 = hashlib.sha256()
-        with open(filename, "rb") as f:
-            for chunk in iter(lambda: f.read(4096), b""):
-                hash_sha256.update(chunk)
-        return hash_sha256.hexdigest()
+        return hashlib.sha256(path.read_bytes()).hexdigest()
 
-    def _hash_metrics_rules_files(self):
+
+    def _hash_files(self, path: Path, glob: str) -> str:
         """Hash the metrics rules files to determine if they have changed."""
-        directory = "./src/prometheus_alert_rules_parsed"
+        return "".join([self._hash_file(f) for f in path.glob(glob)])
 
-        files = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
-
-        concat_hashes = "".join([self._hash_file(os.path.join(directory, file)) for file in files])
-        log.info("Hash of metrics (%s) rules files: %s", str(len(files)), concat_hashes)
-
-        return concat_hashes
-
-    def _hash_metrics_rules_files_changed(self):
+    def _do_file_hashes_match(self) -> bool:
         """Check if the metrics rules files have changed."""
-        new_hash = self._hash_metrics_rules_files()
-        if new_hash != self.stored.metrics_rules_hash:
-            log.info("Metrics rules files have changed")
-            self.metrics_rules_hash = new_hash
-            return True
-        return False
+
+        old_hash = self._hash_files(METRICS_SOURCE_DIR, "*.yaml")
+        new_hash = self._hash_files(METRICS_PARSED_DIR, "*.yaml")
+
+        return old_hash == new_hash
 
     def _parse_metrics_rules_files(self):
         """Parse the metrics rules files."""
+
         input_directory = Path("./src/prometheus_alert_rules")
         output_directory = Path("./src/prometheus_alert_rules_parsed")
 
-        os.makedirs(output_directory, exist_ok=True)
+        output_directory.mkdir(exist_ok=True)
 
         replace_rules = {
             "kubernetesControlPlane-prometheusRule.yaml": {
@@ -110,35 +100,25 @@ class COSIntegration(ops.Object):
             },
         }
 
-        input_files = [
-            f
-            for f in os.listdir(input_directory)
-            if os.path.isfile(os.path.join(input_directory, f))
-        ]
+        for f in input_directory.glob("*.yaml"):
+            output_file_path = output_directory / f.name
 
-        for filename in input_files:
-            input_file_path = input_directory / filename
-            output_file_path = output_directory / filename
+            content = f.read_text()
 
-            with open(input_file_path) as input_file:
-                content = input_file.read()
+            rules = replace_rules[f.name]
+            for k, v in replace_rules.get(f.name, {}).items():
+                content = content.replace(k, v)
 
-            log.info("Writing parsed file to %s", output_directory / filename)
-
-            with open(output_file_path, "w+") as output_file:
-                try:
-                    rules = replace_rules[filename]
-                    for k, v in rules.items():
-                        content = content.replace(k, v)
-                except KeyError:
-                    continue
-                finally:
-                    output_file.write(content)
+            output_file_path.write_text(content)
 
     def ensure_metrics_rules(self):
         self._parse_metrics_rules_files()
 
-        if self._hash_metrics_rules_files_changed():
+        # 1. Hash the old files in parsed folder (sha256 object, not hexstring)
+        # 2. Write the metrics rules files again with _parse_metrics_rules_files() (sha256_object, not hexstring)
+        # 3. If they are different, emit
+
+        if not self._do_file_hashes_match():
             self.on.definitions_ready.emit()
 
     def _create_scrape_job(
