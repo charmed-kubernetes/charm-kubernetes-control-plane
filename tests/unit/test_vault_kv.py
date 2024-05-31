@@ -13,12 +13,13 @@ from encryption.vault_kv import VaultNotReadyError
 
 @pytest.fixture
 def harness():
-    harness = ops.testing.Harness(KubernetesControlPlaneCharm)
-    try:
-        harness.add_network("10.0.0.10", endpoint="vault-kv")
-        yield harness
-    finally:
-        harness.cleanup()
+    with mock.patch.object(KubernetesControlPlaneCharm, "reconcile"):
+        harness = ops.testing.Harness(KubernetesControlPlaneCharm)
+        try:
+            harness.add_network("10.0.0.10", endpoint="vault-kv")
+            yield harness
+        finally:
+            harness.cleanup()
 
 
 @pytest.fixture(autouse=True)
