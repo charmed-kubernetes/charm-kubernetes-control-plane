@@ -1,3 +1,38 @@
+cis-benchmark:
+  description: |-
+    Run the CIS Kubernetes Benchmark against snap-based components.
+  params:
+    apply:
+      type: string
+      default": none
+      description: |-
+        Apply remedies to address benchmark failures. The default, 'none',
+        will not attempt to fix any reported failures. Set to 'conservative'
+        to resolve simple failures. Set to 'dangerous' to attempt to resolve
+        all failures.
+
+        Note: Applying any remediation may result in an unusable cluster.
+    config:
+      type: string
+      default: https://github.com/charmed-kubernetes/kube-bench-config/archive/cis-1.23.zip#sha1=3cda2fc68b4ca36f69f5913bfc0b02576e7a3b3d
+      description: |-
+        Archive containing configuration files to use when running kube-bench.
+        The default value is known to be compatible with snap components. When
+        using a custom URL, append '#<hash_type>=<checksum>' to verify the
+        archive integrity when downloaded.
+    release:
+      type: string
+      default: https://github.com/aquasecurity/kube-bench/releases/download/v0.6.8/kube-bench_0.6.8_linux_amd64.tar.gz#sha256=5f9c5231949bd022a6993f5297cc05bb80a1b7c36a43cefed0a8c8af26778863
+      description: |-
+        Archive containing the 'kube-bench' binary to run. The default value
+        points to a stable upstream release. When using a custom URL, append
+        '#<hash_type>=<checksum>' to verify the archive integrity when
+        downloaded.
+
+        This may also be set to the special keyword 'upstream'. In this case,
+        the action will compile and use a local kube-bench binary built from
+        the default branch of the upstream repository:
+          https://github.com/aquasecurity/kube-bench
 get-kubeconfig:
   description: Retrieve Kubernetes cluster config, including credentials
 upgrade:
