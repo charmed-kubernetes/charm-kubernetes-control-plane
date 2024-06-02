@@ -15,6 +15,7 @@ from pathlib import Path
 from subprocess import CalledProcessError
 from typing import Callable
 
+import actions.csi_benchmark
 import actions.general
 import actions.namespace
 import actions.upgrade
@@ -92,9 +93,10 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.external_cloud_provider = ExternalCloudProvider(self, "external-cloud-provider")
         self.tokens = TokensProvider(self, endpoint="tokens")
         self.encryption_at_rest = EncryptionAtRest(self)
+        self.cis_benchmark = actions.csi_benchmark.CSIBenchmark(self)
 
         # register charm actions
-        actions = [
+        action_events = [
             self.on.upgrade_action,
             self.on.get_kubeconfig_action,
             self.on.apply_manifest_action,
@@ -105,7 +107,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self.on.namespace_delete_action,
             self.on.namespace_list_action,
         ]
-        for action in actions:
+        for action in action_events:
             self.framework.observe(action, self.charm_actions)
 
         self.reconciler = Reconciler(self, self.reconcile)
@@ -137,6 +139,11 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
         return True
 
+    def service_extra_args(self, service_name, config_key) -> str:
+        extra_args = kubernetes_snaps.parse_extra_args(self.model.config[config_key])
+        args = self.cis_benchmark.craft_extra_args(service_name, extra_args)
+        return " ".join(f"{k}={v}" for k, v in args.items())
+
     def configure_apiserver(self):
         status.add(ops.MaintenanceStatus("Configuring API Server"))
         kubernetes_snaps.configure_apiserver(
@@ -147,7 +154,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             authorization_mode=self.model.config["authorization-mode"],
             cluster_cidr=self.cni.cidr,
             etcd_connection_string=self.etcd.get_connection_string(),
-            extra_args_config=self.model.config["api-extra-args"],
+            extra_args_config=self.service_extra_args("kube-apiserver", "api-extra-args"),
             privileged=self.model.config["allow-privileged"],
             service_cidr=self.model.config["service-cidr"],
             external_cloud_provider=self.external_cloud_provider,
@@ -186,7 +193,9 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         kubernetes_snaps.configure_controller_manager(
             cluster_cidr=self.cni.cidr,
             cluster_name=self.get_cluster_name(),
-            extra_args_config=self.model.config["controller-manager-extra-args"],
+            extra_args_config=self.service_extra_args(
+                "kube-controller-manager", "controller-manager-extra-args"
+            ),
             kubeconfig="/root/cdk/kubecontrollermanagerconfig",
             service_cidr=self.model.config["service-cidr"],
             external_cloud_provider=self.external_cloud_provider,
@@ -248,7 +257,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         status.add(ops.MaintenanceStatus("Configuring Kube Proxy"))
         kubernetes_snaps.configure_kube_proxy(
             cluster_cidr=self.cni.cidr,
-            extra_args_config=self.model.config["proxy-extra-args"],
+            extra_args_config=self.service_extra_args("kube-proxy", "proxy-extra-args"),
             extra_config=yaml.safe_load(self.model.config["proxy-extra-config"]),
             kubeconfig="/root/cdk/kubeproxyconfig",
             external_cloud_provider=self.external_cloud_provider,
@@ -260,7 +269,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             container_runtime_endpoint=self.container_runtime.socket,
             dns_domain=self.get_dns_domain(),
             dns_ip=self.get_dns_address(),
-            extra_args_config=self.model.config["kubelet-extra-args"],
+            extra_args_config=self.service_extra_args("kubelet", "kubelet-extra-args"),
             extra_config=yaml.safe_load(self.model.config["kubelet-extra-config"]),
             external_cloud_provider=self.external_cloud_provider,
             kubeconfig="/root/cdk/kubeconfig",
@@ -309,7 +318,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def configure_scheduler(self):
         status.add(ops.MaintenanceStatus("Configuring Scheduler"))
         kubernetes_snaps.configure_scheduler(
-            extra_args_config=self.model.config["scheduler-extra-args"],
+            extra_args_config=self.service_extra_args("kube-scheduler", "scheduler-extra-args"),
             kubeconfig="/root/cdk/kubeschedulerconfig",
         )
 
