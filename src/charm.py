@@ -161,10 +161,18 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         auth_webhook.configure(
             charm_dir=self.charm_dir,
             custom_authn_endpoint=self.model.config["authn-webhook-endpoint"],
-            # TODO: aws iam, keystone
-            # aws_iam_endpoint=???,
-            # keystone_endpoint=???
         )
+
+    def warn_keystone_management(self):
+        relation = self.model.relations.get("keystone-credentials")
+        if relation and any(r.units for r in relation):
+            log.warning(
+                "------------------------------------------------------------\n"
+                "Keystone credential relation is no longer managed\n"
+                "Please remove the relation and manage keystone manually\n"
+                "Run `juju remove-relation kubernetes-control-plane:keystone-credentials keystone`"
+            )
+            status.add(ops.BlockedStatus("Keystone credential relation is no longer managed"))
 
     @status.on_error(ops.WaitingStatus("Waiting for container runtime"))
     def configure_container_runtime(self):
@@ -510,6 +518,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.write_etcd_client_credentials()
         self.write_service_account_key()
         self.configure_auth_webhook()
+        self.warn_keystone_management()
         self.configure_loadbalancers()
         if self.api_dependencies_ready():
             self.encryption_at_rest.prepare()

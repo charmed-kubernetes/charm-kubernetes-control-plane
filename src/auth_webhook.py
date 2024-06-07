@@ -36,11 +36,38 @@ class Secret:
     password: str
 
 
-def configure(
-    charm_dir, aws_iam_endpoint=None, custom_authn_endpoint=None, keystone_endpoint=None
-):
+def _uplift_keystone_endpoint() -> str:
+    """Uplift the keystone auth service from a cdk-addons installation."""
+    try:
+        keystone_auth_service = kubectl_get(
+            "service", "-n", "kube-system", "k8s-keystone-auth-service"
+        )
+    except CalledProcessError:
+        log.info("No k8s-keystone-auth-service to uplift")
+        return None
+    labels = keystone_auth_service.get("metadata", {}).get("labels", {})
+    if labels.get("cdk-addons") != "true":
+        log.info("No cdk-addons based k8s-keystone-auth-service to uplift")
+        return None
+    if not (spec := keystone_auth_service.get("spec")):
+        log.error("No spec found for k8s-keystone-auth-service")
+        return None
+    cluster_ip, port = spec.get("clusterIP"), spec.get("ports")[0].get("port")
+    if not cluster_ip or not port:
+        log.error("No clusterIP or port found for k8s-keystone-auth-service")
+        return None
+    return f"https://{cluster_ip}:{port}/webhook"
+
+
+def _uplift_aws_iam_endpoint() -> str:
+    return None
+
+
+def configure(charm_dir, custom_authn_endpoint=None):
     """Render auth webhook templates and start the related service."""
     status.add(MaintenanceStatus("Configuring auth webhook"))
+    keystone_endpoint = _uplift_keystone_endpoint()
+    aws_iam_endpoint = _uplift_aws_iam_endpoint()
 
     # Set the number of gunicorn workers based on our core count. (2*cores)+1 is
     # recommended: https://docs.gunicorn.org/en/stable/design.html#how-many-workers
