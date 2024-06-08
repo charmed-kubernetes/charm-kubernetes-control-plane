@@ -23,7 +23,6 @@ import auth_webhook
 import charms.contextual_status as status
 import leader_data
 import ops
-import tenacity
 import yaml
 from cdk_addons import CdkAddons
 from charms import kubernetes_snaps
@@ -321,7 +320,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             kubeconfig="/root/cdk/kubeschedulerconfig",
         )
 
-    @status.on_error(ops.WaitingStatus("Waiting for Auth Tokens"), tenacity.RetryError)
+    @status.on_error(ops.WaitingStatus("Waiting for Auth Tokens"), CalledProcessError)
     def create_kubeconfigs(self):
         status.add(ops.MaintenanceStatus("Creating kubeconfigs"))
         ca = self.certificates.ca
@@ -484,7 +483,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                 log.info("COS token or cluster name not yet available.")
                 return []
             return self.cos_integration.get_metrics_endpoints(node_name, token, cluster_name)
-        except (CalledProcessError, tenacity.RetryError):
+        except CalledProcessError:
             log.info("Failed to retrieve COS token.")
             return []
 

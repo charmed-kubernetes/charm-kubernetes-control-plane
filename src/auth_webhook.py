@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import random
@@ -43,8 +42,8 @@ def _uplift_keystone_endpoint() -> str:
         keystone_auth_service = kubectl_get(
             "service", "-n", "kube-system", "k8s-keystone-auth-service", "--ignore-not-found=true"
         )
-    except json.JSONDecodeError:
-        log.info("No k8s-keystone-auth-service to uplift")
+    except (FileNotFoundError, CalledProcessError) as e:
+        log.info("No k8s-keystone-auth-service to uplift: error %s", e)
         return None
     labels = keystone_auth_service.get("metadata", {}).get("labels", {})
     if labels.get("cdk-addons") != "true":
