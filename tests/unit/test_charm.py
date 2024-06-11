@@ -4,6 +4,7 @@
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
 import json
+from pathlib import Path
 from unittest.mock import call, patch
 
 import ops
@@ -145,7 +146,7 @@ def test_active(
     assert harness.model.unit.status == ActiveStatus("Ready")
 
     auth_webhook_configure.assert_called_once_with(
-        charm_dir=harness.charm.charm_dir, custom_authn_endpoint=""
+        charm_dir=harness.charm.charm_dir, custom_authn_endpoint="", custom_authz_config_file=""
     )
     configure_apiserver.assert_called_once_with(
         advertise_address="10.0.0.10",
@@ -159,6 +160,7 @@ def test_active(
         privileged="auto",
         service_cidr="10.152.183.0/24",
         external_cloud_provider=harness.charm.external_cloud_provider,
+        authz_webhook_conf_file=Path("/root/cdk/auth-webhook/authz-webhook-conf.yaml"),
     )
     configure_apiserver_kubelet_api_admin.assert_called_once_with()
     configure_controller_manager.assert_called_once_with(
