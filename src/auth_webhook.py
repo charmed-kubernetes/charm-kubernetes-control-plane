@@ -6,6 +6,7 @@ import string
 import tempfile
 from base64 import b64decode, b64encode
 from dataclasses import dataclass
+from pathlib import Path
 from subprocess import CalledProcessError, check_call, check_output
 from typing import Mapping
 
@@ -19,6 +20,7 @@ auth_secret_ns = "kube-system"
 auth_secret_type = "juju.is/token-auth"
 auth_webhook_root = "/root/cdk/auth-webhook"
 auth_webhook_conf = os.path.join(auth_webhook_root, "auth-webhook-conf.yaml")
+authz_webhook_conf = Path(auth_webhook_root) / "authz-webhook-conf.yaml"
 auth_webhook_exe = os.path.join(auth_webhook_root, "auth-webhook.py")
 # wokeignore:rule=master
 auth_webhook_svc_name = "cdk.master.auth-webhook"
@@ -36,11 +38,39 @@ class Secret:
     password: str
 
 
-def configure(
-    charm_dir, aws_iam_endpoint=None, custom_authn_endpoint=None, keystone_endpoint=None
-):
+def _uplift_keystone_endpoint() -> str:
+    """Uplift the keystone auth service from a cdk-addons installation."""
+    try:
+        keystone_auth_service = kubectl_get(
+            "service", "-n", "kube-system", "k8s-keystone-auth-service", "--ignore-not-found=true"
+        )
+    except (FileNotFoundError, CalledProcessError) as e:
+        log.info("No k8s-keystone-auth-service to uplift: error %s", e)
+        return None
+    labels = keystone_auth_service.get("metadata", {}).get("labels", {})
+    if labels.get("cdk-addons") != "true":
+        log.info("No cdk-addons based k8s-keystone-auth-service to uplift")
+        return None
+    if not (spec := keystone_auth_service.get("spec")):
+        log.error("No spec found for k8s-keystone-auth-service")
+        return None
+    cluster_ip, port = spec.get("clusterIP"), spec.get("ports")[0].get("port")
+    if not cluster_ip or not port:
+        log.error("No clusterIP or port found for k8s-keystone-auth-service")
+        return None
+    return f"https://{cluster_ip}:{port}/webhook"
+
+
+def _uplift_aws_iam_endpoint() -> str:
+    log.warning("TODO: AWS IAM auth is not yet supported for uplift")
+    return None
+
+
+def configure(charm_dir, custom_authn_endpoint=None, custom_authz_config_file=None):
     """Render auth webhook templates and start the related service."""
     status.add(MaintenanceStatus("Configuring auth webhook"))
+    keystone_endpoint = _uplift_keystone_endpoint()
+    aws_iam_endpoint = _uplift_aws_iam_endpoint()
 
     # Set the number of gunicorn workers based on our core count. (2*cores)+1 is
     # recommended: https://docs.gunicorn.org/en/stable/design.html#how-many-workers
@@ -79,6 +109,8 @@ def configure(
     render("auth-webhook.logrotate", "/etc/logrotate.d/auth-webhook", context)
     render("auth-webhook.service", auth_webhook_svc, context)
     restart()
+
+    authz_webhook_conf.write_text(custom_authz_config_file or "")
 
 
 def delete_token(secret_id: str):
