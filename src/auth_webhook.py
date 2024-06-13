@@ -62,6 +62,7 @@ def _uplift_keystone_endpoint() -> str:
 
 
 def _uplift_aws_iam_endpoint() -> str:
+    log.warning("TODO: AWS IAM auth is not yet supported for uplift")
     return None
 
 
