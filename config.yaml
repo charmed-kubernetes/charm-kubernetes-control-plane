@@ -83,6 +83,13 @@ options:
     description: |
       Comma separated authorization modes. Allowed values are
       "RBAC", "Node", "Webhook", "ABAC", "AlwaysDeny" and "AlwaysAllow".
+  authorization-webhook-config-file:
+    type: string
+    default: ""
+    description: |
+      Authorization webhook config passed to kube-apiserver via --authorization-webhook-config-file.
+      For more info, please refer to the upstream documentation at
+      https://kubernetes.io/docs/reference/access-authn-authz/webhook/
   channel:
     type: string
     default: "1.29/stable"
