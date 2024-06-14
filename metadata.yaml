@@ -46,6 +46,8 @@ requires:
     interface: gcp-integration
   azure:
     interface: azure-integration
+  keystone-credentials:
+    interface: keystone-credentials
   certificates:
     interface: tls-certificates
   dns-provider:

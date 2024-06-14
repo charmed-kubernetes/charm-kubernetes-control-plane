@@ -1,8 +1,9 @@
 import json
 import logging
+from pathlib import Path
 from subprocess import CalledProcessError, check_output
 
-from tenacity import retry, stop_after_delay, wait_exponential
+import tenacity
 
 log = logging.getLogger(__name__)
 
@@ -12,17 +13,55 @@ def get_service_ip(name, namespace):
     return service.get("spec", {}).get("clusterIP")
 
 
-@retry(stop=stop_after_delay(60), wait=wait_exponential())
-def kubectl(*args, external=False):
+def kubectl_get(*args: str, **kwargs) -> dict:
+    """Run a kubectl get command with json.
+
+    By default, this function uses the root kubeconfig that points to the local apiserver.
+    Setting the 'external' keyword-argument to 'True' will use the ubuntu config which points to
+    the external cluster endpoint.
+
+    Args:
+        args (str): arguments to pass to kubectl get.
+        kwargs    : flags passed to kubectl().
+
+    Returns:
+        dict: A mapping of the get response.
+
+    Raises:
+        json.JSONDecodeError: If the output is not valid json.
+    """
+    output = kubectl("get", "-o", "json", *args, **kwargs)
+    return json.loads(output) if output else {}
+
+
+@tenacity.retry(
+    retry=tenacity.retry_if_exception_type(CalledProcessError),
+    reraise=True,
+    stop=tenacity.stop_after_delay(60),
+    wait=tenacity.wait_exponential(),
+    before=tenacity.before_log(log, logging.WARNING),
+)
+def kubectl(*args: str, external=False):
     """Run a kubectl cli command with a config file.
 
     By default, this function uses the root kubeconfig that points to the local apiserver.
     Setting the 'external' parameter to 'True' will use the ubuntu config which points to
     the external cluster endpoint.
 
-    Returns stdout and throws an error if the command fails.
+    Args:
+        args (str): arguments to pass to kubectl.
+        external (bool): Use the external cluster kubeconfig.
+
+    Returns:
+        str: The output of the command.
+
+    Raises:
+        FileNotFoundError: If the kubeconfig file is not found.
+        CalledProcessError: If the command fails.
     """
-    cfg = "/home/ubuntu/config" if external else "/root/.kube/config"
+    cfg = Path("/home/ubuntu/config" if external else "/root/.kube/config")
+    if not cfg.exists():
+        raise FileNotFoundError(f"kubeconfig not found at {cfg}")
     command = ["kubectl", f"--kubeconfig={cfg}", *args]
     log.info("Executing {}".format(command))
     try:
@@ -32,8 +71,3 @@ def kubectl(*args, external=False):
             f"Command failed: {command}\nreturncode: {e.returncode}\nstdout: {e.output.decode()}"
         )
         raise
-
-
-def kubectl_get(*args):
-    output = kubectl("get", "-o", "json", *args)
-    return json.loads(output)
