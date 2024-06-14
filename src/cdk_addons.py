@@ -5,9 +5,9 @@ import shutil
 from subprocess import CalledProcessError, check_call, check_output
 
 import charms.contextual_status as status
+import tenacity
 from kubectl import get_service_ip, kubectl, kubectl_get
 from ops import BlockedStatus
-from tenacity import retry, stop_after_delay, wait_exponential
 
 kubeconfig_dir = "/root/snap/cdk-addons/common"
 kubeconfig_path = f"{kubeconfig_dir}/kubeconfig"
@@ -20,7 +20,12 @@ class CdkAddons:
     def __init__(self, charm):
         self.charm = charm
 
-    @retry(stop=stop_after_delay(60), wait=wait_exponential())
+    @tenacity.retry(
+        reraise=True,
+        stop=tenacity.stop_after_delay(60),
+        wait=tenacity.wait_exponential(),
+        before=tenacity.before_log(log, logging.WARNING),
+    )
     def apply(self):
         """Apply addons."""
         check_call(["cdk-addons.apply"])

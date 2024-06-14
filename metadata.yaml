@@ -49,6 +49,8 @@ requires:
     interface: ceph-client
     description: |
       [Deprecated] LP:2048692 only necessary for upgrades from < 1.29
+  keystone-credentials:
+    interface: keystone-credentials
   certificates:
     interface: tls-certificates
   dns-provider:

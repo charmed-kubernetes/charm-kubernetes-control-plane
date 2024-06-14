@@ -118,6 +118,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             privileged=self.model.config["allow-privileged"],
             service_cidr=self.model.config["service-cidr"],
             external_cloud_provider=self.external_cloud_provider,
+            authz_webhook_conf_file=auth_webhook.authz_webhook_conf,
         )
 
     def configure_apiserver_kubelet_api_admin(self):
@@ -128,10 +129,19 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         auth_webhook.configure(
             charm_dir=self.charm_dir,
             custom_authn_endpoint=self.model.config["authn-webhook-endpoint"],
-            # TODO: aws iam, keystone
-            # aws_iam_endpoint=???,
-            # keystone_endpoint=???
+            custom_authz_config_file=self.model.config["authorization-webhook-config-file"],
         )
+
+    def warn_keystone_management(self):
+        relation = self.model.relations.get("keystone-credentials")
+        if relation and any(r.units for r in relation):
+            log.warning(
+                "------------------------------------------------------------\n"
+                "Keystone credential relation is no longer managed\n"
+                "Please remove the relation and manage keystone manually\n"
+                "Run `juju remove-relation kubernetes-control-plane:keystone-credentials keystone`"
+            )
+            status.add(ops.BlockedStatus("Keystone credential relation is no longer managed"))
 
     def configure_container_runtime(self):
         if not self.container_runtime.relations:
@@ -491,6 +501,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.write_etcd_client_credentials()
         self.write_service_account_key()
         self.configure_auth_webhook()
+        self.warn_keystone_management()
         self.configure_loadbalancers()
         if self.api_dependencies_ready():
             self.encryption_at_rest.prepare()
