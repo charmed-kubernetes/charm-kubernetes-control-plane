@@ -44,7 +44,8 @@ def test_kubectl_external(kubeconfig):
     with mock.patch("kubectl.check_output") as check_output:
         kubectl.kubectl("apply", "-f", "test.yaml", external=external)
         check_output.assert_called_once_with(
-            ["kubectl", f"--kubeconfig={path}", "apply", "-f", "test.yaml"]
+            ["kubectl", f"--kubeconfig={path}", "apply", "-f", "test.yaml"],
+            stderr=subprocess.PIPE,
         )
 
 

@@ -35,7 +35,7 @@ def harness():
 @patch("charms.kubernetes_snaps.configure_kubelet")
 @patch("charms.kubernetes_snaps.configure_scheduler")
 @patch("charms.kubernetes_snaps.configure_services_restart_always")
-@patch("charms.kubernetes_snaps.create_kubeconfig")
+@patch("charms.kubernetes_snaps.update_kubeconfig")
 @patch("charms.kubernetes_snaps.get_public_address")
 @patch("charms.kubernetes_snaps.is_snap_installed")
 @patch("charms.kubernetes_snaps.install_snap")
@@ -65,7 +65,7 @@ def test_active(
     install_snap,
     is_snap_installed,
     get_public_address,
-    create_kubeconfig,
+    update_kubeconfig,
     configure_services_restart_always,
     configure_scheduler,
     configure_kubelet,
@@ -211,7 +211,7 @@ def test_active(
         extra_args_config="", kubeconfig="/root/cdk/kubeschedulerconfig"
     )
     configure_services_restart_always.assert_called_once_with(control_plane=True)
-    create_kubeconfig.assert_called()
+    update_kubeconfig.assert_called()
     install_snap.assert_called()
     install_cni_binaries.assert_called()
     set_default_cni_conf_file.assert_called_once_with("10-calico.conflist")

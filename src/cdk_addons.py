@@ -6,7 +6,7 @@ from subprocess import CalledProcessError, check_call, check_output
 
 import charms.contextual_status as status
 import tenacity
-from kubectl import get_service_ip, kubectl, kubectl_get
+from kubectl import ROOT_KUBECONFIG, get_service_ip, kubectl, kubectl_get
 from ops import BlockedStatus
 
 kubeconfig_dir = "/root/snap/cdk-addons/common"
@@ -88,7 +88,7 @@ class CdkAddons:
     def copy_kubeconfig(self):
         """Copy the admin kubeconfig to a location where cdk-addons can read it."""
         os.makedirs(kubeconfig_dir, exist_ok=True)
-        shutil.copy("/root/.kube/config", kubeconfig_path)
+        shutil.copy(ROOT_KUBECONFIG, kubeconfig_path)
 
     def get_default_storage_class(self):
         """Get the name of the default StorageClass."""
