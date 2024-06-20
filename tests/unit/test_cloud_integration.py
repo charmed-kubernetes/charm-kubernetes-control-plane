@@ -44,7 +44,10 @@ def test_cloud_aws(harness):
         event = mock.MagicMock()
         harness.charm.cloud_integration.integrate(event)
         mock_cloud.tag_instance.assert_called_once_with(
-            {"kubernetes.io/cluster/my-cluster": "owned", "k8s.io/role/master": "true"}
+            {
+                "kubernetes.io/cluster/my-cluster": "owned",
+                "k8s.io/role/master": "true",  # wokeignore:rule=master
+            }
         )
         mock_cloud.tag_instance_security_group.assert_called_once_with(
             {"kubernetes.io/cluster/my-cluster": "owned"}
@@ -74,7 +77,10 @@ def test_cloud_gce(harness):
         event = mock.MagicMock()
         harness.charm.cloud_integration.integrate(event)
         mock_cloud.tag_instance.assert_called_once_with(
-            {"k8s-io-cluster-name": "my-cluster", "k8s-io-role-master": "master"}
+            {
+                "k8s-io-cluster-name": "my-cluster",
+                "k8s-io-role-master": "master",  # wokeignore:rule=master
+            }
         )
         mock_cloud.enable_object_storage_management.assert_called_once()
         mock_cloud.enable_security_management.assert_called_once()
@@ -95,7 +101,10 @@ def test_cloud_azure(harness):
         event = mock.MagicMock()
         harness.charm.cloud_integration.integrate(event)
         mock_cloud.tag_instance.assert_called_once_with(
-            {"k8s-io-cluster-name": "my-cluster", "k8s-io-role-master": "master"}
+            {
+                "k8s-io-cluster-name": "my-cluster",
+                "k8s-io-role-master": "master",  # wokeignore:rule=master
+            }
         )
         mock_cloud.enable_object_storage_management.assert_called_once()
         mock_cloud.enable_security_management.assert_called_once()
