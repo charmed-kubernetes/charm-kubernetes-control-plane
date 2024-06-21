@@ -10,7 +10,7 @@ options:
       mode by default, unless certain circumstances are discovered
          * gpu hardware is detected on a worker node
          * openstack-integrator successfully related
-         * ceph-client successfully related
+
   api-extra-args:
     type: string
     default: ""

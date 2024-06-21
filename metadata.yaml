@@ -41,6 +41,9 @@ provides:
   tokens:
     interface: tokens
 requires:
+  ceph-client:
+    # Remains for upgrade compatibility with a warning to remove after upgrade
+    interface: ceph-client
   aws:
     interface: aws-integration
     description: |
@@ -50,6 +53,7 @@ requires:
     description: |
       [Deprecated] LP:2048692 only necessary for upgrades from < 1.29
   keystone-credentials:
+    # Remains for upgrade compatibility with a warning to remove after upgrade
     interface: keystone-credentials
   certificates:
     interface: tls-certificates

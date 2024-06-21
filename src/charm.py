@@ -143,6 +143,17 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             )
             status.add(ops.BlockedStatus("Keystone credential relation is no longer managed"))
 
+    def warn_ceph_client(self):
+        relation = self.model.relations.get("ceph-client")
+        if relation and any(r.units for r in relation):
+            log.warning(
+                "------------------------------------------------------------\n"
+                "Ceph-client relation is no longer managed\n"
+                "Please remove the relation and manage manually or with the ceph-csi charm\n"
+                "Run `juju remove-relation kubernetes-control-plane:ceph-csi ceph-mon`"
+            )
+            status.add(ops.BlockedStatus("Ceph-client relation is no longer managed"))
+
     def configure_container_runtime(self):
         if not self.container_runtime.relations:
             status.add(BlockedStatus("Missing container-runtime integration"))
@@ -502,6 +513,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.write_service_account_key()
         self.configure_auth_webhook()
         self.warn_keystone_management()
+        self.warn_ceph_client()
         self.configure_loadbalancers()
         if self.api_dependencies_ready():
             self.encryption_at_rest.prepare()
