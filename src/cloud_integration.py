@@ -4,7 +4,7 @@
 """Cloud Integration for Charmed Kubernetes Control Plane."""
 
 import logging
-from typing import Union
+from typing import Optional, Union
 
 import charms.contextual_status as status
 import ops
@@ -13,6 +13,10 @@ from ops.interface_azure.requires import AzureIntegrationRequires
 from ops.interface_gcp.requires import GCPIntegrationRequires
 
 log = logging.getLogger(__name__)
+
+CloudSpecificIntegration = Union[
+    AWSIntegrationRequires, AzureIntegrationRequires, GCPIntegrationRequires
+]
 
 
 class CloudIntegration:
@@ -36,7 +40,7 @@ class CloudIntegration:
         self.azure = AzureIntegrationRequires(charm)
 
     @property
-    def cloud(self) -> Union[None, AWSIntegrationRequires, GCPIntegrationRequires]:
+    def cloud(self) -> Optional[CloudSpecificIntegration]:
         """Determine if we're integrated with a known cloud."""
         cloud_name = self.charm.get_cloud_name()
         cloud_support = {"aws": self.aws, "gce": self.gcp, "azure": self.azure}
@@ -55,7 +59,7 @@ class CloudIntegration:
     def integrate(self, event: ops.EventBase):
         """Request tags and permissions for a control-plane node."""
         if not (cloud := self.cloud):
-            return None
+            return
 
         cloud_name = self.charm.get_cloud_name()
         cluster_tag = self.charm.get_cluster_name()
