@@ -1,11 +1,12 @@
 import json
 import logging
 from pathlib import Path
-from subprocess import CalledProcessError, check_output
+from subprocess import PIPE, CalledProcessError, check_output
 
 import tenacity
 
 log = logging.getLogger(__name__)
+ROOT_KUBECONFIG = Path("/root/.kube/config")
 
 
 def get_service_ip(name, namespace):
@@ -59,15 +60,18 @@ def kubectl(*args: str, external=False):
         FileNotFoundError: If the kubeconfig file is not found.
         CalledProcessError: If the command fails.
     """
-    cfg = Path("/home/ubuntu/config" if external else "/root/.kube/config")
+    cfg = Path("/home/ubuntu/config") if external else ROOT_KUBECONFIG
     if not cfg.exists():
         raise FileNotFoundError(f"kubeconfig not found at {cfg}")
     command = ["kubectl", f"--kubeconfig={cfg}", *args]
     log.info("Executing {}".format(command))
     try:
-        return check_output(command).decode("utf-8")
+        return check_output(command, stderr=PIPE).decode("utf-8")
     except CalledProcessError as e:
         log.error(
-            f"Command failed: {command}\nreturncode: {e.returncode}\nstdout: {e.output.decode()}"
+            f"Command failed: {command}\n"
+            f"returncode: {e.returncode}\n"
+            f"stdout: {e.stdout.decode()}\n"
+            f"stderr: {e.stderr.decode()}\n"
         )
         raise
