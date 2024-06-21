@@ -41,7 +41,7 @@ from encryption_at_rest import EncryptionAtRest
 from hacluster import HACluster
 from k8s_api_endpoints import K8sApiEndpoints
 from k8s_kube_system import get_kube_system_pods_not_running
-from kubectl import kubectl
+from kubectl import ROOT_KUBECONFIG, kubectl
 from loadbalancer_interface import LBProvider
 from ops.interface_kube_control import KubeControlProvides
 from ops.interface_tls_certificates import CertificatesRequires
@@ -80,7 +80,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             ],
         )
         self.etcd = EtcdReactiveRequires(self)
-        self.node_base = LabelMaker(self, kubeconfig_path="/root/.kube/config")
+        self.node_base = LabelMaker(self, kubeconfig_path=ROOT_KUBECONFIG)
         self.hacluster = HACluster(self, self.config)
         self.k8s_api_endpoints = K8sApiEndpoints(self)
         self.kube_control = KubeControlProvides(self, endpoint="kube-control")
@@ -197,7 +197,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def configure_cni(self):
         status.add(ops.MaintenanceStatus("Configuring CNI"))
         self.cni.set_image_registry(self.model.config["image-registry"])
-        self.cni.set_kubeconfig_hash_from_file("/root/.kube/config")
+        self.cni.set_kubeconfig_hash_from_file(ROOT_KUBECONFIG)
         self.cni.set_service_cidr(self.model.config["service-cidr"])
         kubernetes_snaps.set_default_cni_conf_file(self.cni.cni_conf_file)
 
@@ -341,26 +341,29 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         node_name = self.get_node_name()
         public_server = self.k8s_api_endpoints.external()
 
-        if not os.path.exists("/root/.kube/config"):
+        if not os.path.exists(ROOT_KUBECONFIG):
             # Create a bootstrap client config. This initial config will allow
             # us to get and create auth webhook tokens via the Kubernetes API,
             # but will not have the final admin token just yet.
-            kubernetes_snaps.create_kubeconfig(
-                "/root/.kube/config",
-                ca=ca,
-                server=local_server,
-                user="admin",
-                token=auth_webhook.token_generator(),
-            )
+            token = auth_webhook.token_generator()
+        else:
+            token = None
+
+        kubernetes_snaps.update_kubeconfig(
+            ROOT_KUBECONFIG,
+            ca=ca,
+            server=local_server,
+            token=token,
+            user="admin",
+        )
 
         admin_token = auth_webhook.create_token(
             uid="admin",
             username="admin",
-            # wokeignore:rule=master
-            groups=["system:masters"],
+            groups=["system:masters"],  # wokeignore:rule=master
         )
 
-        for dest in ["/root/.kube/config", "/home/ubuntu/.kube/config"]:
+        for dest in [ROOT_KUBECONFIG, "/home/ubuntu/.kube/config"]:
             kubernetes_snaps.create_kubeconfig(
                 dest,
                 ca=ca,
