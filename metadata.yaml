@@ -40,6 +40,9 @@ provides:
   tokens:
     interface: tokens
 requires:
+  ceph-client:
+    # Remains for upgrade compatibility with a warning to remove after upgrade
+    interface: ceph-client
   aws:
     interface: aws-integration
   gcp:
@@ -47,6 +50,7 @@ requires:
   azure:
     interface: azure-integration
   keystone-credentials:
+    # Remains for upgrade compatibility with a warning to remove after upgrade
     interface: keystone-credentials
   certificates:
     interface: tls-certificates
