@@ -38,3 +38,10 @@ parts:
     build-packages: [git]
     prime:
       - templates/**
+  branch:
+    # save the branch name into the charm
+    after: [charm]
+    plugin: nil
+    source: ./
+    override-prime: |
+      git -C $CRAFT_PART_SRC branch --show-current >> $CRAFT_PRIME/templates/charm_branch
