@@ -47,6 +47,44 @@ log = logging.getLogger(__name__)
 OBSERVABILITY_ROLE = "system:cos"
 
 
+def charm_track() -> str:
+    """Get the charm track based on the current charm branch.
+
+    Read from the charm_branch file in the templates directory. If the file
+    exists, the last line should contain the branch name. If the branch name
+    exists and starts with "release_", the release ID is extracted and
+    returned. Otherwise, "latest" is returned.
+
+    Returns:
+        str: The charm track based on the current charm branch.
+    """
+    branch_name, branch_file = "", Path("templates/charm_branch")
+    if branch_file.exists():
+        branch_content = branch_file.read_text().strip().splitlines(False)
+        branch_name = branch_content[-1] if branch_content else ""
+        log.info("Branch name from file: %s", branch_name)
+    if branch_name and branch_name.startswith("release_"):
+        rel_id = branch_name.split("_", 1)[-1]
+        if re.match(r"^\d+\.\d+$", rel_id):
+            return rel_id
+        else:
+            log.warning("Branch name is not a release branch: %s", branch_name)
+    return "latest"
+
+
+def cdk_addons_channel(channel: str) -> str:
+    """cdk-addons channel based on the current charm branch and current snaps risk.
+
+    Args:
+        channel: The current charm channel via config. (eg "edge", "1.29/stable")
+
+    Returns:
+        str: The cdk-addons channel based on the charm track and snap risk.
+    """
+    risk = channel.split("/")[-1]
+    return f"{charm_track()}/{risk}"
+
+
 class KubernetesControlPlaneCharm(ops.CharmBase):
     """Charmed Operator for Kubernetes Control Plane."""
 
@@ -132,16 +170,11 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             custom_authz_config_file=self.model.config["authorization-webhook-config-file"],
         )
 
-    def warn_keystone_management(self):
-        relation = self.model.relations.get("keystone-credentials")
-        if relation and any(r.units for r in relation):
-            log.warning(
-                "------------------------------------------------------------\n"
-                "Keystone credential relation is no longer managed\n"
-                "Please remove the relation and manage keystone manually\n"
-                "Run `juju remove-relation kubernetes-control-plane:keystone-credentials keystone`"
-            )
-            status.add(ops.BlockedStatus("Keystone credential relation is no longer managed"))
+    def deprecation_warnings(self):
+        self.warn_ceph_client()
+        self.warn_openstack_cloud()
+        self.warn_gpu_operator()
+        self.warn_keystone_management()
 
     def warn_ceph_client(self):
         relation = self.model.relations.get("ceph-client")
@@ -150,9 +183,52 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                 "------------------------------------------------------------\n"
                 "Ceph-client relation is no longer managed\n"
                 "Please remove the relation and manage manually or with the ceph-csi charm\n"
-                "Run `juju remove-relation kubernetes-control-plane:ceph-csi ceph-mon`"
+                "Run `juju remove-relation %s:ceph-csi ceph-mon`",
+                self.app.name,
             )
-            status.add(ops.BlockedStatus("Ceph-client relation is no longer managed"))
+            status.add(
+                ops.BlockedStatus("ceph-client relation is no longer managed -- see debug log")
+            )
+
+    def warn_openstack_cloud(self):
+        relation = self.model.relations.get("openstack")
+        if relation and any(r.units for r in relation):
+            log.warning(
+                "------------------------------------------------------------\n"
+                "openstack relation is no longer managed\n"
+                "Please remove the relation and manage manually or with the following charms\n"
+                "  * openstack-cloud-controller\n"
+                "  * cinder-csi\n"
+                "Run `juju remove-relation %s:openstack openstack-integrator`",
+                self.app.name,
+            )
+            status.add(
+                ops.BlockedStatus("openstack relation is no longer managed -- see debug log")
+            )
+
+    def warn_gpu_operator(self):
+        enable_nvidia_plugin = self.model.config["enable-nvidia-plugin"].lower()
+        if enable_nvidia_plugin != "false":
+            log.warning(
+                "------------------------------------------------------------\n"
+                "Nvidia GPU operators are no longer managed\n"
+                "Please config enable-nvidia-plugin=false and manage manually or with the nvidia-gpu-operator charm\n"
+                "Run `juju config %s enable-nvidia-plugin=false`",
+                self.app.name,
+            )
+            status.add(ops.BlockedStatus("nvidia-plugin is no longer managed -- see debug log"))
+
+    def warn_keystone_management(self):
+        relation = self.model.relations.get("keystone-credentials")
+        if relation and any(r.units for r in relation):
+            log.warning(
+                "------------------------------------------------------------\n"
+                "Keystone credential relation is no longer managed\n"
+                "Please remove the relation and manage keystone manually\n"
+                "Run `juju remove-relation %s:keystone-credentials keystone`",
+                self.app.name,
+            )
+            status.add(ops.BlockedStatus("Keystone credential relation is no longer managed"))
 
     def configure_container_runtime(self):
         if not self.container_runtime.relations:
@@ -506,14 +582,16 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         """Reconcile state change events."""
         self.install_cni_binaries()
         kubernetes_snaps.install(channel=self.model.config["channel"], control_plane=True)
+        kubernetes_snaps.install_snap(
+            "cdk-addons", channel=cdk_addons_channel(self.model.config["channel"])
+        )
         kubernetes_snaps.configure_services_restart_always(control_plane=True)
         self.request_certificates()
         self.write_certificates()
         self.write_etcd_client_credentials()
         self.write_service_account_key()
         self.configure_auth_webhook()
-        self.warn_keystone_management()
-        self.warn_ceph_client()
+        self.deprecation_warnings()
         self.configure_loadbalancers()
         if self.api_dependencies_ready():
             self.encryption_at_rest.prepare()

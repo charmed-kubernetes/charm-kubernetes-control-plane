@@ -44,14 +44,17 @@ requires:
   ceph-client:
     # Remains for upgrade compatibility with a warning to remove after upgrade
     interface: ceph-client
+    description: |
+      [Deprecated] LP:2048692 only necessary for upgrades from < 1.29
   aws:
     interface: aws-integration
-    description: |
-      [Deprecated] LP:2048692 only necessary for upgrades from < 1.29
-  ceph-client:
-    interface: ceph-client
-    description: |
-      [Deprecated] LP:2048692 only necessary for upgrades from < 1.29
+  gcp:
+    interface: gcp-integration
+  azure:
+    interface: azure-integration
+  openstack:
+    # Remains for upgrade compatibility with a warning to remove after upgrade
+    interface: openstack-integration
   keystone-credentials:
     # Remains for upgrade compatibility with a warning to remove after upgrade
     interface: keystone-credentials
