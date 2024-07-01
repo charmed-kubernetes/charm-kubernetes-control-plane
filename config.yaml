@@ -146,6 +146,13 @@ options:
     type: boolean
     default: true
     description: Deploy the Kubernetes Dashboard
+  enable-nvidia-plugin:
+    type: string
+    default: "false"
+    description: |
+      Deprecation notice: This option is deprecated and may be removed in a future release.
+      If set to anything other than "false", the charm will be blocked with an error message.
+      Consult https://ubuntu.com/kubernetes/docs/gpu-workers to learn how to deploy GPU workers.
   enable-metrics:
     type: boolean
     default: true

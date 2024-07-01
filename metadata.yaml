@@ -49,6 +49,9 @@ requires:
     interface: gcp-integration
   azure:
     interface: azure-integration
+  openstack:
+    # Remains for upgrade compatibility with a warning to remove after upgrade
+    interface: openstack-integration
   keystone-credentials:
     # Remains for upgrade compatibility with a warning to remove after upgrade
     interface: keystone-credentials
