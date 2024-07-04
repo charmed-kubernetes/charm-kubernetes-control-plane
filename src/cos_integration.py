@@ -1,12 +1,18 @@
+from __future__ import annotations
+
+import hashlib
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
 
-from ops import CharmBase
+import ops
 
 log = logging.getLogger(__name__)
 
 OBSERVABILITY_ROLE = "system:cos"
+METRICS_SOURCE_DIR = Path("src/prometheus_alert_rules")
+METRICS_PARSED_DIR = Path("src/prometheus_alert_rules_parsed")
 
 
 @dataclass
@@ -33,7 +39,17 @@ class JobConfig:
     static_configs: Optional[List[Any]] = None
 
 
-class COSIntegration:
+class AlertManagerDefinitionsReadyEvent(ops.EventBase):
+    """Event emitted when alert manager definitions are ready."""
+
+
+class COSIntegrationEvents(ops.ObjectEvents):
+    """Manages COSIntegration events."""
+
+    definitions_ready = ops.EventSource(AlertManagerDefinitionsReadyEvent)
+
+
+class COSIntegration(ops.Object):
     """Utility class that handles the integration with COS for Charmed Kubernetes.
 
     This class provides methods to retrieve and configure Prometheus metrics scraping endpoints
@@ -43,13 +59,62 @@ class COSIntegration:
         charm (CharmBase): Reference to the base charm instance.
     """
 
-    def __init__(self, charm: CharmBase) -> None:
+    on = COSIntegrationEvents()
+    stored = ops.StoredState()
+
+    def __init__(self, charm: ops.CharmBase) -> None:
         """Initialize a COSIntegration instance.
 
         Args:
-            charm (CharmBase): A charm object representing the current charm.
+            charm (ops.CharmBase): A charm object representing the current charm.
         """
+        super().__init__(charm, key=None)
         self.charm = charm
+        self.stored.set_default(metrics_rules_hash=None)
+
+    def _hash_files(self, path: Path, glob: str) -> list[hashlib._Hash]:
+        """Hash the metrics rules files to determine if they have changed."""
+
+        def hash_file(path: Path):
+            return hashlib.sha256(path.read_bytes())
+
+        return [hash_file(f) for f in path.glob(glob)]
+
+    def _do_hashes_match(self, a: list[hashlib._Hash], b: list[hashlib._Hash]) -> bool:
+        """Check if the metrics rules files have changed."""
+        return all(one.digest() == two.digest() for one, two in zip(a, b))
+
+    def _parse_metrics_rules_files(self):
+        input_directory = Path("./src/prometheus_alert_rules")
+        output_directory = Path("./src/prometheus_alert_rules_parsed")
+
+        output_directory.mkdir(exist_ok=True)
+
+        replace_rules = {
+            "kubernetesControlPlane-prometheusRule.yaml": {
+                "[[- namespace -]]": "namespace=~" + f'"{self.charm.config["namespace"]}"',
+            },
+        }
+
+        for f in input_directory.glob("*.yaml"):
+            output_file_path = output_directory / f.name
+
+            content = f.read_text()
+
+            for k, v in replace_rules.get(f.name, {}).items():
+                content = content.replace(k, v)
+
+            output_file_path.write_text(content)
+
+    def ensure_metrics_rules(self):
+        old_hashes = self._hash_files(METRICS_PARSED_DIR, "*.yaml")
+
+        self._parse_metrics_rules_files()
+
+        new_hashes = self._hash_files(METRICS_PARSED_DIR, "*.yaml")
+
+        if not self._do_hashes_match(old_hashes, new_hashes):
+            self.on.definitions_ready.emit()
 
     def _create_scrape_job(
         self, config: JobConfig, node_name: str, token: str, cluster_name: str

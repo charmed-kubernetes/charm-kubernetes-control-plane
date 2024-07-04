@@ -1,4 +1,9 @@
 options:
+  namespace:
+    type: string
+    default: ".+"
+    description: |
+      Namespace to scope alert rules by in regular expression format.
   allow-privileged:
     type: string
     default: "auto"

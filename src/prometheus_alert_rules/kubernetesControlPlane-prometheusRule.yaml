@@ -11,7 +11,7 @@ groups:
       runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubepodcrashlooping
       summary: Pod is crash looping.
     expr: 'max_over_time(kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff",
-      job="kube-state-metrics"}[5m]) >= 1
+      job="kube-state-metrics", [[- namespace -]] }[5m]) >= 1
 
       '
     for: 15m
