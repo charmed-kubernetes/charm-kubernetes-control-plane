@@ -1,4 +1,87 @@
 type: charm
+name: kubernetes-control-plane
+summary: The Kubernetes control plane.
+description: |-
+  Kubernetes is an open-source platform for deploying, scaling, and operations
+  of application containers across a cluster of hosts. Kubernetes is portable
+  in that it works with public, private, and hybrid clouds. Extensible through
+  a pluggable infrastructure. Self healing in that it will automatically
+  restart and place containers on healthy nodes if a node ever goes away.
+links:
+  contact:
+  - Kevin Monroe <kevin.monroe@canonical.com>
+  - Mateo Florido <mateo.florido@canonical.com>
+  - Adam Dyess <adam.dyess@canonical.com>
+  documentation: https://discourse.charmhub.io/t/kubernetes-control-plane-docs-index/6214
+  source: https://github.com/charmed-kubernetes/charm-kubernetes-control-plane
+  issues:
+  - https://bugs.launchpad.net/charm-kubernetes-control-plane
+
+assumes:
+  - juju >= 3.1
+
+peers:
+  coordinator:
+    # LP:2049953 needed for upgrading from < 1.29
+    interface: coordinator
+  peer:
+    interface: kubernetes-control-plane-peer
+provides:
+  cni:
+    interface: kubernetes-cni
+    scope: container
+  container-runtime:
+    interface: container-runtime
+    scope: container
+  cos-agent:
+    interface: cos_agent
+  kube-control:
+    interface: kube-control
+  tokens:
+    interface: tokens
+requires:
+  ceph-client:
+    # Remains for upgrade compatibility with a warning to remove after upgrade
+    interface: ceph-client
+  aws:
+    interface: aws-integration
+  gcp:
+    interface: gcp-integration
+  azure:
+    interface: azure-integration
+  openstack:
+    # Remains for upgrade compatibility with a warning to remove after upgrade
+    interface: openstack-integration
+  keystone-credentials:
+    # Remains for upgrade compatibility with a warning to remove after upgrade
+    interface: keystone-credentials
+  certificates:
+    interface: tls-certificates
+  dns-provider:
+    interface: kube-dns
+  etcd:
+    interface: etcd
+  ha:
+    interface: hacluster
+  loadbalancer-external:
+    # Indicates that the LB should be public facing. Intended for clients which
+    # must reach the API server via external networks.
+    interface: loadbalancer
+  loadbalancer-internal:
+    # Indicates that the LB should not be public and should use internal
+    # networks if available. Intended for control plane and other internal use.
+    interface: loadbalancer
+  external-cloud-provider:
+    interface: external_cloud_provider
+  vault-kv:
+    interface: vault-kv
+
+resources:
+  cni-plugins:
+    type: file
+    filename: cni-plugins.tar.gz
+    description: CNI network plugins for Kubernetes
+
 bases:
   - build-on:
     - name: ubuntu
@@ -11,6 +94,9 @@ bases:
     - name: ubuntu
       channel: "22.04"
       architectures: ["amd64"]
+    - name: ubuntu
+      channel: "24.04"
+      architectures: ["amd64"]
   - build-on:
     - name: ubuntu
       channel: "20.04"
@@ -22,6 +108,9 @@ bases:
     - name: ubuntu
       channel: "22.04"
       architectures: ["arm64"]
+    - name: ubuntu
+      channel: "24.04"
+      architectures: ["arm64"]
   - build-on:
     - name: ubuntu
       channel: "20.04"
@@ -32,6 +121,9 @@ bases:
       architectures: ["s390x"]
     - name: ubuntu
       channel: "22.04"
+      architectures: ["s390x"]
+    - name: ubuntu
+      channel: "24.04"
       architectures: ["s390x"]
 parts:
   charm:
