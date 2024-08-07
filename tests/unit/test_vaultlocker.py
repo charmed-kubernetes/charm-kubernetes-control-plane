@@ -18,14 +18,24 @@ def harness():
         harness.cleanup()
 
 
-def test_is_block_device():
+@pytest.fixture(scope="module")
+def any_loop_device():
+    loops = (
+        loop.split()[0]
+        for loop in Path("/proc/mounts").read_text().splitlines()
+        if loop.startswith("/dev/loop")
+    )
+    yield next(loops)
+
+
+def test_is_block_device(any_loop_device):
     assert not encryption.vaultlocker._is_block_device("/dev/null")
-    assert encryption.vaultlocker._is_block_device("/dev/loop0")
+    assert encryption.vaultlocker._is_block_device(any_loop_device)
 
 
-def test_is_mounted():
+def test_is_mounted(any_loop_device):
     assert not encryption.vaultlocker._is_device_mounted("/dev/null")
-    assert encryption.vaultlocker._is_device_mounted("/dev/loop0")
+    assert encryption.vaultlocker._is_device_mounted(any_loop_device)
 
 
 @mock.patch("pathlib.Path.is_symlink", mock.MagicMock(return_value=False))
