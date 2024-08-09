@@ -45,7 +45,7 @@ class CloudIntegration:
         cloud_name = self.charm.get_cloud_name()
         cloud_support = {"aws": self.aws, "gce": self.gcp, "azure": self.azure}
         if not (cloud := cloud_support.get(cloud_name)):
-            log.error("Skipping Cloud integration: unsupported cloud %s", cloud_name)
+            log.warning("Skipping direct cloud integration: cloud %s", cloud_name)
             return
 
         if not cloud.relation:

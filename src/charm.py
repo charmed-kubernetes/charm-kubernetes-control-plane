@@ -369,12 +369,12 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         if not self.unit.is_leader():
             return
 
-        def check_status(endpoint, ep_name):
+        def check_status(endpoint: LBProvider, ep_name):
             if not endpoint.has_response:
                 status.add(ops.WaitingStatus(f"Waiting for {ep_name}"))
-            elif resp := endpoint.get_response("api-server-external"):
-                if resp and resp.error:
-                    status.add(ops.BlockedStatus(f"Blocked by {ep_name}"))
+            elif (res := endpoint.get_response("api-server-external")) and res.error:
+                log.error("Error from %s: %s", ep_name, res.error_message)
+                status.add(ops.BlockedStatus(f"Blocked by {ep_name}"))
 
         status.add(ops.MaintenanceStatus("Configuring LoadBalancers"))
         if self.lb_external.is_available:
