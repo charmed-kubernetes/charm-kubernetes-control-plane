@@ -17,6 +17,7 @@ from typing import Callable
 
 import actions.general
 import actions.namespace
+import actions.restart
 import actions.upgrade
 import actions.users
 import auth_webhook
@@ -132,6 +133,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
         # register charm actions
         actions = [
+            self.on.restart_action,
             self.on.upgrade_action,
             self.on.get_kubeconfig_action,
             self.on.apply_manifest_action,
@@ -150,7 +152,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def charm_actions(self, event: ops.ActionEvent):
         action_map = {
-            "upgrade_action": actions.upgrade.upgrade_action,
+            "restart_action": actions.restart.restart_action,
+            "upgrade_action": functools.partial(actions.upgrade.upgrade_action, self),
             "get_kubeconfig_action": actions.general.get_kubeconfig,
             "apply_manifest_action": actions.general.apply_manifest,
             "user_create_action": functools.partial(actions.users.user_create, self),

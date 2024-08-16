@@ -1,10 +1,15 @@
-import charms.contextual_status as status
 import ops
 from charms import kubernetes_snaps
 
 
-def upgrade_action(event: ops.ActionEvent):
+def upgrade_action(charm, event: ops.ActionEvent):
     """Handle the upgrade action."""
-    with status.context(event.framework.model.unit):
-        channel = event.framework.model.config.get("channel")
+    channel = event.framework.model.config.get("channel")
+    try:
         kubernetes_snaps.upgrade_snaps(channel=channel, event=event, control_plane=True)
+    except Exception as e:
+        event.fail(str(e))
+        return
+
+    # Post successful upgrade, reconcile the charm to ensure it is in the desired state
+    charm.reconciler.reconcile(event)
