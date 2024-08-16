@@ -36,11 +36,18 @@ def test_upgrade_action_success(upgrade_snaps: mock.Mock, harness):
     assert harness.model.unit.status == ops.BlockedStatus("reconciled")
 
 
-@mock.patch.object(
-    actions.upgrade.kubernetes_snaps, "upgrade_snaps", side_effect=Exception("snap upgrade failed")
-)
+@mock.patch.object(actions.upgrade.kubernetes_snaps, "upgrade_snaps")
 def test_upgrade_action_fails(upgrade_snaps: mock.Mock, harness):
     """Verify that the upgrade action runs the upgrade_snap method and reconciles."""
+
+    def mock_upgrade(channel, event, control_plane):
+        assert channel == "latest/edge"
+        assert control_plane is True
+        status.add(ops.BlockedStatus("snap-upgrade-failed"))
+        event.fail("snap upgrade failed")
+
+    upgrade_snaps.side_effect = mock_upgrade
+
     harness.model.unit.status = ops.model.BlockedStatus("pre-test")
     with mock.patch.object(harness.charm.reconciler, "reconcile_function") as mocked_reconciler:
         with pytest.raises(ops.testing.ActionFailed) as action_err:
@@ -48,7 +55,7 @@ def test_upgrade_action_fails(upgrade_snaps: mock.Mock, harness):
     upgrade_snaps.assert_called_once()
     mocked_reconciler.assert_not_called()
     assert action_err.value.message == "snap upgrade failed"
-    assert harness.model.unit.status == ops.BlockedStatus("pre-test")
+    assert harness.model.unit.status == ops.BlockedStatus("snap-upgrade-failed")
 
 
 @mock.patch.object(actions.restart.kubernetes_snaps, "service_restart")
