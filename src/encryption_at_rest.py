@@ -6,8 +6,9 @@ from typing import Mapping, Optional
 import charms.contextual_status as status
 import ops
 import yaml
-from auth_webhook import token_generator
 from charms import kubernetes_snaps
+
+from auth_webhook import token_generator
 from encryption.vault_kv import VaultKV, VaultNotReadyError
 from encryption.vaultlocker import VaultLocker, VaultLockerError
 

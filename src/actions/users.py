@@ -3,8 +3,9 @@ import os
 import re
 
 import ops
-from auth_webhook import create_token, delete_token, get_secrets
 from charms import kubernetes_snaps
+
+from auth_webhook import create_token, delete_token, get_secrets
 
 
 def protect_resources(name: str, event: ops.ActionEvent) -> bool:

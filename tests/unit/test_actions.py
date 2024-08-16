@@ -1,10 +1,11 @@
 from unittest import mock
 
-import actions.restart
-import actions.upgrade
 import charms.contextual_status as status
 import ops
 import pytest
+
+import actions.restart
+import actions.upgrade
 from charm import KubernetesControlPlaneCharm
 
 

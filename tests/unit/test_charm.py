@@ -10,8 +10,9 @@ from unittest.mock import call, patch
 import ops
 import ops.testing
 import pytest
-from charm import KubernetesControlPlaneCharm
 from ops import ActiveStatus
+
+from charm import KubernetesControlPlaneCharm
 
 
 @pytest.fixture

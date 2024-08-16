@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import charms.operator_libs_linux.v0.apt as apt
 import ops
+
 from encryption.fstab import Fstab
 from encryption.vault_kv import VaultKV, VaultNotReadyError
 

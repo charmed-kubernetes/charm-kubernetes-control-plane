@@ -1,9 +1,10 @@
 import subprocess
 import unittest.mock as mock
 
-import kubectl
 import pytest
 import tenacity
+
+import kubectl
 
 
 @pytest.fixture(params=["/root/.kube/config", "/home/ubuntu/config"])
