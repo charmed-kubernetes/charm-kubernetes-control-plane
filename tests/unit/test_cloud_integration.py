@@ -2,6 +2,7 @@ import unittest.mock as mock
 
 import ops
 import pytest
+
 from charm import KubernetesControlPlaneCharm
 
 

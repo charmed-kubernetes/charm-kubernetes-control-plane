@@ -1,10 +1,11 @@
 from pathlib import Path
 from unittest import mock
 
-import encryption.vaultlocker
 import ops
 import ops.testing
 import pytest
+
+import encryption.vaultlocker
 from charm import KubernetesControlPlaneCharm
 
 

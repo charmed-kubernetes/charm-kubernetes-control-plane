@@ -2,8 +2,9 @@ import os
 import tempfile
 
 import ops
-from kubectl import kubectl
 from yaml import safe_dump, safe_load
+
+from kubectl import kubectl
 
 os.environ["PATH"] += os.pathsep + os.path.join(os.sep, "snap", "bin")
 
