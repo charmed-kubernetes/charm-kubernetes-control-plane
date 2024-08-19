@@ -15,16 +15,9 @@ from pathlib import Path
 from subprocess import CalledProcessError
 from typing import Callable
 
-import actions.general
-import actions.namespace
-import actions.upgrade
-import actions.users
-import auth_webhook
 import charms.contextual_status as status
-import leader_data
 import ops
 import yaml
-from cdk_addons import CdkAddons
 from charms import kubernetes_snaps
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.interface_container_runtime import ContainerRuntimeProvides
@@ -35,6 +28,18 @@ from charms.interface_tokens import TokensProvider
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.node_base import LabelMaker
 from charms.reconciler import Reconciler
+from loadbalancer_interface import LBProvider
+from ops.interface_kube_control import KubeControlProvides
+from ops.interface_tls_certificates import CertificatesRequires
+
+import actions.general
+import actions.namespace
+import actions.restart
+import actions.upgrade
+import actions.users
+import auth_webhook
+import leader_data
+from cdk_addons import CdkAddons
 from cloud_integration import CloudIntegration
 from cos_integration import COSIntegration
 from encryption_at_rest import EncryptionAtRest
@@ -42,9 +47,6 @@ from hacluster import HACluster
 from k8s_api_endpoints import K8sApiEndpoints
 from k8s_kube_system import get_kube_system_pods_not_running
 from kubectl import ROOT_KUBECONFIG, kubectl
-from loadbalancer_interface import LBProvider
-from ops.interface_kube_control import KubeControlProvides
-from ops.interface_tls_certificates import CertificatesRequires
 
 log = logging.getLogger(__name__)
 
@@ -132,6 +134,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
         # register charm actions
         actions = [
+            self.on.restart_action,
             self.on.upgrade_action,
             self.on.get_kubeconfig_action,
             self.on.apply_manifest_action,
@@ -150,7 +153,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def charm_actions(self, event: ops.ActionEvent):
         action_map = {
-            "upgrade_action": actions.upgrade.upgrade_action,
+            "restart_action": actions.restart.restart_action,
+            "upgrade_action": functools.partial(actions.upgrade.upgrade_action, self),
             "get_kubeconfig_action": actions.general.get_kubeconfig,
             "apply_manifest_action": actions.general.apply_manifest,
             "user_create_action": functools.partial(actions.users.user_create, self),

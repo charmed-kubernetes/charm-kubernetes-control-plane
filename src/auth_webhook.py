@@ -13,8 +13,9 @@ from typing import Mapping
 import charms.contextual_status as status
 import yaml
 from jinja2 import Environment, FileSystemLoader
-from kubectl import kubectl, kubectl_get
 from ops import MaintenanceStatus
+
+from kubectl import kubectl, kubectl_get
 
 auth_secret_ns = "kube-system"
 auth_secret_type = "juju.is/token-auth"
