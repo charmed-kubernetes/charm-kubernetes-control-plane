@@ -54,9 +54,9 @@ def get_kube_system_pods_not_running(charm) -> Optional[List]:
     # Pods that are Running or Evicted (which should re-spawn) are
     # considered running
     def is_ready(pod):
-        container_stati = pod["status"].get("initContainerStatuses", [])
-        container_stati += pod["status"].get("containerStatuses", [])
-        return all(status.get("ready", True) for status in container_stati)
+        container_statuses = pod["status"].get("initContainerStatuses", [])
+        container_statuses += pod["status"].get("containerStatuses", [])
+        return all(status.get("ready", True) for status in container_statuses)
 
     def is_invalid(pod):
         status = pod["status"]
