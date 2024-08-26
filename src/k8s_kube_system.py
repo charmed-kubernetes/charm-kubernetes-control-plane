@@ -26,7 +26,7 @@ def get_kube_system_pods_not_running(charm) -> Optional[List]:
     start with those provided in the ignore-kube-system-pods config option.
     """
     result = get_pods("kube-system")
-    if result is None:
+    if result is None or result.get("items") is None:
         return None
 
     # Remove pods whose names start with ones provided in the ignore list
@@ -53,11 +53,15 @@ def get_kube_system_pods_not_running(charm) -> Optional[List]:
 
     # Pods that are Running or Evicted (which should re-spawn) are
     # considered running
-    not_running = [
-        pod
-        for pod in result["items"]
-        if pod["status"]["phase"] not in valid_phases
-        and pod["status"].get("reason", "") != "Evicted"
-    ]
+    def is_ready(pod):
+        container_stati = pod["status"].get("initContainerStatuses", [])
+        container_stati += pod["status"].get("containerStatuses", [])
+        return all(status.get("ready", True) for status in container_stati)
+
+    def is_invalid(pod):
+        status = pod["status"]
+        return status["phase"] not in valid_phases and status.get("reason", "") != "Evicted"
+
+    not_running = [pod for pod in result["items"] if is_invalid(pod) or not is_ready(pod)]
 
     return not_running
