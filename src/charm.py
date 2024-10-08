@@ -32,7 +32,7 @@ from loadbalancer_interface import LBProvider
 from ops.interface_kube_control import KubeControlProvides
 from ops.interface_tls_certificates import CertificatesRequires
 
-import actions.csi_benchmark
+import actions.cis_benchmark
 import actions.general
 import actions.namespace
 import actions.restart
@@ -132,7 +132,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.external_cloud_provider = ExternalCloudProvider(self, "external-cloud-provider")
         self.tokens = TokensProvider(self, endpoint="tokens")
         self.encryption_at_rest = EncryptionAtRest(self)
-        self.cis_benchmark = actions.csi_benchmark.CSIBenchmark(self)
+        self.cis_benchmark = actions.cis_benchmark.CISBenchmark(self)
 
         # register charm actions
         action_events = [

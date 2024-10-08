@@ -21,18 +21,21 @@ BENCH_CFG = BENCH_HOME / "cfg-ck"
 GO_PKG = "github.com/aquasecurity/kube-bench"
 RESULTS_DIR = "/home/ubuntu/kube-bench-results"
 
-# Remediation dicts associate a failing test with a Remedy to fix it.
-# Conservative fixes will probably leave the cluster in a good state.
-# Dangerous fixes will likely break the cluster.
-# Tuple examples:
-#  {'1.2.3': Remedy('manual -- we don't know how to auto fix this', None, None)}
-#  {'1.2.3': Remedy('cli', 'command to run', None)}
-#  {'1.2.3': Remedy('kv', 'snap', {cfg_key: value})}
-
 
 @dataclasses.dataclass
 class Remedy:
-    """Remedy class for benchmarking."""
+    """Remedy class for benchmarking.
+
+    Remediation dicts associate a failing test with a Remedy to fix it.
+    Conservative fixes will probably leave the cluster in a good state.
+    Dangerous fixes will likely break the cluster.
+    Tuple examples:
+    ```
+      {'1.2.3': Remedy('manual -- we don't know how to auto fix this', None, None)}
+      {'1.2.3': Remedy('cli', 'command to run', None)}
+      {'1.2.3': Remedy('kv', 'snap', {cfg_key: value})}
+    ```
+    """
 
     type: str
     command: Optional[str]
@@ -132,7 +135,7 @@ def _move_matching_parent(dirpath, filename, dest):
         raise ActionError(f"Could not find {filename} in {dirpath}")
 
 
-class CSIBenchmark(ops.Object):
+class CISBenchmark(ops.Object):
     """Action class for CIS benchmarking."""
 
     stored = ops.StoredState()
