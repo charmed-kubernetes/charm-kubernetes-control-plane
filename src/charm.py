@@ -110,6 +110,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             self,
             relation_name="cos-agent",
             scrape_configs=self.get_scrape_jobs,
+            metrics_rules_dir="./src/prometheus_alert_rules_parsed",
             refresh_events=[
                 self.on.tokens_relation_joined,
                 self.on.tokens_relation_changed,
@@ -118,6 +119,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                 self.on.kube_control_relation_joined,
                 self.on.kube_control_relation_changed,
                 self.on.upgrade_charm,
+                self.cos_integration.on.definitions_ready,
             ],
         )
         self.etcd = EtcdReactiveRequires(self)
@@ -523,6 +525,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         auth_webhook.create_token(
             uid=self.model.unit.name, username=cos_user, groups=[OBSERVABILITY_ROLE]
         )
+
+        self.cos_integration.ensure_metrics_rules()
 
     def generate_tokens(self):
         """Generate and send tokens for units that request them."""
