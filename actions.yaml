@@ -4,7 +4,7 @@ cis-benchmark:
   params:
     apply:
       type: string
-      default": none
+      default: none
       description: |-
         Apply remedies to address benchmark failures. The default, 'none',
         will not attempt to fix any reported failures. Set to 'conservative'
