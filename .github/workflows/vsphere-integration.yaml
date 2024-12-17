@@ -20,7 +20,7 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: vsphere
-          juju-channel: 3.1/stable
+          juju-channel: 3/stable
           charmcraft-channel: ${{ steps.charmcraft.outputs.channel }}
           credentials-yaml: ${{ secrets.CREDENTIALS_YAML }}
           clouds-yaml: ${{ secrets.CLOUDS_YAML }}
@@ -39,7 +39,7 @@ jobs:
           mv juju-crashdump-* tmp/ | true
       - name: Upload debug artifacts
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: test-run-artifacts
           path: tmp
