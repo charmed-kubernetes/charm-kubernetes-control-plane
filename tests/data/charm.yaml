@@ -3,5 +3,11 @@ applications:
   kubernetes-control-plane:
     charm: {{charm}}
     channel: null
+    series: {{series}}
     resources:
       cni-plugins: {{resource_path}}/cni-plugins-{{arch}}.tar.gz
+  grafana-agent:
+    charm: grafana-agent
+    series: {{series}}
+relations:
+- [ kubernetes-control-plane:cos-agent, grafana-agent:cos-agent ]

@@ -54,6 +54,10 @@ log = logging.getLogger(__name__)
 OBSERVABILITY_ROLE = "system:cos"
 
 
+class RefreshCosAgent(ops.EventBase):
+    """Event to trigger a refresh of the COS agent."""
+
+
 def charm_track() -> str:
     """Get the charm track based on the current charm branch.
 
@@ -95,6 +99,8 @@ def cdk_addons_channel(channel: str) -> str:
 class KubernetesControlPlaneCharm(ops.CharmBase):
     """Charmed Operator for Kubernetes Control Plane."""
 
+    observability_refresh = ops.EventSource(RefreshCosAgent)
+
     APISERVER_PORT = 6443
 
     def __init__(self, *args):
@@ -118,6 +124,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                 self.on.kube_control_relation_joined,
                 self.on.kube_control_relation_changed,
                 self.on.upgrade_charm,
+                self.observability_refresh,
             ],
         )
         self.etcd = EtcdReactiveRequires(self)
@@ -523,6 +530,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         auth_webhook.create_token(
             uid=self.model.unit.name, username=cos_user, groups=[OBSERVABILITY_ROLE]
         )
+        self.observability_refresh.emit()
 
     def generate_tokens(self):
         """Generate and send tokens for units that request them."""
@@ -580,15 +588,16 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def get_scrape_jobs(self):
         try:
-            node_name = self.get_node_name()
-            cos_user = f"system:cos:{node_name}"
-            token = auth_webhook.get_token(cos_user)
-            cluster_name = self.get_cluster_name()
-            if not token or not cluster_name:
-                log.info("COS token or cluster name not yet available.")
-                return []
-            return self.cos_integration.get_metrics_endpoints(node_name, token, cluster_name)
-        except CalledProcessError:
+            with status.on_error(ops.WaitingStatus("Waiting for scrape jobs")):
+                node_name = self.get_node_name()
+                cos_user = f"system:cos:{node_name}"
+                token = auth_webhook.get_token(cos_user)
+                cluster_name = self.get_cluster_name()
+                if not token or not cluster_name:
+                    log.info("COS token or cluster name not yet available.")
+                    return []
+                return self.cos_integration.get_metrics_endpoints(node_name, token, cluster_name)
+        except status.ReconcilerError:
             log.info("Failed to retrieve COS token.")
             return []
 
