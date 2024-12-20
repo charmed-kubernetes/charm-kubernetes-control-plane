@@ -14,7 +14,7 @@ ops.interface_aws @ git+https://github.com/charmed-kubernetes/interface-aws-inte
 ops.interface_gcp @ git+https://github.com/charmed-kubernetes/interface-gcp-integration@main#subdirectory=ops
 ops.interface_azure @ git+https://github.com/charmed-kubernetes/interface-azure-integration@main#subdirectory=ops
 aiohttp == 3.7.4
-cosl == 0.0.7
+cosl==0.0.47
 jinja2 == 3.1.3
 loadbalancer_interface == 1.2.0
 ops == 2.12.0
