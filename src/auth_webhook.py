@@ -130,6 +130,10 @@ def create_token(uid, username, groups=[]):
     # The authenticator expects tokens to be in the form user::token
     token = "{}::{}".format(uid, token_generator())
 
+    # make sure groups is list type. #2097158
+    if type(groups) != list:
+        groups = [groups]
+
     uid_b64 = b64encode(uid.encode("utf-8")).decode("utf-8")
     username_b64 = b64encode(username.encode("utf-8")).decode("utf-8")
     token_b64 = b64encode(token.encode("utf-8")).decode("utf-8")
