@@ -67,3 +67,12 @@ async def test_getkubeconfig(ops_test: OpsTest):
     action = await cp.units[0].run_action("get-kubeconfig")
     result = await action.wait()
     assert result.results["kubeconfig"]
+
+
+async def test_user_create(ops_test: OpsTest):
+    cp = ops_test.model.applications["kubernetes-control-plane"]
+    actions = await cp.get_actions()
+    assert "user-create" in actions
+    action = await cp.units[0].run_action("user-create", name="testuser", groups="system:masters")
+    result = await action.wait()
+    assert result.results["kubeconfig"].startswith("juju scp")

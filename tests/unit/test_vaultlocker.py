@@ -26,7 +26,10 @@ def any_loop_device():
         for loop in Path("/proc/mounts").read_text().splitlines()
         if loop.startswith("/dev/loop")
     )
-    yield next(loops)
+    try:
+        yield next(loops)
+    except StopIteration:
+        pytest.skip("No loop devices found")
 
 
 def test_is_block_device(any_loop_device):
