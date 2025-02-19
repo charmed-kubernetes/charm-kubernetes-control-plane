@@ -8,7 +8,7 @@ charm-lib-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib
 charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@main#subdirectory=ops
 charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@main
 interface_hacluster @ git+https://github.com/charmed-kubernetes/charm-interface-hacluster@main
-ops.interface_kube_control @ git+https://github.com/charmed-kubernetes/interface-kube-control@main#subdirectory=ops
+ops.interface-kube-control==0.2.0
 ops.interface_tls_certificates @ git+https://github.com/charmed-kubernetes/interface-tls-certificates@main#subdirectory=ops
 ops.interface_aws @ git+https://github.com/charmed-kubernetes/interface-aws-integration@main#subdirectory=ops
 ops.interface_gcp @ git+https://github.com/charmed-kubernetes/interface-gcp-integration@main#subdirectory=ops
