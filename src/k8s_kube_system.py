@@ -47,26 +47,29 @@ def get_kube_system_pods_not_running(charm) -> Optional[List]:
         )
     )
 
-    # Pods in phases such as ['Running', 'Succeeded', 'Failed']
-    # should not be considered as pending Pods.
-    valid_phases = ["Running", "Succeeded", "Failed"]
-
-    # Pods in ['Succeeded', 'Failed'] phases are not meant to become ready
-    def is_yet_to_be_ready(pod):
-
-        if pod["status"]["phase"] == "Running":
+    def is_not_running(pod) -> bool:
+        status = pod["status"]
+        pod_phase, pod_reason = status["phase"], status.get("reason", "")
+        if pod_phase == "Failed":
+            # Report failed pods as not running -- full stop
+            return True
+        if pod_phase == "Succeeded":
+            # Exclude Succeeded pods since they have run and done their work
+            return False
+        if pod_phase == "Running":
+            # Any Running phase pod with not ready containers, should be considered not running
             container_statuses = pod["status"].get("initContainerStatuses", [])
             container_statuses += pod["status"].get("containerStatuses", [])
-            return not(all(status.get("ready", True) for status in container_statuses))
+            return any(not status.get("ready", True) for status in container_statuses)
+        # Any other phase (Pending or Unknown) are not running if they aren't evicted
+        return pod_reason != "Evicted"
 
-        return False
+    not_running = [pod for pod in result["items"] if is_not_running(pod)]
 
-    # Pods that are Running or Evicted (which should re-spawn) are
-    # considered running
-    def is_invalid(pod):
-        status = pod["status"]
-        return status["phase"] not in valid_phases and status.get("reason", "") != "Evicted"
-
-    not_running = [pod for pod in result["items"] if is_invalid(pod) or is_yet_to_be_ready(pod)]
+    log.info(
+        "Following pods are not running: {}".format(
+            ", ".join(pod["metadata"]["name"] for pod in not_running)
+        )
+    )
 
     return not_running
