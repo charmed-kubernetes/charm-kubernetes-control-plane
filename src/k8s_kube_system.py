@@ -51,17 +51,22 @@ def get_kube_system_pods_not_running(charm) -> Optional[List]:
     # should not be considered as pending Pods.
     valid_phases = ["Running", "Succeeded", "Failed"]
 
+    # Pods in ['Succeeded', 'Failed'] phases are not meant to become ready
+    def is_yet_to_be_ready(pod):
+
+        if pod["status"]["phase"] == "Running":
+            container_statuses = pod["status"].get("initContainerStatuses", [])
+            container_statuses += pod["status"].get("containerStatuses", [])
+            return not(all(status.get("ready", True) for status in container_statuses))
+
+        return False
+
     # Pods that are Running or Evicted (which should re-spawn) are
     # considered running
-    def is_ready(pod):
-        container_statuses = pod["status"].get("initContainerStatuses", [])
-        container_statuses += pod["status"].get("containerStatuses", [])
-        return all(status.get("ready", True) for status in container_statuses)
-
     def is_invalid(pod):
         status = pod["status"]
         return status["phase"] not in valid_phases and status.get("reason", "") != "Evicted"
 
-    not_running = [pod for pod in result["items"] if is_invalid(pod) or not is_ready(pod)]
+    not_running = [pod for pod in result["items"] if is_invalid(pod) or is_yet_to_be_ready(pod)]
 
     return not_running
