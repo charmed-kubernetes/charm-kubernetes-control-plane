@@ -51,25 +51,26 @@ def get_kube_system_pods_not_running(charm) -> Optional[List]:
         status = pod["status"]
         pod_phase, pod_reason = status["phase"], status.get("reason", "")
         if pod_phase == "Failed":
-            # Report failed pods as not running -- full stop
-            return True
-        if pod_phase == "Succeeded":
+            # Failed pods are not running -- full stop
+            not_running = True
+        elif pod_phase == "Succeeded":
             # Exclude Succeeded pods since they have run and done their work
-            return False
-        if pod_phase == "Running":
+            not_running = False
+        elif pod_phase == "Running":
             # Any Running phase pod with not ready containers, should be considered not running
             container_statuses = pod["status"].get("initContainerStatuses", [])
             container_statuses += pod["status"].get("containerStatuses", [])
-            return any(not status.get("ready", True) for status in container_statuses)
-        # Any other phase (Pending or Unknown) are not running if they aren't evicted
-        return pod_reason != "Evicted"
+            not_running = any(not status.get("ready", True) for status in container_statuses)
+        else:
+            # Any other phase (Pending or Unknown) are not running if they aren't evicted
+            not_running = pod_reason != "Evicted"
+        
+        if not_running:
+            pod_name, pod_ns = pod["metadata"]["namespace"], pod["metadata"]["name"]
+            log.warning("Pod/%s/%s in phase=%s is not running because of reason=%s", pod_ns, pod_name, pod_phase, pod_reason)
+        
+        return not_running
 
     not_running = [pod for pod in result["items"] if is_not_running(pod)]
-
-    log.info(
-        "Following pods are not running: {}".format(
-            ", ".join(pod["metadata"]["name"] for pod in not_running)
-        )
-    )
 
     return not_running
