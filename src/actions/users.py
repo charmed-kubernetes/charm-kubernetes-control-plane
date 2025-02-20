@@ -35,7 +35,6 @@ def user_list(event: ops.ActionEvent):
 
 def user_create(charm, event: ops.ActionEvent):
     user = event.params["name"]
-    groups = event.params.get("groups") or ""
     if not protect_resources(user, event):
         return
 
@@ -51,7 +50,9 @@ def user_create(charm, event: ops.ActionEvent):
         return
 
     # Create the secret
-    if not (token := create_token(user, user, groups)):
+    groups: str = event.params.get("groups") or ""
+    group_list = [g.strip() for g in groups.split(",") if g.strip()]
+    if not (token := create_token(user, user, group_list)):
         event.fail("Failed to create secret for: {}".format(user))
         return
 
