@@ -51,7 +51,7 @@ def user_create(charm, event: ops.ActionEvent):
 
     # Create the secret
     groups: str = event.params.get("groups") or ""
-    group_list = [g.strip() for g in groups.split(",") if g]
+    group_list = [g.strip() for g in groups.split(",") if g.strip()]
     if not (token := create_token(user, user, group_list)):
         event.fail("Failed to create secret for: {}".format(user))
         return
