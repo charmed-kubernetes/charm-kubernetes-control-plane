@@ -47,21 +47,30 @@ def get_kube_system_pods_not_running(charm) -> Optional[List]:
         )
     )
 
-    # Pods in phases such as ['Running', 'Succeeded', 'Failed']
-    # should not be considered as pending Pods.
-    valid_phases = ["Running", "Succeeded", "Failed"]
-
-    # Pods that are Running or Evicted (which should re-spawn) are
-    # considered running
-    def is_ready(pod):
-        container_statuses = pod["status"].get("initContainerStatuses", [])
-        container_statuses += pod["status"].get("containerStatuses", [])
-        return all(status.get("ready", True) for status in container_statuses)
-
-    def is_invalid(pod):
+    def is_not_running(pod) -> bool:
         status = pod["status"]
-        return status["phase"] not in valid_phases and status.get("reason", "") != "Evicted"
+        pod_phase, pod_reason = status["phase"], status.get("reason", "")
+        if pod_phase == "Failed":
+            # Failed pods are not running -- full stop
+            not_running = True
+        elif pod_phase == "Succeeded":
+            # Exclude Succeeded pods since they have run and done their work
+            not_running = False
+        elif pod_phase == "Running":
+            # Any Running phase pod with not ready containers, should be considered not running
+            container_statuses = pod["status"].get("initContainerStatuses", [])
+            container_statuses += pod["status"].get("containerStatuses", [])
+            not_running = any(not status.get("ready", True) for status in container_statuses)
+        else:
+            # Any other phase (Pending or Unknown) are not running if they aren't evicted
+            not_running = pod_reason != "Evicted"
 
-    not_running = [pod for pod in result["items"] if is_invalid(pod) or not is_ready(pod)]
+        if not_running:
+            pod_name, pod_ns = pod["metadata"]["namespace"], pod["metadata"]["name"]
+            log.warning("Pod/%s/%s in phase=%s is not running because of reason=%s", pod_ns, pod_name, pod_phase, pod_reason)
+
+        return not_running
+
+    not_running = [pod for pod in result["items"] if is_not_running(pod)]
 
     return not_running
