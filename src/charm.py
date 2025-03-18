@@ -58,6 +58,12 @@ class RefreshCosAgent(ops.EventBase):
     """Event to trigger a refresh of the COS agent."""
 
 
+class MissingCNIError(Exception):
+    """Exception raised when CNI is missing and not ignored."""
+
+    ERR = "Missing CNI relation or config"
+
+
 def charm_track() -> str:
     """Get the charm track based on the current charm branch.
 
@@ -288,12 +294,18 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         sandbox_image = kubernetes_snaps.get_sandbox_image(registry)
         self.container_runtime.set_sandbox_image(sandbox_image)
 
+    @status.on_error(ops.BlockedStatus(MissingCNIError.ERR), MissingCNIError)
     def configure_cni(self):
         status.add(ops.MaintenanceStatus("Configuring CNI"))
         self.cni.set_image_registry(self.model.config["image-registry"])
         self.cni.set_kubeconfig_hash_from_file(ROOT_KUBECONFIG)
         self.cni.set_service_cidr(self.model.config["service-cidr"])
-        kubernetes_snaps.set_default_cni_conf_file(self.cni.cni_conf_file)
+        if (conf_file := self.cni.cni_conf_file) and Path(conf_file).exists():
+            kubernetes_snaps.set_default_cni_conf_file(conf_file)
+        elif self.model.config["ignore-missing-cni"]:
+            log.info("Ignoring missing CNI configuration as per user request.")
+        else:
+            raise MissingCNIError()
 
     def configure_controller_manager(self):
         status.add(ops.MaintenanceStatus("Configuring Controller Manager"))
