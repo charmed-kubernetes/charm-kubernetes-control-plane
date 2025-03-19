@@ -262,7 +262,8 @@ def test_manage_ports(
     mock_close.assert_called_once_with(*port_params)
 
 
-def test_ignore_missing_cni(harness, caplog):
+@patch("charms.kubernetes_snaps.set_default_cni_conf_file")
+def test_ignore_missing_cni(set_default_cni_conf_file, harness, caplog):
     """Verify that if CNI relation is missing, it can be ignored."""
     harness.disable_hooks()
     harness.begin()
@@ -280,3 +281,4 @@ def test_ignore_missing_cni(harness, caplog):
         infos = [log[2] for log in caplog.record_tuples if log[1] == logging.INFO]
         assert len(infos) == 1, "There should be only one info level log"
         assert ["Ignoring missing CNI configuration as per user request."] == infos
+        set_default_cni_conf_file.assert_called_once_with(None)
