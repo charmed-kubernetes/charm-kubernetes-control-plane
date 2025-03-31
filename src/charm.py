@@ -55,6 +55,12 @@ log = logging.getLogger(__name__)
 OBSERVABILITY_ROLE = "system:cos"
 
 
+class MissingCNIError(Exception):
+    """Exception raised when CNI is missing and not ignored."""
+
+    ERR = "Missing CNI relation or config"
+
+
 def charm_track() -> str:
     """Get the charm track based on the current charm branch.
 
@@ -282,12 +288,26 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         sandbox_image = kubernetes_snaps.get_sandbox_image(registry)
         self.container_runtime.set_sandbox_image(sandbox_image)
 
+    @status.on_error(ops.BlockedStatus(MissingCNIError.ERR), MissingCNIError)
     def configure_cni(self):
         status.add(ops.MaintenanceStatus("Configuring CNI"))
         self.cni.set_image_registry(self.model.config["image-registry"])
         self.cni.set_kubeconfig_hash_from_file(ROOT_KUBECONFIG)
         self.cni.set_service_cidr(self.model.config["service-cidr"])
-        kubernetes_snaps.set_default_cni_conf_file(self.cni.cni_conf_file)
+
+        ignore_missing_cni = self.model.config["ignore-missing-cni"]
+        conf_file = self.cni.cni_conf_file
+
+        if not conf_file and not ignore_missing_cni:
+            raise MissingCNIError()
+
+        if not conf_file and ignore_missing_cni:
+            log.info("Ignoring missing CNI configuration as per user request.")
+
+        # It's okay to set_default_cni_conf_file when conf_file == None
+        # because it will delete the existing default and not update
+        # to the new one
+        kubernetes_snaps.set_default_cni_conf_file(conf_file)
 
     def configure_controller_manager(self):
         status.add(ops.MaintenanceStatus("Configuring Controller Manager"))
