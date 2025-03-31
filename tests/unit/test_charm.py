@@ -4,9 +4,11 @@
 # Learn more about testing at: https://juju.is/docs/sdk/testing
 
 import json
+import logging
 from pathlib import Path
-from unittest.mock import call, patch
+from unittest.mock import MagicMock, call, patch
 
+import charms.contextual_status as status
 import ops
 import ops.testing
 import pytest
@@ -51,6 +53,7 @@ def harness():
 @patch("charms.node_base.LabelMaker.active_labels")
 @patch("charms.node_base.LabelMaker.set_label")
 @patch("charms.node_base.LabelMaker.remove_label")
+@patch("pathlib.Path.exists", MagicMock(return_value=True))
 def test_active(
     remove_label,
     set_label,
@@ -257,3 +260,25 @@ def test_manage_ports(
 
     harness.charm.manage_ports(mock_close)
     mock_close.assert_called_once_with(*port_params)
+
+
+@patch("charms.kubernetes_snaps.set_default_cni_conf_file")
+def test_ignore_missing_cni(set_default_cni_conf_file, harness, caplog):
+    """Verify that if CNI relation is missing, it can be ignored."""
+    harness.disable_hooks()
+    harness.begin()
+
+    # CNI relation is not added and not ignored, raise an error
+    harness.update_config({"ignore-missing-cni": False})
+    with pytest.raises(status.ReconcilerError):
+        harness.charm.configure_cni()
+
+    # CNI relation is not added yet ignored, silently ignore
+    with caplog.at_level(logging.INFO):
+        caplog.clear()
+        harness.update_config({"ignore-missing-cni": True})
+        harness.charm.configure_cni()
+        infos = [log[2] for log in caplog.record_tuples if log[1] == logging.INFO]
+        assert len(infos) == 1, "There should be only one info level log"
+        assert ["Ignoring missing CNI configuration as per user request."] == infos
+        set_default_cni_conf_file.assert_called_once_with(None)
