@@ -67,7 +67,13 @@ def get_kube_system_pods_not_running(charm) -> Optional[List]:
 
         if not_running:
             pod_name, pod_ns = pod["metadata"]["namespace"], pod["metadata"]["name"]
-            log.warning("Pod/%s/%s in phase=%s is not running because of reason=%s", pod_ns, pod_name, pod_phase, pod_reason)
+            log.warning(
+                "Pod/%s/%s in phase=%s is not running because of reason=%s",
+                pod_ns,
+                pod_name,
+                pod_phase,
+                pod_reason,
+            )
 
         return not_running
 
