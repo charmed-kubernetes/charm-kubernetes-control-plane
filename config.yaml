@@ -186,6 +186,12 @@ options:
       Space separated list of pod names in the kube-system namespace to ignore
       when checking for running pods. Any non-Running Pod whose name is on
       this list, will be ignored during the check.
+  ignore-missing-cni:
+    type: boolean
+    default: false
+    description: |
+      If ignore-missing-cni is set to true, the charm will not enter a blocked state if a CNI has not been configured/provided via relation.
+      If ignore-missing-cni is set to false, and a CNI has not been configured/provided via relation, then the charm will enter a blocked state with the message: "Missing CNI relation or config".
   image-registry:
     type: string
     default: "rocks.canonical.com:443/cdk"

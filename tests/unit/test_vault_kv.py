@@ -6,6 +6,7 @@ import hvac.exceptions
 import ops
 import ops.testing
 import pytest
+
 from charm import KubernetesControlPlaneCharm
 from encryption.reactive import retrieve_secret_id
 from encryption.vault_kv import VaultNotReadyError
