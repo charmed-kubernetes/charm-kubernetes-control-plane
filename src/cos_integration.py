@@ -100,25 +100,35 @@ class COSIntegration:
             "replacement": node_name,
         }
 
-        components = [
-            ("kube-proxy", "/metrics", "http", "localhost:10249"),
-            ("apiserver", "/metrics", "https", "localhost:6443"),
-            ("kube-scheduler", "/metrics", "https", "localhost:10259"),
-            ("kube-controller-manager", "/metrics", "https", "localhost:10257"),
-        ]
-
         kubernetes_jobs = [
             JobConfig(
-                name=component,
-                metrics_path=path,
-                scheme=scheme,
-                target=target,
-                relabel_configs=[
-                    {"target_label": "job", "replacement": component},
-                    *([instance_relabel] if component != "kube-proxy" else []),
-                ],
+                name="apiserver",
+                metrics_path="/metrics",
+                scheme="https",
+                target="localhost:6443",
+                relabel_configs=[{"target_label": "job", "replacement": "apiserver"}, instance_relabel],
+            ),
+            JobConfig(
+                name="kube-proxy",
+                metrics_path="/metrics",
+                scheme="http",
+                target="localhost:10249",
+                relabel_configs=[{"target_label": "job", "replacement": "kube-proxy"}],
+            ),
+            JobConfig(
+                name="kube-scheduler",
+                metrics_path="/metrics",
+                scheme="https",
+                target="localhost:10259",
+                relabel_configs=[{"target_label": "job", "replacement": "kube-scheduler"}, instance_relabel],
+            ),
+            JobConfig(
+                name="kube-controller-manager",
+                metrics_path="/metrics",
+                scheme="https",
+                target="localhost:10257",
+                relabel_configs=[{"target_label": "job", "replacement": "kube-controller-manager"}, instance_relabel],
             )
-            for component, path, scheme, target in components
         ]
         kubelet_metrics_paths = [
             "/metrics",
