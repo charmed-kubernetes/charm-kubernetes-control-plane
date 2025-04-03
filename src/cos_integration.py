@@ -139,7 +139,7 @@ class COSIntegration:
 
         kubelet_jobs = [
             JobConfig(
-                name=f"kubelet-{metric.replace('/', '-')}",
+                name=f"kubelet{metric.replace('/', '-')}",
                 metrics_path=metric,
                 scheme="https",
                 target="localhost:10250",
