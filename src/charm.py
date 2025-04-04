@@ -40,6 +40,7 @@ import actions.upgrade
 import actions.users
 import auth_webhook
 import leader_data
+import routabled
 from cdk_addons import CdkAddons
 from cloud_integration import CloudIntegration
 from cos_integration import COSIntegration
@@ -631,6 +632,9 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             raise
 
         log.info(f"Extracted 'cni-plugins' to {unpack_path}")
+
+        routabled.ensure("config-changed")
+        log.info("Wire-up routabled config-changed events")
 
     def reconcile(self, event):
         """Reconcile state change events."""
