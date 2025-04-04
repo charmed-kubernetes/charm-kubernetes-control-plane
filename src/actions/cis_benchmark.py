@@ -45,7 +45,7 @@ class Remedy:
         """Run the remedy command."""
         if self.type == "manual":
             log.info(
-                "Test %s: unable to auto-apply remedy.\n" "Manual steps:\n%s",
+                "Test %s: unable to auto-apply remedy.\nManual steps:\n%s",
                 test_num,
                 test_remediation,
             )
@@ -69,7 +69,7 @@ CONSERVATIVE = {
 ADMISSION_PLUGINS = {
     "enable-admission-plugins": (
         "PersistentVolumeLabel",
-        "PodSecurityPolicy," "AlwaysPullImages",
+        "PodSecurityPolicy,AlwaysPullImages",
         "NodeRestriction",
     )
 }
@@ -169,7 +169,7 @@ class CISBenchmark(ops.Object):
 
             # Setup the 'go' environment
             env = os.environ.copy()
-            go_bin = shutil.which("go", path=f'{env["PATH"]}:/snap/bin')
+            go_bin = shutil.which("go", path=f"{env['PATH']}:/snap/bin")
             if not go_bin:
                 try:
                     cmd = ["snap", "install", "go", "--channel=stable", "--classic"]
@@ -269,11 +269,7 @@ class CISBenchmark(ops.Object):
         self._restart_charm(event)
 
         event.set_results(
-            {
-                "summary": (
-                    "Reset is complete. Re-run with " '"apply=none" to generate a new report.'
-                )
-            }
+            {"summary": ('Reset is complete. Re-run with "apply=none" to generate a new report.')}
         )
 
     def craft_extra_args(self, service: str, args: dict):
