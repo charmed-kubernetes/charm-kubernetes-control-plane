@@ -63,5 +63,4 @@ def get_kube_system_pods_not_running(charm) -> Optional[List]:
         return status["phase"] not in valid_phases and status.get("reason", "") != "Evicted"
 
     not_running = [pod for pod in result["items"] if is_invalid(pod) or not is_ready(pod)]
-
     return not_running

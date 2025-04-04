@@ -4,7 +4,7 @@ charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kub
 charm-lib-interface-kube-dns @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kube-dns@release_1.31
 charm-lib-interface-kubernetes-cni @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kubernetes-cni@release_1.31
 charm-lib-interface-tokens @ git+https://github.com/charmed-kubernetes/charm-lib-interface-tokens@release_1.31
-charm-lib-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps@release_1.31
+charm-lib-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps@no-cni/release-1.31
 charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@release_1.31#subdirectory=ops
 charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@release_1.31
 interface_hacluster @ git+https://github.com/charmed-kubernetes/charm-interface-hacluster@release_1.31
