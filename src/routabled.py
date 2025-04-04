@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from subprocess import check_call
 from typing import Optional, TypedDict
 
 DEFAULT_TIMEOUT = 300  # 5 minutes
@@ -62,6 +63,11 @@ def _render_routabled(event_name: str, context: EventConfig) -> None:
         context: Addition configuration for the event to schedule.
     """
     ROUTABLED_PATH.mkdir(parents=True, exist_ok=True)
-    dest = ROUTABLED_PATH / f'{context["app"]}.{event_name}.sh'
-    dest.write_text(ROUTABLED_SH.format(**context))
-    dest.chmod(0o400)
+    dest = ROUTABLED_PATH / f"{context['app']}.{event_name}.sh"
+    content = ROUTABLED_SH.format(**context)
+    if not dest.exists() or dest.read_text() != content:
+        dest.write_text(ROUTABLED_SH.format(**context))
+        dest.chmod(0o755)
+
+        check_call(["systemctl", "enable", "--now", "systemd-networkd"])
+        check_call(["systemctl", "restart", "networkd-dispatcher"])
