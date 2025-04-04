@@ -1,0 +1,10 @@
+#!/bin/bash
+# networkd-dispatcher script to trigger juju-exec on network change
+
+INTERFACE=$1
+STATUS=$2
+
+# Only trigger for the loopback interface
+if [[ "$INTERFACE" == "lo" ]]; then
+    /usr/bin/timeout {timeout} /usr/bin/bash -c '/usr/bin/juju-exec "{app}/{unit_num}" "JUJU_DISPATCH_PATH={event} ./dispatch"'
+fi
