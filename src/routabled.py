@@ -64,4 +64,4 @@ def _render_routabled(event_name: str, context: EventConfig) -> None:
     ROUTABLED_PATH.mkdir(parents=True, exist_ok=True)
     dest = ROUTABLED_PATH / f'{context["app"]}.{event_name}.sh'
     dest.write_text(ROUTABLED_SH.format(**context))
-    dest.chmod(0o400)
+    dest.chmod(0o700)
