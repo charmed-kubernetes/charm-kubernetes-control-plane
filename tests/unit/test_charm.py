@@ -161,7 +161,7 @@ def test_active(
         cluster_cidr="192.168.0.0/16",
         etcd_connection_string="https://10.0.0.11:2379",
         extra_args_config="",
-        privileged="auto",
+        privileged=False,
         service_cidr="10.152.183.0/24",
         external_cloud_provider=harness.charm.external_cloud_provider,
         authz_webhook_conf_file=Path("/root/cdk/auth-webhook/authz-webhook-conf.yaml"),

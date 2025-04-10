@@ -198,6 +198,13 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         args = self.cis_benchmark.craft_extra_args(service_name, extra_args)
         return " ".join(f"{k}={v}" for k, v in args.items())
 
+    def allow_privileged(self) -> bool:
+        val = self.model.config["allow-privileged"].lower()
+        if val not in ["true", "false", "auto"]:
+            status.add(ops.BlockedStatus("Invalid config for allow-privileged"))
+            return False
+        return val == "true"
+
     def configure_apiserver(self):
         status.add(ops.MaintenanceStatus("Configuring API Server"))
         kubernetes_snaps.configure_apiserver(
@@ -209,7 +216,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             cluster_cidr=self.cni.cidr,
             etcd_connection_string=self.etcd.get_connection_string(),
             extra_args_config=self.service_extra_args("kube-apiserver", "api-extra-args"),
-            privileged=self.model.config["allow-privileged"],
+            privileged=self.allow_privileged(),
             service_cidr=self.model.config["service-cidr"],
             external_cloud_provider=self.external_cloud_provider,
             authz_webhook_conf_file=auth_webhook.authz_webhook_conf,

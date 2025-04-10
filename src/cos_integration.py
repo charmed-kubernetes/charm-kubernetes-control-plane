@@ -106,7 +106,10 @@ class COSIntegration:
                 metrics_path="/metrics",
                 scheme="https",
                 target="localhost:6443",
-                relabel_configs=[{"target_label": "job", "replacement": "apiserver"}, instance_relabel],
+                relabel_configs=[
+                    {"target_label": "job", "replacement": "apiserver"},
+                    instance_relabel,
+                ],
             ),
             JobConfig(
                 name="kube-proxy",
@@ -120,15 +123,21 @@ class COSIntegration:
                 metrics_path="/metrics",
                 scheme="https",
                 target="localhost:10259",
-                relabel_configs=[{"target_label": "job", "replacement": "kube-scheduler"}, instance_relabel],
+                relabel_configs=[
+                    {"target_label": "job", "replacement": "kube-scheduler"},
+                    instance_relabel,
+                ],
             ),
             JobConfig(
                 name="kube-controller-manager",
                 metrics_path="/metrics",
                 scheme="https",
                 target="localhost:10257",
-                relabel_configs=[{"target_label": "job", "replacement": "kube-controller-manager"}, instance_relabel],
-            )
+                relabel_configs=[
+                    {"target_label": "job", "replacement": "kube-controller-manager"},
+                    instance_relabel,
+                ],
+            ),
         ]
         kubelet_metrics_paths = [
             "/metrics",

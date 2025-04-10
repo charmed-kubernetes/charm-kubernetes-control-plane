@@ -1,15 +1,23 @@
 options:
   allow-privileged:
     type: string
-    default: "auto"
+    default: "false"
     description: |
       Allow kube-apiserver to run in privileged mode. Supported values are
-      "true", "false", and "auto". If "true", kube-apiserver will run in
-      privileged mode by default. If "false", kube-apiserver will never run in
-      privileged mode. If "auto", kube-apiserver will not run in privileged
-      mode by default, unless certain circumstances are discovered
-         * gpu hardware is detected on a worker node
-         * openstack-integrator successfully related
+      "true", "false", and "auto (deprecated)".
+
+      If "true", kube-apiserver will run in privileged mode.
+      If "false", kube-apiserver will never run in privileged mode.
+
+      Deprecated option:
+      If "auto", kube-apiserver will never run in privileged mode.
+      This mode was the previous default, so it's value is retained for backwards compatibility.
+
+      Prior to 1.29, kube-apiserver would run in privileged mode if the following conditions were met:
+      * gpu hardware is detected on a worker node
+      * openstack-integrator successfully related
+
+      Any other configuration will result in the charm blocked with an error message.
 
   api-extra-args:
     type: string
