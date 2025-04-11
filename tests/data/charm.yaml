@@ -4,8 +4,6 @@ applications:
     charm: {{charm}}
     channel: null
     series: {{series}}
-    options:
-      allow-privileged: true
     resources:
       cni-plugins: {{resource_path}}/cni-plugins-{{arch}}.tar.gz
   grafana-agent:

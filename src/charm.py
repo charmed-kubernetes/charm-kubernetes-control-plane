@@ -199,12 +199,38 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         return " ".join(f"{k}={v}" for k, v in args.items())
 
     @property
+    def _any_privileged_cni(self) -> bool:
+        """Returns boolean indicating relation to a CNI requiring privilege."""
+        cni_conf_file = self.cni.cni_conf_file
+        if not cni_conf_file:
+            return False
+        require_priv = {"calico", "kube-ovn", "cilium"}
+        cni_conf_files = {
+            rel.data[unit].get("cni-conf-file", "")
+            for rel in self.cni.relations
+            for unit in rel.units
+        }
+        return any(app in fname for fname in cni_conf_files for app in require_priv)
+
+    @property
+    def _gpu_enabled(self) -> bool:
+        """Returns boolean if any container_runtime has nvidia_enabled."""
+        return any(
+            rel.data[unit].get("nvidia_enabled", "") == "true"
+            for rel in self.container_runtime.relations
+            for unit in rel.units
+        )
+
+    @property
     def allows_privileged(self) -> bool:
         val = self.model.config["allow-privileged"].lower()
         if val not in ["true", "false", "auto"]:
             status.add(ops.BlockedStatus("Invalid config for allow-privileged"))
             return False
-        return val == "true"
+        if val == "auto":
+            return self._any_privileged_cni or self._gpu_enabled
+        else:
+            return val == "true"
 
     def configure_apiserver(self):
         status.add(ops.MaintenanceStatus("Configuring API Server"))
