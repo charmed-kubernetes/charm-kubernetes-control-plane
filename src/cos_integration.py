@@ -102,39 +102,38 @@ class COSIntegration:
 
         kubernetes_jobs = [
             JobConfig(
-                "kube-proxy",
-                "/metrics",
-                "http",
-                "localhost:10249",
-                [{"target_label": "job", "replacement": "kube-proxy"}],
-            ),
-            JobConfig(
-                "apiserver",
-                "/metrics",
-                "https",
-                "localhost:6443",
-                [
-                    {
-                        "source_labels": ["job"],
-                        "target_label": "job",
-                        "replacement": "apiserver",
-                    },
+                name="apiserver",
+                metrics_path="/metrics",
+                scheme="https",
+                target="localhost:6443",
+                relabel_configs=[
+                    {"target_label": "job", "replacement": "apiserver"},
                     instance_relabel,
                 ],
             ),
             JobConfig(
-                "kube-scheduler",
-                "/metrics",
-                "https",
-                "localhost:10259",
-                [{"target_label": "job", "replacement": "kube-scheduler"}, instance_relabel],
+                name="kube-proxy",
+                metrics_path="/metrics",
+                scheme="http",
+                target="localhost:10249",
+                relabel_configs=[{"target_label": "job", "replacement": "kube-proxy"}],
             ),
             JobConfig(
-                "kube-controller-manager",
-                "/metrics",
-                "https",
-                "localhost:10257",
-                [
+                name="kube-scheduler",
+                metrics_path="/metrics",
+                scheme="https",
+                target="localhost:10259",
+                relabel_configs=[
+                    {"target_label": "job", "replacement": "kube-scheduler"},
+                    instance_relabel,
+                ],
+            ),
+            JobConfig(
+                name="kube-controller-manager",
+                metrics_path="/metrics",
+                scheme="https",
+                target="localhost:10257",
+                relabel_configs=[
                     {"target_label": "job", "replacement": "kube-controller-manager"},
                     instance_relabel,
                 ],
@@ -149,39 +148,43 @@ class COSIntegration:
 
         kubelet_jobs = [
             JobConfig(
-                f"kubelet-{metric}" if metric else "kubelet",
-                path,
-                "https",
-                "localhost:10250",
-                [
-                    {"target_label": "metrics_path", "replacement": path},
+                name=f"kubelet{metric.replace('/', '-')}",
+                metrics_path=metric,
+                scheme="https",
+                target="localhost:10250",
+                relabel_configs=[
+                    {"target_label": "metrics_path", "replacement": metric},
                     {"target_label": "job", "replacement": "kubelet"},
                     instance_relabel,
                 ],
             )
-            for path in kubelet_metrics_paths
-            if (metric := path.strip("/metrics")) is not None
+            for metric in kubelet_metrics_paths
         ]
 
-        kube_state_metrics = [
-            JobConfig(
-                "kube-state-metrics",
-                "/api/v1/namespaces/kube-system/services/kube-state-metrics:8080/proxy/metrics",
-                "https",
-                "localhost:6443",
-                [
+        jobs = [
+            self._create_scrape_job(job, node_name, token, cluster_name)
+            for job in kubernetes_jobs + kubelet_jobs
+        ]
+
+        if self.charm.unit.is_leader():
+            # NOTE: Leader should be the only one gathering KSM data.
+            kube_state_metrics_job = JobConfig(
+                name="kube-state-metrics",
+                metrics_path="/api/v1/namespaces/kube-system/services/kube-state-metrics:8080/proxy/metrics",
+                scheme="https",
+                target="localhost:6443",
+                relabel_configs=[
                     {"target_label": "job", "replacement": "kube-state-metrics"},
                 ],
-                [
+                static_configs=[
                     {
                         "targets": ["localhost:6443"],
                         "labels": {"cluster": cluster_name},
                     }
                 ],
             )
-        ]
+            jobs.append(
+                self._create_scrape_job(kube_state_metrics_job, node_name, token, cluster_name)
+            )
 
-        return [
-            self._create_scrape_job(job, node_name, token, cluster_name)
-            for job in kubernetes_jobs + kubelet_jobs + kube_state_metrics
-        ]
+        return jobs

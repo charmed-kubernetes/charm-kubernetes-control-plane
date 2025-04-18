@@ -38,3 +38,15 @@ index f3ee60b..c188dbe 100644
  
        '
      for: 15m
+@@ -1085,9 +1085,9 @@ groups:
+ - name: k8s.rules
+   rules:
+   - expr: "sum by (cluster, namespace, pod, container) (\n  irate(container_cpu_usage_seconds_total{job=\"\
+-      kubelet\", metrics_path=\"/metrics/cadvisor\", image!=\"\"}[5m])\n) * on (cluster,\
++      kubelet\", metrics_path=\"/metrics/cadvisor\", image!=\"\", juju_application=~\".+\"}[5m])\n) * on (cluster,\
+       \ namespace, pod) group_left(node) topk by (cluster, namespace, pod) (\n  1,\
+-      \ max by(cluster, namespace, pod, node) (kube_pod_info{node!=\"\"})\n)\n"
++      \ max by(cluster, namespace, pod, node) (kube_pod_info{node!=\"\", juju_application=~\".+\"})\n)\n"
+     record: node_namespace_pod_container:container_cpu_usage_seconds_total:sum_irate
+   - expr: "container_memory_working_set_bytes{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\"\
+       , image!=\"\"}\n* on (cluster, namespace, pod) group_left(node) topk by(cluster,\

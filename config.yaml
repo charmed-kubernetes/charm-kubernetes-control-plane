@@ -3,13 +3,17 @@ options:
     type: string
     default: "auto"
     description: |
-      Allow kube-apiserver to run in privileged mode. Supported values are
-      "true", "false", and "auto". If "true", kube-apiserver will run in
-      privileged mode by default. If "false", kube-apiserver will never run in
-      privileged mode. If "auto", kube-apiserver will not run in privileged
-      mode by default, unless certain circumstances are discovered
-         * gpu hardware is detected on a worker node
-         * openstack-integrator successfully related
+      Allows kube-apiserver to accept privileged containers. Supported values
+      are "true", "false", and "auto".
+
+      If "true",  kube-apiserver allows privileged containers
+      If "false", kube-apiserver never allows privileged containers
+      If "auto",  kube-apiserver allows privileged containers under the
+          following conditions:
+      * any privileged cni is related
+      * container-runtime states nvidia_enabled
+
+      Any other configuration will result in the charm blocked with an error message.
 
   api-extra-args:
     type: string
@@ -186,6 +190,12 @@ options:
       Space separated list of pod names in the kube-system namespace to ignore
       when checking for running pods. Any non-Running Pod whose name is on
       this list, will be ignored during the check.
+  ignore-missing-cni:
+    type: boolean
+    default: false
+    description: |
+      If ignore-missing-cni is set to true, the charm will not enter a blocked state if a CNI has not been configured/provided via relation.
+      If ignore-missing-cni is set to false, and a CNI has not been configured/provided via relation, then the charm will enter a blocked state with the message: "Missing CNI relation or config".
   image-registry:
     type: string
     default: "rocks.canonical.com:443/cdk"

@@ -8,7 +8,7 @@ from base64 import b64decode, b64encode
 from dataclasses import dataclass
 from pathlib import Path
 from subprocess import CalledProcessError, check_call, check_output
-from typing import Mapping
+from typing import List, Mapping
 
 import charms.contextual_status as status
 import yaml
@@ -118,7 +118,7 @@ def delete_token(secret_id: str):
     kubectl("delete", "secret", "-n", auth_secret_ns, secret_id, "--ignore-not-found=true")
 
 
-def create_token(uid, username, groups=[]):
+def create_token(uid: str, username: str, groups: List[str]):
     token = get_token(username)
     if token:
         return token

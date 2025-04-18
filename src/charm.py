@@ -54,6 +54,16 @@ log = logging.getLogger(__name__)
 OBSERVABILITY_ROLE = "system:cos"
 
 
+class RefreshCosAgent(ops.EventBase):
+    """Event to trigger a refresh of the COS agent."""
+
+
+class MissingCNIError(Exception):
+    """Exception raised when CNI is missing and not ignored."""
+
+    ERR = "Missing CNI relation or config"
+
+
 def charm_track() -> str:
     """Get the charm track based on the current charm branch.
 
@@ -95,6 +105,8 @@ def cdk_addons_channel(channel: str) -> str:
 class KubernetesControlPlaneCharm(ops.CharmBase):
     """Charmed Operator for Kubernetes Control Plane."""
 
+    observability_refresh = ops.EventSource(RefreshCosAgent)
+
     APISERVER_PORT = 6443
 
     def __init__(self, *args):
@@ -118,6 +130,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                 self.on.kube_control_relation_joined,
                 self.on.kube_control_relation_changed,
                 self.on.upgrade_charm,
+                self.observability_refresh,
             ],
         )
         self.etcd = EtcdReactiveRequires(self)
@@ -185,6 +198,40 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         args = self.cis_benchmark.craft_extra_args(service_name, extra_args)
         return " ".join(f"{k}={v}" for k, v in args.items())
 
+    @property
+    def _any_privileged_cni(self) -> bool:
+        """Returns boolean indicating relation to a CNI requiring privilege."""
+        cni_conf_file = self.cni.cni_conf_file
+        if not cni_conf_file:
+            return False
+        require_priv = {"calico", "kube-ovn", "cilium"}
+        cni_conf_files = {
+            rel.data[unit].get("cni-conf-file", "")
+            for rel in self.cni.relations
+            for unit in rel.units
+        }
+        return any(app in fname for fname in cni_conf_files for app in require_priv)
+
+    @property
+    def _gpu_enabled(self) -> bool:
+        """Returns boolean if any container_runtime has nvidia_enabled."""
+        return any(
+            rel.data[unit].get("nvidia_enabled", "") == "true"
+            for rel in self.container_runtime.relations
+            for unit in rel.units
+        )
+
+    @property
+    def allows_privileged(self) -> bool:
+        val = self.model.config["allow-privileged"].lower()
+        if val not in ["true", "false", "auto"]:
+            status.add(ops.BlockedStatus("Invalid config for allow-privileged"))
+            return False
+        if val == "auto":
+            return self._any_privileged_cni or self._gpu_enabled
+        else:
+            return val == "true"
+
     def configure_apiserver(self):
         status.add(ops.MaintenanceStatus("Configuring API Server"))
         kubernetes_snaps.configure_apiserver(
@@ -196,7 +243,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             cluster_cidr=self.cni.cidr,
             etcd_connection_string=self.etcd.get_connection_string(),
             extra_args_config=self.service_extra_args("kube-apiserver", "api-extra-args"),
-            privileged=self.model.config["allow-privileged"],
+            privileged=self.allows_privileged,
             service_cidr=self.model.config["service-cidr"],
             external_cloud_provider=self.external_cloud_provider,
             authz_webhook_conf_file=auth_webhook.authz_webhook_conf,
@@ -281,12 +328,26 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         sandbox_image = kubernetes_snaps.get_sandbox_image(registry)
         self.container_runtime.set_sandbox_image(sandbox_image)
 
+    @status.on_error(ops.BlockedStatus(MissingCNIError.ERR), MissingCNIError)
     def configure_cni(self):
         status.add(ops.MaintenanceStatus("Configuring CNI"))
         self.cni.set_image_registry(self.model.config["image-registry"])
         self.cni.set_kubeconfig_hash_from_file(ROOT_KUBECONFIG)
         self.cni.set_service_cidr(self.model.config["service-cidr"])
-        kubernetes_snaps.set_default_cni_conf_file(self.cni.cni_conf_file)
+
+        ignore_missing_cni = self.model.config["ignore-missing-cni"]
+        conf_file = self.cni.cni_conf_file
+
+        if not conf_file and not ignore_missing_cni:
+            raise MissingCNIError()
+
+        if not conf_file and ignore_missing_cni:
+            log.info("Ignoring missing CNI configuration as per user request.")
+
+        # It's okay to set_default_cni_conf_file when conf_file == None
+        # because it will delete the existing default and not update
+        # to the new one
+        kubernetes_snaps.set_default_cni_conf_file(conf_file)
 
     def configure_controller_manager(self):
         status.add(ops.MaintenanceStatus("Configuring Controller Manager"))
@@ -523,6 +584,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         auth_webhook.create_token(
             uid=self.model.unit.name, username=cos_user, groups=[OBSERVABILITY_ROLE]
         )
+        self.observability_refresh.emit()
 
     def generate_tokens(self):
         """Generate and send tokens for units that request them."""
@@ -580,15 +642,16 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def get_scrape_jobs(self):
         try:
-            node_name = self.get_node_name()
-            cos_user = f"system:cos:{node_name}"
-            token = auth_webhook.get_token(cos_user)
-            cluster_name = self.get_cluster_name()
-            if not token or not cluster_name:
-                log.info("COS token or cluster name not yet available.")
-                return []
-            return self.cos_integration.get_metrics_endpoints(node_name, token, cluster_name)
-        except CalledProcessError:
+            with status.on_error(ops.WaitingStatus("Waiting for scrape jobs")):
+                node_name = self.get_node_name()
+                cos_user = f"system:cos:{node_name}"
+                token = auth_webhook.get_token(cos_user)
+                cluster_name = self.get_cluster_name()
+                if not token or not cluster_name:
+                    log.info("COS token or cluster name not yet available.")
+                    return []
+                return self.cos_integration.get_metrics_endpoints(node_name, token, cluster_name)
+        except status.ReconcilerError:
             log.info("Failed to retrieve COS token.")
             return []
 
