@@ -533,9 +533,13 @@ bases:
       architectures: ["s390x"]
 parts:
   charm:
-    build-packages: [git]
+    plugin: charm
+    build-packages:
+    - git
+    charm-python-packages:
+    - setuptools==79.0.0
     prime:
-      - templates/**
+    - templates/**
   branch:
     # save the branch name into the charm
     after: [charm]
