@@ -24,3 +24,4 @@ tenacity == 8.2.3
 hvac == 2.2.0
 # auth-webhook service
 gunicorn == 23.0.0
+setuptools == 79.0.1
