@@ -534,10 +534,8 @@ bases:
 parts:
   charm:
     plugin: charm
-    build-packages:
-    - git
-    charm-python-packages:
-    - setuptools==79.0.0
+    source: .
+    build-packages: [git]
     prime:
     - templates/**
   branch:
