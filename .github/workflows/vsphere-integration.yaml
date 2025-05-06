@@ -13,7 +13,7 @@ jobs:
         id: charmcraft
         run: echo "channel=$(cat .charmcraft-channel)" >> $GITHUB_OUTPUT
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.10"
       - name: Setup operator environment
@@ -39,13 +39,13 @@ jobs:
           mv juju-crashdump-* tmp/ | true
       - name: Upload debug artifacts
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: test-run-artifacts
           path: tmp
       - name: Upload charmcraft logs
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: charmcraft-logs
           path: "/home/ubuntu/.local/state/charmcraft/log/*"
