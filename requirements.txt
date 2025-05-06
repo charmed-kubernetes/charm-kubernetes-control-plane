@@ -24,4 +24,4 @@ tenacity == 8.2.3
 hvac == 2.2.0
 # auth-webhook service
 gunicorn == 23.0.0
-charset_normalizer == 3.4.1
+pluggy == 1.4.0
