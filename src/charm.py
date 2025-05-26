@@ -5,6 +5,7 @@
 """Charmed Machine Operator for Kubernetes Control Plane."""
 
 import functools
+import ipaddress
 import logging
 import os
 import re
@@ -63,6 +64,10 @@ class MissingCNIError(Exception):
 
     ERR = "Missing CNI relation or config"
 
+class DualStackUnspecifiedIPError(Exception):
+    """Exception raised when there is an unspecified IP in a dual stack configuration."""
+
+    ERR = "Unspecified IP in dual stack configuration"
 
 def charm_track() -> str:
     """Get the charm track based on the current charm branch.
@@ -424,6 +429,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             external_cloud_provider=self.external_cloud_provider,
         )
 
+    @status.on_error(ops.BlockedStatus(DualStackUnspecifiedIPError.ERR), DualStackUnspecifiedIPError)
     def configure_kubelet(self):
         status.add(ops.MaintenanceStatus("Configuring Kubelet"))
         kubernetes_snaps.configure_kubelet(
@@ -434,7 +440,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             extra_config=yaml.safe_load(self.model.config["kubelet-extra-config"]),
             external_cloud_provider=self.external_cloud_provider,
             kubeconfig="/root/cdk/kubeconfig",
-            node_ip=self.kube_control.ingress_addresses[0],
+            node_ip=','.join(self._get_node_ip_addresses()),
             registry=self.model.config["image-registry"],
             taints=self.model.config["register-with-taints"].split(),
         )
@@ -877,6 +883,27 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                     msg = msg.format(len(unready), plural)
                     status.add(ops.WaitingStatus(msg))
 
+    def _get_node_ip_addresses(self) -> list[str]:
+        addresses = self.kube_control.ingress_addresses
+        uniq = {ipaddress.ip_address(addr) for addr in addresses}
+        sorted_ips = sorted(uniq, key=lambda x: (x.version, x))
+
+        ipv4 = next((ip for ip in sorted_ips if ip.version == 4), None)
+        ipv6 = next((ip for ip in sorted_ips if ip.version == 6), None)
+
+        # Return a list with at most one IPv4 and one IPv6
+        node_ip_addresses = []
+        if ipv4:
+            node_ip_addresses.append(ipv4)
+        if ipv6:
+            node_ip_addresses.append(ipv6)
+
+        # Dual-stack addresses (one IPv6 and one IPv4 address) must not contain unspecified IPs
+        # https://github.com/kubernetes/kubernetes/blob/f6530285a85d6f4280711301613a7d3215a25818/staging/src/k8s.io/component-helpers/node/util/ips.go#L58
+        if len(node_ip_addresses) == 2 and any(addr.is_unspecified for addr in node_ip_addresses):
+            raise DualStackUnspecifiedIPError(f"{node_ip_addresses} contain unspecified IP")
+
+        return [str(addr) for addr in node_ip_addresses]
 
 if __name__ == "__main__":  # pragma: nocover
     ops.main(KubernetesControlPlaneCharm)
