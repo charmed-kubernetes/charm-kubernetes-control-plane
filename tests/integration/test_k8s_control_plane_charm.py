@@ -11,7 +11,7 @@ from pytest_operator.plugin import OpsTest
 log = logging.getLogger(__name__)
 
 
-SERIES = "jammy"
+SERIES = "noble"
 
 
 @pytest.mark.abort_on_fail
