@@ -64,10 +64,12 @@ class MissingCNIError(Exception):
 
     ERR = "Missing CNI relation or config"
 
+
 class DualStackNodeIPError(Exception):
-    """Exception raised when there is an issue obtaining node IP(s) for kubelet 
+    """Exception raised when there is an issue obtaining node IP(s) for kubelet
     in a dual stack configuration.
     """
+
 
 def charm_track() -> str:
     """Get the charm track based on the current charm branch.
@@ -439,7 +441,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             extra_config=yaml.safe_load(self.model.config["kubelet-extra-config"]),
             external_cloud_provider=self.external_cloud_provider,
             kubeconfig="/root/cdk/kubeconfig",
-            node_ip=','.join(self._get_node_ip_addresses()),
+            node_ip=",".join(self._get_node_ip_addresses()),
             registry=self.model.config["image-registry"],
             taints=self.model.config["register-with-taints"].split(),
         )
@@ -887,16 +889,25 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         uniq = {ipaddress.ip_address(addr) for addr in addresses}
         sorted_ips = sorted(uniq, key=lambda x: (x.version, x))
 
-
-        if len(sorted_ips) not in (1, 2) or (len(sorted_ips) == 2 and (sorted_ips[0].version != sorted_ips[1].version)):
-            log.error("node-ips must contain either a single IP or a dual-stack pair of IPs (sorted_ips='%s')", sorted_ips)
+        if len(sorted_ips) not in (1, 2) or (
+            len(sorted_ips) == 2 and (sorted_ips[0].version != sorted_ips[1].version)
+        ):
+            log.error(
+                "node-ips must contain either a single IP or a dual-stack pair of IPs (sorted_ips='%s')",
+                sorted_ips,
+            )
             raise DualStackNodeIPError(f"{sorted_ips} is invalid")
         # Dual-stack addresses (one IPv6 and one IPv4 address) must not contain unspecified IPs
         # https://github.com/kubernetes/kubernetes/blob/f6530285a85d6f4280711301613a7d3215a25818/staging/src/k8s.io/component-helpers/node/util/ips.go#L58
         elif len(sorted_ips) == 2 and any(addr.is_unspecified for addr in sorted_ips):
+            log.error(
+                "dual-stack node-ips cannot include '0.0.0.0' or '::' (sorted_ips='%s')",
+                sorted_ips,
+            )
             raise DualStackNodeIPError(f"{sorted_ips} contain unspecified IP")
 
         return [str(addr) for addr in sorted_ips]
+
 
 if __name__ == "__main__":  # pragma: nocover
     ops.main(KubernetesControlPlaneCharm)
