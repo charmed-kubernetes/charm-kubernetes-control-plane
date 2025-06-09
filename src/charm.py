@@ -66,9 +66,7 @@ class MissingCNIError(Exception):
 
 
 class DualStackNodeIPError(Exception):
-    """Exception raised when there is an issue obtaining node IP(s) for kubelet
-    in a dual stack configuration.
-    """
+    """Exception raised when there is an issue obtaining node IP(s) for kubelet in a dual stack configuration."""
 
 
 def charm_track() -> str:
