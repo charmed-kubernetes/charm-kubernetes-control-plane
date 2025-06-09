@@ -887,14 +887,18 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         uniq = {ipaddress.ip_address(addr) for addr in addresses}
         sorted_ips = sorted(uniq, key=lambda x: (x.version, x))
 
-        if len(sorted_ips) not in (1, 2) or (
-            len(sorted_ips) == 2 and (sorted_ips[0].version != sorted_ips[1].version)
-        ):
+        if not (0 < len(sorted_ips) <= 2):
             log.error(
-                "node-ips must contain either a single IP or a dual-stack pair of IPs (sorted_ips='%s')",
+                "node-ips must contain either a single IP or a dual-stack pair of IPs (ips='%s')",
                 sorted_ips,
             )
-            raise DualStackNodeIPError(f"{sorted_ips} is invalid")
+            raise DualStackNodeIPError(f"{sorted_ips} invalid length")
+        elif len(sorted_ips) == 2 and (sorted_ips[0].version != sorted_ips[1].version):
+            log.error(
+                "node-ips dual-stack pair of IPs must be different ip versions (ips='%s')",
+                sorted_ips,
+            )
+            raise DualStackNodeIPError(f"{sorted_ips} duplicate ip versions")
         # Dual-stack addresses (one IPv6 and one IPv4 address) must not contain unspecified IPs
         # https://github.com/kubernetes/kubernetes/blob/f6530285a85d6f4280711301613a7d3215a25818/staging/src/k8s.io/component-helpers/node/util/ips.go#L58
         elif len(sorted_ips) == 2 and any(addr.is_unspecified for addr in sorted_ips):
