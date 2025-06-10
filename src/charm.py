@@ -65,10 +65,6 @@ class MissingCNIError(Exception):
     ERR = "Missing CNI relation or config"
 
 
-class DualStackNodeIPError(Exception):
-    """Exception raised when there is an issue obtaining node IP(s) for kubelet in a dual stack configuration."""
-
-
 def charm_track() -> str:
     """Get the charm track based on the current charm branch.
 
@@ -439,7 +435,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             extra_config=yaml.safe_load(self.model.config["kubelet-extra-config"]),
             external_cloud_provider=self.external_cloud_provider,
             kubeconfig="/root/cdk/kubeconfig",
-            node_ip=",".join(self._get_node_ip_addresses()),
+            node_ip=",".join(self._get_node_addresses()),
             registry=self.model.config["image-registry"],
             taints=self.model.config["register-with-taints"].split(),
         )
@@ -778,6 +774,36 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.certificates.request_client_cert("system:kube-apiserver")
         self.certificates.request_server_cert(cn=common_name, sans=sans)
 
+    def _service_has_failed(self, service):
+        try:
+            output = subprocess.check_output(
+                ["systemctl", "show", "--no-pager", service], stderr=subprocess.STDOUT
+            ).decode("utf-8")
+
+            fields = dict(
+                line.split("=", 1) for line in output.strip().splitlines() if "=" in line
+            )
+
+            if fields.get("ActiveState") == "failed" or fields.get("Result") == "exit-code":
+                return (
+                    True,
+                    f"{service} has failed: ActiveState={fields.get('ActiveState')}, Result={fields.get('Result')}",
+                )
+            elif fields.get("ExecMainStatus") and fields["ExecMainStatus"] != "0":
+                return True, f"{service} Non-zero exit: ExecMainStatus={fields['ExecMainStatus']}"
+            elif int(fields.get("NRestarts", 0)) > 10:
+                return True, f"{service} is restarting repeatedly"
+            return False, ""
+        except subprocess.CalledProcessError as e:
+            return True, f"Failed to check {service} status: {e.output.decode('utf-8')}"
+
+    def _check_core_services(self, services):
+        for service in services:
+            has_failed, reason = self._service_has_failed(service)
+            if has_failed:
+                status.add(ops.BlockedStatus(f"{service} has failed: {reason}"))
+                return
+
     def update_status(self, event):
         if self.hacluster.is_ready:
             apiserver_running = (
@@ -789,6 +815,14 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                 self.hacluster.set_node_standby()
         self._set_workload_version()
         self._check_kube_system()
+        self._check_core_services(
+            [
+                "snap.kubelet.daemon.service",
+                "snap.kube-apiserver.daemon.service",
+                "snap.kube-controller-manager.daemon.service",
+                "snap.kube-scheduler.daemon.service",
+            ]
+        )
 
     @status.on_error(ops.WaitingStatus("Waiting for service-account-key"))
     def write_service_account_key(self):
@@ -882,33 +916,10 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                     msg = msg.format(len(unready), plural)
                     status.add(ops.WaitingStatus(msg))
 
-    def _get_node_ip_addresses(self) -> list[str]:
+    def _get_node_addresses(self) -> list[str]:
         addresses = self.kube_control.ingress_addresses
         uniq = {ipaddress.ip_address(addr) for addr in addresses}
-        sorted_ips = sorted(uniq, key=lambda x: (x.version, x))
-
-        if not (0 < len(sorted_ips) <= 2):
-            log.error(
-                "node-ips must contain either a single IP or a dual-stack pair of IPs (ips='%s')",
-                sorted_ips,
-            )
-            raise DualStackNodeIPError(f"{sorted_ips} invalid length")
-        elif len(sorted_ips) == 2 and (sorted_ips[0].version != sorted_ips[1].version):
-            log.error(
-                "node-ips dual-stack pair of IPs must be different ip versions (ips='%s')",
-                sorted_ips,
-            )
-            raise DualStackNodeIPError(f"{sorted_ips} duplicate ip versions")
-        # Dual-stack addresses (one IPv6 and one IPv4 address) must not contain unspecified IPs
-        # https://github.com/kubernetes/kubernetes/blob/f6530285a85d6f4280711301613a7d3215a25818/staging/src/k8s.io/component-helpers/node/util/ips.go#L58
-        elif len(sorted_ips) == 2 and any(addr.is_unspecified for addr in sorted_ips):
-            log.error(
-                "dual-stack node-ips cannot include '0.0.0.0' or '::' (sorted_ips='%s')",
-                sorted_ips,
-            )
-            raise DualStackNodeIPError(f"{sorted_ips} contain unspecified IP")
-
-        return [str(addr) for addr in sorted_ips]
+        return [str(x) for x in sorted(uniq, key=lambda x: (x.version, x))]
 
 
 if __name__ == "__main__":  # pragma: nocover
