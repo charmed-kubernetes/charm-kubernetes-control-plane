@@ -799,6 +799,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def _check_core_services(self, services):
         for service in services:
+            log.info(f"checking the status of {service}")
             has_failed, reason = self._service_has_failed(service)
             if has_failed:
                 status.add(ops.BlockedStatus(f"{service} has failed: {reason}"))
