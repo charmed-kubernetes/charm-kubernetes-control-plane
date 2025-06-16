@@ -784,14 +784,19 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                 line.split("=", 1) for line in output.strip().splitlines() if "=" in line
             )
 
-            if fields.get("ActiveState") == "failed" or fields.get("Result") == "exit-code":
+            active_state = fields.get("ActiveState")
+            result = fields.get("Result")
+            exec_main_status = fields.get("ExecMainStatus")
+            n_restarts = int(fields.get("NRestarts") or -1)
+
+            if active_state == "failed" or result == "exit-code":
                 return (
                     True,
-                    f"{service} has failed: ActiveState={fields.get('ActiveState')}, Result={fields.get('Result')}",
+                    f"{service} has failed: ActiveState={active_state}, Result={result}",
                 )
-            elif fields.get("ExecMainStatus") and fields["ExecMainStatus"] != "0":
-                return True, f"{service} Non-zero exit: ExecMainStatus={fields['ExecMainStatus']}"
-            elif int(fields.get("NRestarts", 0)) > 10:
+            elif exec_main_status and exec_main_status != "0":
+                return True, f"{service} Non-zero exit: ExecMainStatus={exec_main_status}"
+            elif n_restarts and n_restarts > 10:
                 return True, f"{service} is restarting repeatedly"
             return False, ""
         except subprocess.CalledProcessError as e:
