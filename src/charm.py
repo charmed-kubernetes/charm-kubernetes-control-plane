@@ -907,7 +907,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def _check_kube_system(self):
         if not self.reconciler.stored.reconciled:
             # Bail, the unit isn't reconciled
-            log.info("Wait to check kube-system until reconciled")
+            log.info("Skipping kube-system check: unit is not yet reconciled.")
             return
 
         # only update the kube-system status under these conditions
