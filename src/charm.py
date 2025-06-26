@@ -805,7 +805,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def _check_core_services(self, services):
         if not self.reconciler.stored.reconciled:
             # Bail, the unit isn't reconciled
-            log.info("Wait to check core services until reconciled")
+            log.info("Skipping core services check: unit is not yet reconciled.")
             return
         with status.context(self.unit):
             for service in services:
