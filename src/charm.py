@@ -5,7 +5,6 @@
 """Charmed Machine Operator for Kubernetes Control Plane."""
 
 import functools
-import ipaddress
 import logging
 import os
 import re
@@ -14,9 +13,10 @@ import socket
 import subprocess
 from pathlib import Path
 from subprocess import CalledProcessError
-from typing import Callable
+from typing import Callable, List
 
 import charms.contextual_status as status
+import charms.node_base.address as node_address
 import ops
 import yaml
 from charms import kubernetes_snaps
@@ -236,7 +236,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def configure_apiserver(self):
         status.add(ops.MaintenanceStatus("Configuring API Server"))
         kubernetes_snaps.configure_apiserver(
-            advertise_address=self.kube_control.ingress_addresses[0],
+            advertise_address=self._get_node_ips()[0],
             audit_policy=self.model.config["audit-policy"],
             audit_webhook_conf=self.model.config["audit-webhook-config"],
             auth_webhook_conf=auth_webhook.auth_webhook_conf,
@@ -435,7 +435,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             extra_config=yaml.safe_load(self.model.config["kubelet-extra-config"]),
             external_cloud_provider=self.external_cloud_provider,
             kubeconfig="/root/cdk/kubeconfig",
-            node_ip=",".join(self._get_node_addresses()),
+            node_ip=",".join(self._get_node_ips()),
             registry=self.model.config["image-registry"],
             taints=self.model.config["register-with-taints"].split(),
         )
@@ -747,7 +747,6 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         k8s_service_addrs = kubernetes_snaps.get_kubernetes_service_addresses(
             self.config["service-cidr"].split(",")
         )
-        ingress_addrs = self.kube_control.ingress_addresses
 
         sans = [
             # The CN field is checked as a hostname, so if it's an IP, it
@@ -761,10 +760,10 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             "kubernetes.default",
             "kubernetes.default.svc",
             f"kubernetes.default.svc.{domain}",
+            *node_address.by_relation(self, "kube-control", True),
         ]
         sans += bind_addrs
         sans += config_addrs
-        sans += ingress_addrs
         sans += k8s_service_addrs
         sans += filter(None, [self.k8s_api_endpoints.get_external_api_endpoint()])
         sans += filter(None, [self.k8s_api_endpoints.get_internal_api_endpoint()])
@@ -804,6 +803,10 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             return True, f"Failed to check {service} status: {e.output.decode('utf-8')}"
 
     def _check_core_services(self, services):
+        if not self.reconciler.stored.reconciled:
+            # Bail, the unit isn't reconciled
+            log.info("Skipping core services check: unit is not yet reconciled.")
+            return
         with status.context(self.unit):
             for service in services:
                 log.info(f"checking the status of {service}")
@@ -904,7 +907,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def _check_kube_system(self):
         if not self.reconciler.stored.reconciled:
             # Bail, the unit isn't reconciled
-            log.info("Wait to check kube-system until reconciled")
+            log.info("Skipping kube-system check: unit is not yet reconciled.")
             return
 
         # only update the kube-system status under these conditions
@@ -924,10 +927,9 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                     msg = msg.format(len(unready), plural)
                     status.add(ops.WaitingStatus(msg))
 
-    def _get_node_addresses(self) -> list[str]:
-        addresses = self.kube_control.ingress_addresses
-        uniq = {ipaddress.ip_address(addr) for addr in addresses}
-        return [str(x) for x in sorted(uniq, key=lambda x: (x.version, x))]
+    def _get_node_ips(self) -> List[str]:
+        """Get the list of node IPs."""
+        return node_address.by_relation_preferred(self, "kube-control", True)
 
 
 if __name__ == "__main__":  # pragma: nocover
