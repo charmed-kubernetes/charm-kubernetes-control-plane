@@ -16,6 +16,7 @@ from subprocess import CalledProcessError
 from typing import Callable
 
 import charms.contextual_status as status
+import charms.node_base.address as node_address
 import ops
 import yaml
 from charms import kubernetes_snaps
@@ -746,7 +747,6 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         k8s_service_addrs = kubernetes_snaps.get_kubernetes_service_addresses(
             self.config["service-cidr"].split(",")
         )
-        ingress_addrs = self.kube_control.ingress_addresses
 
         sans = [
             # The CN field is checked as a hostname, so if it's an IP, it
@@ -760,10 +760,10 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             "kubernetes.default",
             "kubernetes.default.svc",
             f"kubernetes.default.svc.{domain}",
+            *node_address.by_relation(self, "kube-control", True),
         ]
         sans += bind_addrs
         sans += config_addrs
-        sans += ingress_addrs
         sans += k8s_service_addrs
         sans += filter(None, [self.k8s_api_endpoints.get_external_api_endpoint()])
         sans += filter(None, [self.k8s_api_endpoints.get_internal_api_endpoint()])
@@ -857,7 +857,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def _check_kube_system(self):
         if not self.reconciler.stored.reconciled:
             # Bail, the unit isn't reconciled
-            log.info("Wait to check kube-system until reconciled")
+            log.info("Skipping kube-system check: unit is not yet reconciled.")
             return
 
         # only update the kube-system status under these conditions

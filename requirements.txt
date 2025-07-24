@@ -1,15 +1,15 @@
-charm-lib-interface-container-runtime @ git+https://github.com/charmed-kubernetes/charm-lib-interface-container-runtime@main
-charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider@main
-charm-lib-interface-kube-dns @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kube-dns@main
-charm-lib-interface-kubernetes-cni @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kubernetes-cni@main
-charm-lib-interface-tokens @ git+https://github.com/charmed-kubernetes/charm-lib-interface-tokens@main
-charm-lib-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps@main
-charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@main#subdirectory=ops
-interface_hacluster @ git+https://github.com/charmed-kubernetes/charm-interface-hacluster@main
-ops.interface_tls_certificates @ git+https://github.com/charmed-kubernetes/interface-tls-certificates@main#subdirectory=ops
-ops.interface_aws @ git+https://github.com/charmed-kubernetes/interface-aws-integration@main#subdirectory=ops
-ops.interface_gcp @ git+https://github.com/charmed-kubernetes/interface-gcp-integration@main#subdirectory=ops
-ops.interface_azure @ git+https://github.com/charmed-kubernetes/interface-azure-integration@main#subdirectory=ops
+charm-lib-interface-container-runtime @ git+https://github.com/charmed-kubernetes/charm-lib-interface-container-runtime@release_1.33
+charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kubernetes/charm-lib-interface-external-cloud-provider@release_1.33
+charm-lib-interface-kube-dns @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kube-dns@release_1.33
+charm-lib-interface-kubernetes-cni @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kubernetes-cni@release_1.33
+charm-lib-interface-tokens @ git+https://github.com/charmed-kubernetes/charm-lib-interface-tokens@release_1.33
+charm-lib-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps@release_1.33
+charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@release_1.33#subdirectory=ops
+interface_hacluster @ git+https://github.com/charmed-kubernetes/charm-interface-hacluster@release_1.33
+ops.interface_tls_certificates @ git+https://github.com/charmed-kubernetes/interface-tls-certificates@release_1.33#subdirectory=ops
+ops.interface_aws @ git+https://github.com/charmed-kubernetes/interface-aws-integration@release_1.33#subdirectory=ops
+ops.interface_gcp @ git+https://github.com/charmed-kubernetes/interface-gcp-integration@release_1.33#subdirectory=ops
+ops.interface_azure @ git+https://github.com/charmed-kubernetes/interface-azure-integration@release_1.33#subdirectory=ops
 aiohttp == 3.7.4
 cosl==0.0.47
 charms.reconciler == 0.0.0
