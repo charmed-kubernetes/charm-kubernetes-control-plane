@@ -143,7 +143,7 @@ def test_active(
     harness.begin()
     harness.charm.on.config_changed.emit()
 
-    assert harness.model.unit.status == ActiveStatus()
+    assert harness.model.unit.status == ActiveStatus("Ready")
 
     auth_webhook_configure.assert_called_once_with(
         charm_dir=harness.charm.charm_dir, custom_authn_endpoint="", custom_authz_config_file=""

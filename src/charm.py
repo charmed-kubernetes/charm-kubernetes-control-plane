@@ -15,12 +15,9 @@ from pathlib import Path
 from subprocess import CalledProcessError
 from typing import Callable
 
-import auth_webhook
 import charms.contextual_status as status
-import leader_data
 import ops
 import yaml
-from cdk_addons import CdkAddons
 from charms import kubernetes_snaps
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.interface_container_runtime import ContainerRuntimeProvides
@@ -31,16 +28,20 @@ from charms.interface_tokens import TokensProvider
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.node_base import LabelMaker
 from charms.reconciler import Reconciler
+from loadbalancer_interface import LBProvider
+from ops import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
+from ops.interface_kube_control import KubeControlProvides
+from ops.interface_tls_certificates import CertificatesRequires
+
+import auth_webhook
+import leader_data
+from cdk_addons import CdkAddons
 from cos_integration import COSIntegration
 from encryption_at_rest import EncryptionAtRest
 from hacluster import HACluster
 from k8s_api_endpoints import K8sApiEndpoints
 from k8s_kube_system import get_kube_system_pods_not_running
 from kubectl import kubectl
-from loadbalancer_interface import LBProvider
-from ops import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
-from ops.interface_kube_control import KubeControlProvides
-from ops.interface_tls_certificates import CertificatesRequires
 
 log = logging.getLogger(__name__)
 
