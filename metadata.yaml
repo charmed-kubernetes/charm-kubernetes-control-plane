@@ -58,6 +58,8 @@ requires:
   keystone-credentials:
     # Remains for upgrade compatibility with a warning to remove after upgrade
     interface: keystone-credentials
+    description: |
+      [Deprecated] LP:2048692 only necessary for upgrades from < 1.29
   certificates:
     interface: tls-certificates
   dns-provider:
@@ -66,10 +68,6 @@ requires:
     interface: etcd
   ha:
     interface: hacluster
-  keystone-credentials:
-    interface: keystone-credentials
-    description: |
-      [Deprecated] LP:2048692 only necessary for upgrades from < 1.29
   loadbalancer-external:
     # Indicates that the LB should be public facing. Intended for clients which
     # must reach the API server via external networks.
