@@ -53,8 +53,9 @@ class Remedy:
             cmd = shlex.split(self.command)
             try:
                 out = subprocess.check_output(cmd)
-            except subprocess.CalledProcessError:
-                raise ActionError(f"Test {test_num}: failed to run: {cmd}")
+            except subprocess.CalledProcessError as e:
+                log.error("Test %s: failed to run: %s\nError: %s", test_num, e.cmd, e.output)
+                raise ActionError(f"Test {test_num}: failed to run: {e.cmd}\nError: {e.output}")
             else:
                 log.info("Test %s: applied remedy: %s\nOutput: %s", test_num, cmd, out)
             return 1
@@ -68,15 +69,21 @@ CONSERVATIVE = {
 }
 ADMISSION_PLUGINS = {
     "enable-admission-plugins": (
-        "PersistentVolumeLabel",
-        "PodSecurityPolicy,AlwaysPullImages",
+        "AlwaysPullImages",
+        "DenyServiceExternalIPs",
         "NodeRestriction",
+        "PersistentVolumeLabel",
     )
 }
 DANGEROUS = {
     "0.0.0": Remedy("cli", 'echo "this is fine"', None),
     # etcd (no known warnings with a default install)
     # k8s-control-plane
+    "1.1.1": Remedy("cli", "chmod 600 /var/snap/kube-*/current/args", None),
+    "1.1.5": Remedy("cli", "chmod 600 /root/cdk/kube-scheduler-config.yaml", None),
+    "1.1.15": Remedy("cli", "chmod 600 /root/cdk/kubeschedulerconfig", None),
+    "1.1.17": Remedy("cli", "chmod 600 /root/cdk/kubecontrollermanagerconfig", None),
+    "1.1.20": Remedy("cli", "chmod -R 600 /root/cdk/*.crt", None),
     "1.1.21": Remedy("cli", "chmod -R 600 /root/cdk/*.key", None),
     "1.2.9": Remedy("manual", None, None),
     "1.2.11": Remedy("kv", "kube-apiserver", ADMISSION_PLUGINS),
@@ -291,7 +298,7 @@ class CISBenchmark(ops.Object):
 
         # Node type is different depending on the charm
         app = self.charm.meta.name or "unknown"
-        version = "cis-1.23"
+        version = "cis-1.10"
         if "control-plane" in app:
             # must refer to this as upstream kube-bench tests do
             # wokeignore:rule=master
@@ -329,13 +336,11 @@ class CISBenchmark(ops.Object):
         # When making a summary, we also have a verbose report. Set action output
         # so operators can see everything related to this run.
         try:
-            out = subprocess.check_output(
-                summary_cmd, universal_newlines=True, stderr=subprocess.DEVNULL
-            )
+            out = subprocess.check_output(summary_cmd, universal_newlines=True)
         except subprocess.CalledProcessError:
             raise ActionError(f"Failed to run: {summary_cmd}")
         else:
-            fetch_cmd = f"juju scp {self.charm.unit}:{log_file} ."
+            fetch_cmd = f"juju scp {self.charm.unit.name}:{log_file} ."
             event.set_results({"cmd": summary_cmd, "report": fetch_cmd, "summary": out})
 
         return log or None
