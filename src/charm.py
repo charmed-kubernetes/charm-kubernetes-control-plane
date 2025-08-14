@@ -247,7 +247,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         sandbox_image = kubernetes_snaps.get_sandbox_image(registry)
         self.container_runtime.set_sandbox_image(sandbox_image)
 
-    @status.on_error(ops.BlockedStatus(MissingCNIError.ERR), MissingCNIError)
+    @status.on_error(ops.BlockedStatus(MissingCNIError.ERR))
     def configure_cni(self):
         status.add(MaintenanceStatus("Configuring CNI"))
         self.cni.set_image_registry(self.model.config["image-registry"])

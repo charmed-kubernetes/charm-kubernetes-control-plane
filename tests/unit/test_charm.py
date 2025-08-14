@@ -8,13 +8,12 @@ import logging
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
-import charms.contextual_status as status
 import ops
 import ops.testing
 import pytest
 from ops import ActiveStatus
 
-from charm import KubernetesControlPlaneCharm
+from charm import KubernetesControlPlaneCharm, MissingCNIError
 
 
 @pytest.fixture
@@ -147,7 +146,7 @@ def test_active(
     harness.begin()
     harness.charm.on.config_changed.emit()
 
-    assert harness.model.unit.status == ActiveStatus("Ready")
+    assert harness.model.unit.status == ActiveStatus("")
 
     auth_webhook_configure.assert_called_once_with(
         charm_dir=harness.charm.charm_dir, custom_authn_endpoint="", custom_authz_config_file=""
@@ -270,7 +269,7 @@ def test_ignore_missing_cni(set_default_cni_conf_file, harness, caplog):
 
     # CNI relation is not added and not ignored, raise an error
     harness.update_config({"ignore-missing-cni": False})
-    with pytest.raises(status.ReconcilerError):
+    with pytest.raises(MissingCNIError):
         harness.charm.configure_cni()
 
     # CNI relation is not added yet ignored, silently ignore
