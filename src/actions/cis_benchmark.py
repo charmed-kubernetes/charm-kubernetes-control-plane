@@ -72,7 +72,6 @@ ADMISSION_PLUGINS = {
         "AlwaysPullImages",
         "DenyServiceExternalIPs",
         "NodeRestriction",
-        "PersistentVolumeLabel",
     )
 }
 DANGEROUS = {
