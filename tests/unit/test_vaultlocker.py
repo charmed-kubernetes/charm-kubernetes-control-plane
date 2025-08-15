@@ -1,10 +1,12 @@
+import subprocess
 from pathlib import Path
 from unittest import mock
 
-import encryption.vaultlocker
 import ops
 import ops.testing
 import pytest
+
+import encryption.vaultlocker
 from charm import KubernetesControlPlaneCharm
 
 
@@ -18,14 +20,33 @@ def harness():
         harness.cleanup()
 
 
+@pytest.fixture(scope="module")
+def mock_lsblk():
+    def respond_to_dev_fake(cmd):
+        dev = cmd[-1]
+        if dev == "/dev/fake":
+            return b"""
+NAME="fake" MAJ:MIN="7:98" RM="0" SIZE="7M" RO="1" TYPE="loop" MOUNTPOINTS="/mount/fake"
+"""
+        raise subprocess.CalledProcessError(1, cmd, f"{dev}: not a block device")
+
+    with mock.patch("subprocess.check_output") as lsblk:
+        lsblk.side_effect = respond_to_dev_fake
+        yield lsblk
+
+
+@mock.patch("pathlib.Path.is_block_device", mock.MagicMock(return_value=False))
 def test_is_block_device():
     assert not encryption.vaultlocker._is_block_device("/dev/null")
-    assert encryption.vaultlocker._is_block_device("/dev/loop0")
 
 
-def test_is_mounted():
+def test_is_mounted(mock_lsblk):
     assert not encryption.vaultlocker._is_device_mounted("/dev/null")
-    assert encryption.vaultlocker._is_device_mounted("/dev/loop0")
+    mock_lsblk.assert_called_once_with(["/usr/bin/lsblk", "-P", "/dev/null"])
+
+    mock_lsblk.reset_mock()
+    assert encryption.vaultlocker._is_device_mounted("/dev/fake")
+    mock_lsblk.assert_called_once_with(["/usr/bin/lsblk", "-P", "/dev/fake"])
 
 
 @mock.patch("pathlib.Path.is_symlink", mock.MagicMock(return_value=False))

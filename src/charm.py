@@ -15,16 +15,9 @@ from pathlib import Path
 from subprocess import CalledProcessError
 from typing import Callable
 
-import actions.general
-import actions.namespace
-import actions.upgrade
-import actions.users
-import auth_webhook
 import charms.contextual_status as status
-import leader_data
 import ops
 import yaml
-from cdk_addons import CdkAddons
 from charms import kubernetes_snaps
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.interface_container_runtime import ContainerRuntimeProvides
@@ -35,6 +28,17 @@ from charms.interface_tokens import TokensProvider
 from charms.kubernetes_libs.v0.etcd import EtcdReactiveRequires
 from charms.node_base import LabelMaker
 from charms.reconciler import Reconciler
+from loadbalancer_interface import LBProvider
+from ops.interface_kube_control import KubeControlProvides
+from ops.interface_tls_certificates import CertificatesRequires
+
+import actions.general
+import actions.namespace
+import actions.upgrade
+import actions.users
+import auth_webhook
+import leader_data
+from cdk_addons import CdkAddons
 from cloud_integration import CloudIntegration
 from cos_integration import COSIntegration
 from encryption_at_rest import EncryptionAtRest
@@ -42,13 +46,16 @@ from hacluster import HACluster
 from k8s_api_endpoints import K8sApiEndpoints
 from k8s_kube_system import get_kube_system_pods_not_running
 from kubectl import ROOT_KUBECONFIG, kubectl
-from loadbalancer_interface import LBProvider
-from ops.interface_kube_control import KubeControlProvides
-from ops.interface_tls_certificates import CertificatesRequires
 
 log = logging.getLogger(__name__)
 
 OBSERVABILITY_ROLE = "system:cos"
+
+
+class MissingCNIError(Exception):
+    """Exception raised when CNI is missing and not ignored."""
+
+    ERR = "Missing CNI relation or config"
 
 
 def charm_track() -> str:
@@ -270,12 +277,26 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         sandbox_image = kubernetes_snaps.get_sandbox_image(registry)
         self.container_runtime.set_sandbox_image(sandbox_image)
 
+    @status.on_error(ops.BlockedStatus(MissingCNIError.ERR), MissingCNIError)
     def configure_cni(self):
         status.add(ops.MaintenanceStatus("Configuring CNI"))
         self.cni.set_image_registry(self.model.config["image-registry"])
         self.cni.set_kubeconfig_hash_from_file(ROOT_KUBECONFIG)
         self.cni.set_service_cidr(self.model.config["service-cidr"])
-        kubernetes_snaps.set_default_cni_conf_file(self.cni.cni_conf_file)
+
+        ignore_missing_cni = self.model.config["ignore-missing-cni"]
+        conf_file = self.cni.cni_conf_file
+
+        if not conf_file and not ignore_missing_cni:
+            raise MissingCNIError()
+
+        if not conf_file and ignore_missing_cni:
+            log.info("Ignoring missing CNI configuration as per user request.")
+
+        # It's okay to set_default_cni_conf_file when conf_file == None
+        # because it will delete the existing default and not update
+        # to the new one
+        kubernetes_snaps.set_default_cni_conf_file(conf_file)
 
     def configure_controller_manager(self):
         status.add(ops.MaintenanceStatus("Configuring Controller Manager"))
