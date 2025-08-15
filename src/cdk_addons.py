@@ -6,8 +6,9 @@ from subprocess import CalledProcessError, check_call, check_output
 
 import charms.contextual_status as status
 import tenacity
-from kubectl import get_service_ip, kubectl, kubectl_get
 from ops import BlockedStatus
+
+from kubectl import get_service_ip, kubectl, kubectl_get
 
 kubeconfig_dir = "/root/snap/cdk-addons/common"
 kubeconfig_path = f"{kubeconfig_dir}/kubeconfig"

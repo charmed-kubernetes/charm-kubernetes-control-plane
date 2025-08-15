@@ -3,9 +3,10 @@ from dataclasses import dataclass
 from subprocess import CalledProcessError
 from typing import Dict, List
 
-import auth_webhook
 from ops import CharmBase
 from tenacity import RetryError
+
+import auth_webhook
 
 log = logging.getLogger(__name__)
 

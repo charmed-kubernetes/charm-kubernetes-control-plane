@@ -9,6 +9,7 @@ from typing import List, Optional
 import hvac
 import ops
 import requests
+
 from encryption import reactive
 
 log = logging.getLogger(__name__)

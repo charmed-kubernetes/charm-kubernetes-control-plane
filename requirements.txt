@@ -4,7 +4,7 @@ charm-lib-interface-external-cloud-provider @ git+https://github.com/charmed-kub
 charm-lib-interface-kube-dns @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kube-dns@release_1.29
 charm-lib-interface-kubernetes-cni @ git+https://github.com/charmed-kubernetes/charm-lib-interface-kubernetes-cni@release_1.29
 charm-lib-interface-tokens @ git+https://github.com/charmed-kubernetes/charm-lib-interface-tokens@release_1.29
-charm-lib-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps@release_1.29
+charms.kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps@release_1.29
 charm-lib-node-base @ git+https://github.com/charmed-kubernetes/layer-kubernetes-node-base@release_1.29#subdirectory=ops
 charm-lib-reconciler @ git+https://github.com/charmed-kubernetes/charm-lib-reconciler@release_1.29
 interface_hacluster @ git+https://github.com/charmed-kubernetes/charm-interface-hacluster@release_1.29
@@ -14,7 +14,7 @@ aiohttp == 3.7.4
 cosl == 0.0.7
 gunicorn == 20.1.0
 jinja2 == 3.1.3
-loadbalancer_interface == 1.2.0
+loadbalancer_interface == 1.2.1
 ops == 2.12.0
 pydantic == 1.10.15
 tenacity == 8.2.3
