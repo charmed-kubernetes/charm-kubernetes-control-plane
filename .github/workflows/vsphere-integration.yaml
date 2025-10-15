@@ -23,7 +23,7 @@ jobs:
           juju-channel: 3/stable
           charmcraft-channel: ${{ steps.charmcraft.outputs.channel }}
           credentials-yaml: ${{ secrets.CREDENTIALS_YAML }}
-          clouds-yaml: ${{ secrets.CLOUDS_YAML_TEST }}
+          clouds-yaml: ${{ secrets.CLOUDS_YAML }}
           bootstrap-constraints: "arch=amd64 cores=2 mem=4G"
           bootstrap-options: >
             ${{ vars.VSPHERE_BOOTSTRAP_NOBLE }}
