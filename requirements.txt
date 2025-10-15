@@ -9,7 +9,7 @@ ops.interface_tls_certificates @ git+https://github.com/charmed-kubernetes/inter
 ops.interface_aws @ git+https://github.com/charmed-kubernetes/interface-aws-integration@main#subdirectory=ops
 ops.interface_gcp @ git+https://github.com/charmed-kubernetes/interface-gcp-integration@main#subdirectory=ops
 ops.interface_azure @ git+https://github.com/charmed-kubernetes/interface-azure-integration@main#subdirectory=ops
-charms-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps@main
+charms-kubernetes-snaps @ git+https://github.com/charmed-kubernetes/charm-lib-kubernetes-snaps@akd/config-hashing-speedup
 aiohttp == 3.7.4
 cosl==0.0.47
 charms.reconciler == 0.0.0

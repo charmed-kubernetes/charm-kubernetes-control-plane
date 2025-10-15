@@ -679,6 +679,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     def reconcile(self, event):
         """Reconcile state change events."""
         self.install_cni_binaries()
+        kubernetes_snaps.feature_enable(kubernetes_snaps.FEATURE_CONFIG_HASHING)
         kubernetes_snaps.install(channel=self.model.config["channel"], control_plane=True)
         kubernetes_snaps.install_snap(
             "cdk-addons", channel=cdk_addons_channel(self.model.config["channel"])
