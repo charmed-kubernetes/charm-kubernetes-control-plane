@@ -8,6 +8,8 @@ Dashboard changes:
 import json
 import os
 import shutil
+import subprocess
+from pathlib import Path
 from urllib.request import urlopen
 
 import yaml
@@ -35,6 +37,21 @@ DASHBOARDS = {
     "workload-total.json",
 }
 TARGET_DIR = "src/grafana_dashboards"
+PATCHES_DIR = Path("scripts/dashboard-patches")
+
+
+def apply_patches():
+    """Apply patches to the downloaded and processed dashboard files.
+
+    The following patches are applied to the upstream dashboards:
+
+        001_cluster_and_juju_model: The patch adds a reference to the
+            juju model on the cluster dropdowns so that they only show
+            the clusters belonging to the selected juju models.
+    """
+    for patch_file in PATCHES_DIR.glob("*"):
+        print(f"Applying patch {patch_file}")
+        subprocess.check_call(["/usr/bin/git", "apply", str(patch_file)])
 
 
 def fetch_dashboards(source_url):
@@ -82,6 +99,7 @@ def main():
     for name, dashboard_data in process_dashboards_data(data):
         dashboard = prepare_dashboard(dashboard_data)
         save_dashboard_to_file(name, dashboard)
+    apply_patches()
 
 
 if __name__ == "__main__":
