@@ -412,6 +412,12 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
                     kubelet_token=kubelet_token,
                     proxy_token=proxy_token,
                 )
+
+            for user, _ in self.kube_control.closed_auth_creds():
+                log.info("Revoke auth-token for '%s'", user)
+                if secret := auth_webhook.get_secrets().get(user):
+                    auth_webhook.delete_token(secret.secret_id)
+
         else:
             self.kube_control.clear_creds()
 
