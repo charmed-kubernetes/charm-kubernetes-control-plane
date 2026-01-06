@@ -85,7 +85,7 @@ def _mkfs_ext4(device: os.PathLike, force: bool = False):
         "-O",
         "^has_journal",
         "-E",
-        "lazy_itable_init=0,lazy_journal_init=0",
+        "lazy_itable_init=0",
     ]
 
     cmd.append(str(device))
