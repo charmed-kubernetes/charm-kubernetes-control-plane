@@ -68,30 +68,27 @@ def _install_alternative(name: str, target: os.PathLike, source: os.PathLike, pr
     subprocess.check_output(cmd)
 
 
-def _mkfs_xfs(device: os.PathLike, force: bool = False, inode_size: Optional[int] = None):
-    """Format device with XFS filesystem.
+def _mkfs_ext4(device: os.PathLike, force: bool = False):
+    """Format device with EXT4 filesystem.
 
     By default this should fail if the device already has a filesystem on it.
     :param device: Full path to device to format
     :param force: Force operation
-    :param inode_size: XFS inode size in bytes; if set to 0 or None,
-        the value used will be the XFS system default
     """
-    cmd = ["/usr/sbin/mkfs.xfs"]
+    cmd = ["/usr/sbin/mkfs.ext4"]
     if force:
-        cmd.append("-f")
+        log.info("Forcing ext4 filesystem creation on %s", device)
+        cmd.append("-F")
 
-    if inode_size:
-        if inode_size >= 256 and inode_size <= 2048:
-            cmd += ["-i", "size={}".format(inode_size)]
-        else:
-            log.warning(
-                "Config value xfs-inode-size=%s is invalid. Using system default.", inode_size
-            )
-    else:
-        log.info("Using XFS filesystem with system default inode size.")
+    # Keep metadata minimal for small volumes
+    cmd += [
+        "-O",
+        "^has_journal",
+        "-E",
+        "lazy_itable_init=0",
+    ]
 
-    cmd += [device]
+    cmd.append(str(device))
     subprocess.check_output(cmd)
 
 
@@ -183,7 +180,7 @@ class VaultLocker(ops.Object):
     def _encrypt_device(self, device, mountpoint=None, uuid=None):
         """Set up encryption for the given block device.
 
-        Optionally create and mount an XFS filesystem on the encrypted device.
+        Optionally create and mount an EXT4 filesystem on the encrypted device.
 
         If ``mountpoint`` is not given, the device will not be formatted or
         mounted.  When interacting with or mounting the device manually, the
@@ -201,11 +198,11 @@ class VaultLocker(ops.Object):
             _vaultlocker_exec("encrypt", "--uuid", uuid, device)
             self._stored.uuids[device] = uuid
             if mountpoint:
-                mapped_device = f"/dev/mapper/crypt-{uuid}"
+                mapped_device = Path(f"/dev/mapper/crypt-{uuid}")
                 log.info("Creating filesystem on %s (%s)", mapped_device, device)
                 # If this fails, it's probably due to the size of the loopback
                 # backing file that is defined by the `dd`.
-                _mkfs_xfs(mapped_device)
+                _mkfs_ext4(mapped_device)
                 Path(mountpoint).mkdir(mode=0o755, parents=True, exist_ok=True)
                 log.info(
                     "Mounting filesystem for %s (%s) at %s", mapped_device, device, mountpoint
@@ -221,13 +218,13 @@ class VaultLocker(ops.Object):
                     mountpoint,
                     options=",".join(fs_opts),
                     persist=True,
-                    filesystem="xfs",
+                    filesystem="ext4",
                 )
         except (subprocess.CalledProcessError, OSError) as e:
             raise VaultLockerError("Error configuring VaultLocker") from e
 
     def create_encrypted_loop_mount(self, mountpoint, uuid=None, backing_file=None):
-        """Create a persistent loop device, encrypted, formatted to XFS, and mounted.
+        """Create a persistent loop device, encrypted, formatted to EXT4, and mounted.
 
         A backing file will be created under `/var/lib/vaultlocker/backing_files`,
         in a UUID named file
