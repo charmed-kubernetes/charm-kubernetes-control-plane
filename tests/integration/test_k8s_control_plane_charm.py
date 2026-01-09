@@ -33,7 +33,7 @@ async def test_build_and_deploy(ops_test: OpsTest):
 
     log.info("Building bundle")
     bundle, *overlays = await ops_test.async_render_bundles(
-        ops_test.Bundle("kubernetes-core", channel="1.35/edge", series=SERIES),
+        ops_test.Bundle("kubernetes-core", channel="edge", series=SERIES),
         Path("tests/data/charm.yaml"),
         arch="amd64",
         series=SERIES,
@@ -48,7 +48,7 @@ async def test_build_and_deploy(ops_test: OpsTest):
     rc, stdout, stderr = await ops_test.run(*cmd)
     assert rc == 0, f"Bundle deploy failed: {(stderr or stdout).strip()}"
 
-    core_apps = set(ops_test.model.applications) - {"grafana-agent"}
+    core_apps = set(ops_test.model.applications) - {"opentelemetry-collector"}
     async with ops_test.fast_forward():
         await ops_test.model.wait_for_idle(apps=core_apps, status="active", timeout=60 * 60)
 

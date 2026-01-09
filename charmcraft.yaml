@@ -119,7 +119,7 @@ config:
         https://kubernetes.io/docs/reference/access-authn-authz/webhook/
     channel:
       type: string
-      default: "1.35/stable"
+      default: "latest/edge"
       description: |
         Snap channel to install Kubernetes control plane services from
     controller-manager-extra-args:
