@@ -1,0 +1,40 @@
+diff --git a/charms/worker/k8s/src/grafana_dashboards/k8s-resources-cluster.json b/charms/worker/k8s/src/grafana_dashboards/k8s-resources-cluster.json
+index 3fc8d1d..da1f4c7 100644
+--- a/charms/worker/k8s/src/grafana_dashboards/k8s-resources-cluster.json
++++ b/charms/worker/k8s/src/grafana_dashboards/k8s-resources-cluster.json
+@@ -147,7 +147,7 @@
+                         "type": "prometheus",
+                         "uid": "${prometheusds}"
+                     },
+-                    "expr": "1 - sum(:node_memory_MemAvailable_bytes:sum{cluster=\"$cluster\"}) / sum(node_memory_MemTotal_bytes{job=\"node-exporter\",cluster=\"$cluster\"})",
++                    "expr": "1 - sum(:node_memory_MemAvailable_bytes:sum{cluster=\"$cluster\"}) / sum(node_memory_MemTotal_bytes{job=~\".*node-exporter\",juju_model=\"$cluster\"})",
+                     "instant": true
+                 }
+             ],
+@@ -1559,4 +1559,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Compute Resources / Cluster",
+     "uid": "efa86fd1d0c121a26444b636a3f509a8"
+-}
+\ No newline at end of file
++}
+diff --git a/charms/worker/k8s/src/grafana_dashboards/k8s-resources-multicluster.json b/charms/worker/k8s/src/grafana_dashboards/k8s-resources-multicluster.json
+index 5189d67..c57a86e 100644
+--- a/charms/worker/k8s/src/grafana_dashboards/k8s-resources-multicluster.json
++++ b/charms/worker/k8s/src/grafana_dashboards/k8s-resources-multicluster.json
+@@ -147,7 +147,7 @@
+                         "type": "prometheus",
+                         "uid": "${prometheusds}"
+                     },
+-                    "expr": "1 - sum(:node_memory_MemAvailable_bytes:sum) / sum(node_memory_MemTotal_bytes{job=\"node-exporter\"})",
++                    "expr": "1 - sum(:node_memory_MemAvailable_bytes:sum) / sum(node_memory_MemTotal_bytes{job=~\".*node-exporter\"})",
+                     "instant": true
+                 }
+             ],
+@@ -612,4 +612,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Compute Resources /  Multi-Cluster",
+     "uid": "b59e6c9f2fcbe2e16d77fc492374cc4f"
+-}
+\ No newline at end of file
++}
