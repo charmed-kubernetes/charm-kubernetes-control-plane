@@ -885,7 +885,7 @@
                 "multi": false,
                 "name": "cluster",
                 "options": [],
-                "query": "label_values(up{job=\"kube-scheduler\"}, cluster)",
+                "query": "label_values(up{job=\"kube-scheduler\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
                 "refresh": 2,
                 "regex": "",
                 "sort": 1,
