@@ -11,7 +11,6 @@ ops.interface_gcp @ git+https://github.com/charmed-kubernetes/interface-gcp-inte
 ops.interface_azure @ git+https://github.com/charmed-kubernetes/interface-azure-integration@main#subdirectory=ops
 aiohttp == 3.7.4
 cosl==0.0.47
-charms.kubernetes-snaps == 0.0.0
 charms.reconciler == 0.0.0
 charms.contextual-status == 0.0.0
 charms.kubernetes-snaps == 0.0.1
