@@ -43,22 +43,27 @@ class Remedy:
 
     def run(self, test_num: int, test_remediation: str) -> int:
         """Run the remedy command."""
+        applied = 0
         if self.type == "manual":
             log.info(
                 "Test %s: unable to auto-apply remedy.\nManual steps:\n%s",
                 test_num,
                 test_remediation,
             )
-        elif self.type == "cli":
+        elif self.type == "cli" and self.command:
             cmd = shlex.split(self.command)
             try:
-                out = subprocess.check_output(cmd)
+                out = subprocess.check_output(cmd, shell=True, text=True)
             except subprocess.CalledProcessError as e:
-                log.error("Test %s: failed to run: %s\nError: %s", test_num, e.cmd, e.output)
-                raise ActionError(f"Test {test_num}: failed to run: {e.cmd}\nError: {e.output}")
+                msg = f"Test {test_num}: failed to apply remedy: {e.cmd}\nStdout: {e.stdout}\nError: {e.stderr}"
+                log.error("%s", msg)
+                raise ActionError(msg)
             else:
                 log.info("Test %s: applied remedy: %s\nOutput: %s", test_num, cmd, out)
-            return 1
+            applied = 1
+        else:
+            log.warning("Test %s: invalid remedy configuration: %s", test_num, self)
+        return applied
 
 
 CONSERVATIVE = {
@@ -324,7 +329,7 @@ class CISBenchmark(ops.Object):
             mode="w+b", prefix=log_prefix, dir=RESULTS_DIR, delete=False
         ) as res_file:
             try:
-                subprocess.call(verbose_cmd, stdout=res_file, stderr=subprocess.DEVNULL)
+                subprocess.call(verbose_cmd, stdout=res_file)
             except subprocess.CalledProcessError:
                 raise ActionError(f"Failed to run: {verbose_cmd}")
             else:
