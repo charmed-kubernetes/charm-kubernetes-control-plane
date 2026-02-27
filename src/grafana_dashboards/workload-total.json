@@ -1065,7 +1065,7 @@
                 "multi": false,
                 "name": "cluster",
                 "options": [],
-                "query": "label_values(kube_pod_info{job=\"kube-state-metrics\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                "query": "label_values(kube_pod_info{job=\"kube-state-metrics\"}, cluster)",
                 "refresh": 2,
                 "regex": "",
                 "sort": 0,

@@ -6,11 +6,8 @@ applications:
     series: {{series}}
     resources:
       cni-plugins: {{resource_path}}/cni-plugins-{{arch}}.tar.gz
-  kubernetes-worker: {}
-  opentelemetry-collector:
-    charm: opentelemetry-collector
+  grafana-agent:
+    charm: grafana-agent
     series: {{series}}
-    channel: 2/stable
 relations:
-- [ kubernetes-control-plane:cos-agent, opentelemetry-collector:cos-agent ]
-- [ kubernetes-worker:cos-agent, opentelemetry-collector:cos-agent ]
+- [ kubernetes-control-plane:cos-agent, grafana-agent:cos-agent ]

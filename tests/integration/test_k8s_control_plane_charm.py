@@ -48,8 +48,8 @@ async def test_build_and_deploy(ops_test: OpsTest):
     rc, stdout, stderr = await ops_test.run(*cmd)
     assert rc == 0, f"Bundle deploy failed: {(stderr or stdout).strip()}"
 
-    core_apps = set(ops_test.model.applications) - {"opentelemetry-collector"}
-    async with ops_test.fast_forward(fast_interval="30s"):
+    core_apps = set(ops_test.model.applications) - {"grafana-agent"}
+    async with ops_test.fast_forward():
         await ops_test.model.wait_for_idle(apps=core_apps, status="active", timeout=60 * 60)
 
 

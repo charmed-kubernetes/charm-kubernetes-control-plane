@@ -42,6 +42,7 @@ def harness():
 @patch("charms.kubernetes_snaps.get_public_address")
 @patch("charms.kubernetes_snaps.is_snap_installed")
 @patch("charms.kubernetes_snaps.install_snap")
+@patch("charms.kubernetes_snaps.install")
 @patch("charms.kubernetes_snaps.set_default_cni_conf_file")
 @patch("charms.kubernetes_snaps.write_certificates")
 @patch("charms.kubernetes_snaps.write_etcd_client_credentials")
@@ -67,6 +68,7 @@ def test_active(
     write_certificates,
     set_default_cni_conf_file,
     install_snap,
+    install,
     is_snap_installed,
     get_public_address,
     update_kubeconfig,
@@ -217,6 +219,7 @@ def test_active(
     configure_services_restart_always.assert_called_once_with(control_plane=True)
     update_kubeconfig.assert_called()
     install_snap.assert_called()
+    install.assert_called()
     install_cni_binaries.assert_called()
     set_default_cni_conf_file.assert_called_once_with("10-calico.conflist")
     write_certificates.assert_called_once_with(

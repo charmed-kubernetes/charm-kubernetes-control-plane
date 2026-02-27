@@ -907,7 +907,7 @@
                 "multi": false,
                 "name": "cluster",
                 "options": [],
-                "query": "label_values(up{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                "query": "label_values(up{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\"}, cluster)",
                 "refresh": 2,
                 "regex": "",
                 "sort": 0,
