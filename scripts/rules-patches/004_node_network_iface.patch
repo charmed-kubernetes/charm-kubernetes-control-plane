@@ -1,0 +1,13 @@
+diff --git a/src/prometheus_alert_rules/kubePrometheus-prometheusRule.yaml b/src/prometheus_alert_rules/kubePrometheus-prometheusRule.yaml
+index f2190fd..f506b19 100644
+--- a/src/prometheus_alert_rules/kubePrometheus-prometheusRule.yaml
++++ b/src/prometheus_alert_rules/kubePrometheus-prometheusRule.yaml
+@@ -55,7 +55,7 @@ groups:
+       runbook_url: https://runbooks.prometheus-operator.dev/runbooks/general/nodenetworkinterfaceflapping
+       summary: Network interface is often changing its status
+     expr: |
+-      changes(node_network_up{job="node-exporter",device!~"veth.+"}[2m]) > 2
++      changes(node_network_up{job=~".*node-exporter",device!~"veth.+"}[2m]) > 2
+     for: 2m
+     labels:
+       severity: warning

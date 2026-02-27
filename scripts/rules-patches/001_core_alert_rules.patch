@@ -1,0 +1,40 @@
+diff --git a/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml b/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
+index 129f859..ce614e8 100644
+--- a/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
++++ b/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
+@@ -663,7 +663,7 @@ groups:
+       runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubeapidown
+       summary: Target disappeared from Prometheus target discovery.
+     expr: |
+-      absent(up{job="apiserver"} == 1)
++      up{job="apiserver"} == 0
+     for: 15m
+     labels:
+       severity: critical
+@@ -865,7 +865,7 @@ groups:
+       runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubeletdown
+       summary: Target disappeared from Prometheus target discovery.
+     expr: |
+-      absent(up{job="kubelet", metrics_path="/metrics"} == 1)
++      up{job="kubelet", metrics_path="/metrics"} == 0
+     for: 15m
+     labels:
+       severity: critical
+@@ -877,7 +877,7 @@ groups:
+       runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubeschedulerdown
+       summary: Target disappeared from Prometheus target discovery.
+     expr: |
+-      absent(up{job="kube-scheduler"} == 1)
++      up{job="kube-scheduler"} == 0
+     for: 15m
+     labels:
+       severity: critical
+@@ -889,7 +889,7 @@ groups:
+       runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubecontrollermanagerdown
+       summary: Target disappeared from Prometheus target discovery.
+     expr: |
+-      absent(up{job="kube-controller-manager"} == 1)
++      up{job="kube-controller-manager"} == 0
+     for: 15m
+     labels:
+       severity: critical

@@ -1,0 +1,22 @@
+diff --git a/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml b/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
+index 8c07249..fb57ee8 100644
+--- a/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
++++ b/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
+@@ -1057,16 +1057,7 @@ groups:
+       verb: write
+     record: code_resource:apiserver_request_total:rate5m
+   - expr: |
+-      sum by (cluster, code, verb) (increase(apiserver_request_total{job="apiserver",verb=~"LIST|GET|POST|PUT|PATCH|DELETE",code=~"2.."}[1h]))
+-    record: code_verb:apiserver_request_total:increase1h
+-  - expr: |
+-      sum by (cluster, code, verb) (increase(apiserver_request_total{job="apiserver",verb=~"LIST|GET|POST|PUT|PATCH|DELETE",code=~"3.."}[1h]))
+-    record: code_verb:apiserver_request_total:increase1h
+-  - expr: |
+-      sum by (cluster, code, verb) (increase(apiserver_request_total{job="apiserver",verb=~"LIST|GET|POST|PUT|PATCH|DELETE",code=~"4.."}[1h]))
+-    record: code_verb:apiserver_request_total:increase1h
+-  - expr: |
+-      sum by (cluster, code, verb) (increase(apiserver_request_total{job="apiserver",verb=~"LIST|GET|POST|PUT|PATCH|DELETE",code=~"5.."}[1h]))
++      sum by (cluster, code, verb) (increase(apiserver_request_total{job="apiserver",verb=~"LIST|GET|POST|PUT|PATCH|DELETE"}[1h]))
+     record: code_verb:apiserver_request_total:increase1h
+ - name: kube-apiserver-burnrate.rules
+   rules:
