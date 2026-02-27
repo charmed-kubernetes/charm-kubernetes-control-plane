@@ -69,23 +69,20 @@ def test_install_alternative(mock_backup, mock_check_call, mock_exists, exists):
 
 @mock.patch("subprocess.check_output")
 @pytest.mark.parametrize("forced", [True, False])
-@pytest.mark.parametrize("inode_sz", [0, 1024, 4096])
-def test_mkfs_xfs(mock_check_call, forced, inode_sz):
-    encryption.vaultlocker._mkfs_xfs("abc", forced, inode_sz)
+def test_mkfs_ext4(mock_check_call, forced):
+    encryption.vaultlocker._mkfs_ext4("abc", force=forced)
     mock_check_call.assert_called_once()
     args = mock_check_call.call_args[0][0]
-    assert args[0] == "/usr/sbin/mkfs.xfs"
+    assert args[0] == "/usr/sbin/mkfs.ext4"
     if forced:
-        assert "-f" in args
-    if inode_sz == 1024:
-        assert args[-3:-1] == ["-i", "size=1024"]
+        assert "-F" in args
     assert args[-1] == "abc"
 
 
 @mock.patch("subprocess.check_output")
 @mock.patch("encryption.vaultlocker.Fstab")
 @pytest.mark.parametrize("persist", [True, False])
-@pytest.mark.parametrize("filesystem", ["ext3", "fat32"])
+@pytest.mark.parametrize("filesystem", ["ext4", "xfs"])
 def test_mount(mock_fstab, mock_check_output, persist, filesystem):
     options = mock.MagicMock()
     assert encryption.vaultlocker.mount(
@@ -187,13 +184,13 @@ def test_vaultlocker_encrypt_device_no_mount(check_output, harness):
 @mock.patch("encryption.vaultlocker._is_device_mounted", mock.MagicMock(return_value=False))
 @mock.patch("pathlib.Path.mkdir", mock.MagicMock())
 @mock.patch("subprocess.check_output")
-@mock.patch("encryption.vaultlocker._mkfs_xfs")
+@mock.patch("encryption.vaultlocker._mkfs_ext4")
 @mock.patch("encryption.vaultlocker.mount")
-def test_vaultlocker_encrypt_device_mounted(mount, _mkfs_xfs, check_call, harness):
+def test_vaultlocker_encrypt_device_mounted(mount, _mkfs_ext4, check_call, harness):
     harness.begin()
     device = "/dev/null"
     mountpoint = "/path/to/mount"
-    mapped = "/dev/mapper/crypt-test"
+    mapped = Path("/dev/mapper/crypt-test")
     options = (
         "defaults,nofail,x-systemd.requires=vaultlocker-decrypt@test.service,comment=vaultlocker"
     )
@@ -203,9 +200,9 @@ def test_vaultlocker_encrypt_device_mounted(mount, _mkfs_xfs, check_call, harnes
     check_call.assert_called_once_with(
         ["/usr/bin/vaultlocker", "encrypt", "--uuid", "test", device], stderr=-1
     )
-    _mkfs_xfs.assert_called_once_with(mapped)
+    _mkfs_ext4.assert_called_once_with(mapped)
     mount.assert_called_once_with(
-        mapped, mountpoint, options=options, persist=True, filesystem="xfs"
+        mapped, mountpoint, options=options, persist=True, filesystem="ext4"
     )
     assert harness.charm.encryption_at_rest.vaultlocker._stored.uuids == {device: "test"}
 
