@@ -1,0 +1,25 @@
+diff --git a/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml b/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
+index 759d22e..7e25e4d 100644
+--- a/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
++++ b/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
+@@ -1607,9 +1607,17 @@ groups:
+     record: 'node_namespace_pod:kube_pod_info:'
+   - expr: |
+       count by (cluster, node) (
+-        node_cpu_seconds_total{mode="idle",job="node-exporter"}
+-        * on (cluster, namespace, pod) group_left(node)
+-        topk by(cluster, namespace, pod) (1, node_namespace_pod:kube_pod_info:)
++        node_cpu_seconds_total{mode="idle",job=~".*node-exporter"}
++        * on (instance) group_left(node, cluster)
++        (
++          label_replace(
++            group by (node, cluster) (node_namespace_pod:kube_pod_info:),
++            "instance",
++            "$1",
++            "node",
++            "(.*)"
++          )
++        )
+       )
+     record: node:node_num_cpu:sum
+   - expr: |
