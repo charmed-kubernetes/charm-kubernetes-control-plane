@@ -1,0 +1,333 @@
+diff --git a/src/grafana_dashboards/apiserver.json b/src/grafana_dashboards/apiserver.json
+index fd1eb49..aac4bd6 100644
+--- a/src/grafana_dashboards/apiserver.json
++++ b/src/grafana_dashboards/apiserver.json
+@@ -827,7 +827,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(up{job=\"apiserver\"}, cluster)",
++                "query": "label_values(up{job=\"apiserver\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+@@ -854,4 +854,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / API server",
+     "uid": "09ec8aa1e996d6ffcd6817bbaff4db1b"
+-}
+\ No newline at end of file
++}
+diff --git a/src/grafana_dashboards/cluster-total.json b/src/grafana_dashboards/cluster-total.json
+index 17cc4c3..4c78a28 100644
+--- a/src/grafana_dashboards/cluster-total.json
++++ b/src/grafana_dashboards/cluster-total.json
+@@ -772,7 +772,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(up{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\"}, cluster)",
++                "query": "label_values(up{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+@@ -786,4 +786,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Networking / Cluster",
+     "uid": "ff635a025bcfea7bc3dd4f508990a3e9"
+-}
+\ No newline at end of file
++}
+diff --git a/src/grafana_dashboards/controller-manager.json b/src/grafana_dashboards/controller-manager.json
+index ebfb37b..e157cff 100644
+--- a/src/grafana_dashboards/controller-manager.json
++++ b/src/grafana_dashboards/controller-manager.json
+@@ -548,7 +548,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(up{job=\"kube-controller-manager\"}, cluster)",
++                "query": "label_values(up{job=\"kube-controller-manager\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+@@ -576,4 +576,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Controller Manager",
+     "uid": "72e0e05bef5099e5f049b05fdc429ed4"
+-}
+\ No newline at end of file
++}
+diff --git a/src/grafana_dashboards/k8s-resources-cluster.json b/src/grafana_dashboards/k8s-resources-cluster.json
+index dc58cde..c5d31c4 100644
+--- a/src/grafana_dashboards/k8s-resources-cluster.json
++++ b/src/grafana_dashboards/k8s-resources-cluster.json
+@@ -1545,7 +1545,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(up{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\"}, cluster)",
++                "query": "label_values(up{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+diff --git a/src/grafana_dashboards/k8s-resources-namespace.json b/src/grafana_dashboards/k8s-resources-namespace.json
+index 65f09ef..c21f8f9 100644
+--- a/src/grafana_dashboards/k8s-resources-namespace.json
++++ b/src/grafana_dashboards/k8s-resources-namespace.json
+@@ -1463,7 +1463,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(up{job=\"kube-state-metrics\"}, cluster)",
++                "query": "label_values(up{job=\"kube-state-metrics\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+@@ -1490,4 +1490,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Compute Resources / Namespace (Pods)",
+     "uid": "85a562078cdf77779eaa1add43ccec1e"
+-}
+\ No newline at end of file
++}
+diff --git a/src/grafana_dashboards/k8s-resources-node.json b/src/grafana_dashboards/k8s-resources-node.json
+index 2de7fc5..cadbf24 100644
+--- a/src/grafana_dashboards/k8s-resources-node.json
++++ b/src/grafana_dashboards/k8s-resources-node.json
+@@ -626,7 +626,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(up{job=\"kube-state-metrics\"}, cluster)",
++                "query": "label_values(up{job=\"kube-state-metrics\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+@@ -653,4 +653,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Compute Resources / Node (Pods)",
+     "uid": "200ac8fdbfbb74b39aff88118e4d1c2c"
+-}
+\ No newline at end of file
++}
+diff --git a/src/grafana_dashboards/k8s-resources-pod.json b/src/grafana_dashboards/k8s-resources-pod.json
+index 9fdb7a9..197aa29 100644
+--- a/src/grafana_dashboards/k8s-resources-pod.json
++++ b/src/grafana_dashboards/k8s-resources-pod.json
+@@ -1316,7 +1316,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(up{job=\"kube-state-metrics\"}, cluster)",
++                "query": "label_values(up{job=\"kube-state-metrics\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+@@ -1356,4 +1356,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Compute Resources / Pod",
+     "uid": "6581e46e4e5c7ba40a07646395ef7b23"
+-}
+\ No newline at end of file
++}
+diff --git a/src/grafana_dashboards/k8s-resources-workload.json b/src/grafana_dashboards/k8s-resources-workload.json
+index f9c3488..05a4f53 100644
+--- a/src/grafana_dashboards/k8s-resources-workload.json
++++ b/src/grafana_dashboards/k8s-resources-workload.json
+@@ -984,7 +984,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(up{job=\"kube-state-metrics\"}, cluster)",
++                "query": "label_values(up{job=\"kube-state-metrics\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+@@ -1038,4 +1038,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Compute Resources / Workload",
+     "uid": "a164a7f0339f99e89cea5cb47e9be617"
+-}
+\ No newline at end of file
++}
+diff --git a/src/grafana_dashboards/k8s-resources-workloads-namespace.json b/src/grafana_dashboards/k8s-resources-workloads-namespace.json
+index 3cd0742..6329f19 100644
+--- a/src/grafana_dashboards/k8s-resources-workloads-namespace.json
++++ b/src/grafana_dashboards/k8s-resources-workloads-namespace.json
+@@ -1194,7 +1194,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(up{job=\"kube-state-metrics\"}, cluster)",
++                "query": "label_values(up{job=\"kube-state-metrics\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+@@ -1235,4 +1235,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Compute Resources / Namespace (Workloads)",
+     "uid": "a87fb0d919ec0ea5f6543124e16c42a5"
+-}
+\ No newline at end of file
++}
+diff --git a/src/grafana_dashboards/kubelet.json b/src/grafana_dashboards/kubelet.json
+index dd98b34..6cbc75f 100644
+--- a/src/grafana_dashboards/kubelet.json
++++ b/src/grafana_dashboards/kubelet.json
+@@ -1198,7 +1198,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(up{job=\"kubelet\", metrics_path=\"/metrics\"}, cluster)",
++                "query": "label_values(up{job=\"kubelet\", metrics_path=\"/metrics\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+@@ -1225,4 +1225,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Kubelet",
+     "uid": "3138fa155d5915769fbded898ac09fd9"
+-}
+\ No newline at end of file
++}
+diff --git a/src/grafana_dashboards/namespace-by-pod.json b/src/grafana_dashboards/namespace-by-pod.json
+index 0813ecb..8833f58 100644
+--- a/src/grafana_dashboards/namespace-by-pod.json
++++ b/src/grafana_dashboards/namespace-by-pod.json
+@@ -578,7 +578,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(up{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\"}, cluster)",
++                "query": "label_values(up{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+@@ -612,4 +612,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Networking / Namespace (Pods)",
+     "uid": "8b7a8b326d7a6f1f04244066368c67af"
+-}
+\ No newline at end of file
++}
+diff --git a/src/grafana_dashboards/namespace-by-workload.json b/src/grafana_dashboards/namespace-by-workload.json
+index c9f3ffb..5f53fde 100644
+--- a/src/grafana_dashboards/namespace-by-workload.json
++++ b/src/grafana_dashboards/namespace-by-workload.json
+@@ -724,7 +724,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(up{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\"}, cluster)",
++                "query": "label_values(up{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+@@ -770,4 +770,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Networking / Namespace (Workload)",
+     "uid": "bbb2a765a623ae38130206c7d94a160f"
+-}
+\ No newline at end of file
++}
+diff --git a/src/grafana_dashboards/persistentvolumesusage.json b/src/grafana_dashboards/persistentvolumesusage.json
+index cb5f908..6ccf679 100644
+--- a/src/grafana_dashboards/persistentvolumesusage.json
++++ b/src/grafana_dashboards/persistentvolumesusage.json
+@@ -254,7 +254,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(kubelet_volume_stats_capacity_bytes{job=\"kubelet\", metrics_path=\"/metrics\"}, cluster)",
++                "query": "label_values(kubelet_volume_stats_capacity_bytes{job=\"kubelet\", metrics_path=\"/metrics\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+@@ -294,4 +294,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Persistent Volumes",
+     "uid": "919b92a8e8041bd567af9edab12c840c"
+-}
+\ No newline at end of file
++}
+diff --git a/src/grafana_dashboards/pod-total.json b/src/grafana_dashboards/pod-total.json
+index 7b7bf20..6705d1c 100644
+--- a/src/grafana_dashboards/pod-total.json
++++ b/src/grafana_dashboards/pod-total.json
+@@ -414,7 +414,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(up{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\"}, cluster)",
++                "query": "label_values(up{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+@@ -466,4 +466,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Networking / Pod",
+     "uid": "7a18067ce943a40ae25454675c19ff5c"
+-}
+\ No newline at end of file
++}
+diff --git a/src/grafana_dashboards/proxy.json b/src/grafana_dashboards/proxy.json
+index d2e4287..4143ae8 100644
+--- a/src/grafana_dashboards/proxy.json
++++ b/src/grafana_dashboards/proxy.json
+@@ -599,7 +599,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(up{job=\"kube-proxy\"}, cluster)",
++                "query": "label_values(up{job=\"kube-proxy\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+@@ -627,4 +627,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Proxy",
+     "uid": "632e265de029684c40b21cb76bca4f94"
+-}
+\ No newline at end of file
++}
+diff --git a/src/grafana_dashboards/scheduler.json b/src/grafana_dashboards/scheduler.json
+index e75eda0..bbca771 100644
+--- a/src/grafana_dashboards/scheduler.json
++++ b/src/grafana_dashboards/scheduler.json
+@@ -545,7 +545,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(up{job=\"kube-scheduler\"}, cluster)",
++                "query": "label_values(up{job=\"kube-scheduler\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+@@ -573,4 +573,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Scheduler",
+     "uid": "2e6b6a3b4bddf1427b3a55aa1311c656"
+-}
+\ No newline at end of file
++}
+diff --git a/src/grafana_dashboards/workload-total.json b/src/grafana_dashboards/workload-total.json
+index 1c8b6cd..2d08206 100644
+--- a/src/grafana_dashboards/workload-total.json
++++ b/src/grafana_dashboards/workload-total.json
+@@ -496,7 +496,7 @@
+                 "hide": 0,
+                 "label": "cluster",
+                 "name": "cluster",
+-                "query": "label_values(kube_pod_info{job=\"kube-state-metrics\"}, cluster)",
++                "query": "label_values(kube_pod_info{job=\"kube-state-metrics\", juju_model_uuid=~\"$juju_model_uuid\", juju_model=~\"$juju_model\"}, cluster)",
+                 "refresh": 2,
+                 "sort": 1,
+                 "type": "query"
+@@ -558,4 +558,4 @@
+     "timezone": "UTC",
+     "title": "Kubernetes / Networking / Workload",
+     "uid": "728bf77cc1166d2f3133bf25846876cc"
+-}
+\ No newline at end of file
++}

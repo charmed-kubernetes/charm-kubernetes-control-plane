@@ -1,0 +1,26 @@
+diff --git a/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml b/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
+index 759d22e..242c2ae 100644
+--- a/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
++++ b/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
+@@ -1614,12 +1614,15 @@ groups:
+     record: node:node_num_cpu:sum
+   - expr: |
+       sum(
+-        node_memory_MemAvailable_bytes{job="node-exporter"} or
+-        (
+-          node_memory_Buffers_bytes{job="node-exporter"} +
+-          node_memory_Cached_bytes{job="node-exporter"} +
+-          node_memory_MemFree_bytes{job="node-exporter"} +
+-          node_memory_Slab_bytes{job="node-exporter"}
++        label_replace(
++          node_memory_MemAvailable_bytes{job=~".*node-exporter", juju_application=~".*"} or
++          (
++            node_memory_Buffers_bytes{job=~".*node-exporter", juju_application=~".*"} +
++            node_memory_Cached_bytes{job=~".*node-exporter", juju_application=~".*"} +
++            node_memory_MemFree_bytes{job=~".*node-exporter", juju_application=~".*"} +
++            node_memory_Slab_bytes{job=~".*node-exporter", juju_application=~".*"}
++          ),
++          "cluster", "$1", "juju_model", "(.*)"
+         )
+       ) by (cluster)
+     record: :node_memory_MemAvailable_bytes:sum

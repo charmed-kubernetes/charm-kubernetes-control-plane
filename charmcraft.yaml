@@ -358,7 +358,7 @@ actions:
           archive integrity when downloaded.
       release:
         type: string
-        default: https://github.com/aquasecurity/kube-bench/releases/download/v0.6.8/kube-bench_0.6.8_linux_amd64.tar.gz#sha256=5f9c5231949bd022a6993f5297cc05bb80a1b7c36a43cefed0a8c8af26778863
+        default: https://github.com/aquasecurity/kube-bench/releases/download/v0.11.2/kube-bench_0.11.2_linux_amd64.tar.gz#sha256=26ecc7074560c761bd9fbc0f9dd4bb6b951b092c32654d96864607482e79ae42
         description: |-
           Archive containing the 'kube-bench' binary to run. The default value
           points to a stable upstream release. When using a custom URL, append

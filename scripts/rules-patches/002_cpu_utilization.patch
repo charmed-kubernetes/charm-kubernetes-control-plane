@@ -1,0 +1,24 @@
+diff --git a/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml b/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
+index 129f859..50e94dd 100644
+--- a/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
++++ b/src/prometheus_alert_rules/kubernetesControlPlane-prometheusRule.yaml
+@@ -1636,11 +1636,17 @@ groups:
+       ) by (cluster)
+     record: :node_memory_MemAvailable_bytes:sum
+   - expr: |
+-      avg by (cluster, node) (
++      avg by (cluster, instance) (
+         sum without (mode) (
+-          rate(node_cpu_seconds_total{mode!="idle",mode!="iowait",mode!="steal",job="node-exporter"}[5m])
++          label_replace(
++            rate(node_cpu_seconds_total{mode!="idle",mode!="iowait",mode!="steal",job=~".*node-exporter",juju_application=~".*"}[5m]),
++            "cluster", "$1", "juju_model", "(.*)"
++          )
+         )
+       )
++      *
++      on(instance) group_left(node)
++      label_replace(kube_node_info, "instance", "$1", "node", "(.*)")
+     record: node:node_cpu_utilization:ratio_rate5m
+   - expr: |
+       avg by (cluster) (
