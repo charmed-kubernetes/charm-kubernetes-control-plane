@@ -4,12 +4,12 @@ on: [pull_request]
 jobs:
   call-inclusive-naming-check:
     name: Inclusive Naming
-    uses: canonical/inclusive-naming/.github/workflows/woke.yaml@main
+    uses: canonical/inclusive-naming/.github/workflows/woke.yaml@7aa0f7a606f182bd03a7adb28e0d710216101ca5 # main
     with:
       fail-on-error: "true"
 
   lint-unit:
     name: Lint Unit
-    uses: charmed-kubernetes/workflows/.github/workflows/lint-unit.yaml@main
+    uses: charmed-kubernetes/workflows/.github/workflows/lint-unit.yaml@6ee58c37d404effad4598ce7b523dbaf0cb99285 # main
     with:
       python: "['3.10', '3.12']"
