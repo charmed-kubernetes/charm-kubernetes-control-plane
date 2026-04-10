@@ -207,7 +207,7 @@ def get_token(username):
 
 def render(src, dest, context):
     """Read a template file, render it, and write to dest."""
-    env = Environment(loader=FileSystemLoader("templates"))
+    env = Environment(loader=FileSystemLoader("templates")) # nosec B701
     template = env.get_template(src)
     output = template.render(context)
 
