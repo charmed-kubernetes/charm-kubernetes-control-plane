@@ -201,7 +201,7 @@ def test_active(
         external_cloud_provider=harness.charm.external_cloud_provider,
         kubeconfig="/root/cdk/kubeconfig",
         node_ip="10.0.0.10",
-        registry="rocks.canonical.com:443/cdk",
+        registry="ghcr.io/canonical/cdk",
         taints=["node-role.kubernetes.io/control-plane:NoSchedule"],
     )
     configure_kube_proxy.assert_called_once_with(
