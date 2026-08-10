@@ -97,7 +97,7 @@
                                 "value": "/var/lib/cilium/clustermesh/"
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "lifecycle": {
                             "postStart": {
@@ -278,7 +278,7 @@
                                 }
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "config",
                         "resources": {},
@@ -312,7 +312,7 @@
                                 "value": "/opt/cni/bin"
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "mount-cgroup",
                         "resources": {},
@@ -349,7 +349,7 @@
                                 "value": "/opt/cni/bin"
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "apply-sysctl-overwrites",
                         "resources": {},
@@ -400,7 +400,7 @@
                                 }
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "clean-cilium-state",
                         "resources": {},
@@ -434,7 +434,7 @@
                         "command": [
                             "/install-plugin.sh"
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "install-cni-binaries",
                         "resources": {
@@ -719,7 +719,7 @@
                     {
                         "containerID": "containerd://4ecfb8bdb8fda2e0594ee033ccf91f36b7340ba7d391dfe28427345905e9d07b",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "cilium-agent",
                         "ready": true,
@@ -788,7 +788,7 @@
                     {
                         "containerID": "containerd://2acec06e76ed41286568022e30ebac9b63095776bbbcb5e3ae7eab063902ba9c",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "config",
                         "ready": true,
@@ -819,7 +819,7 @@
                     {
                         "containerID": "containerd://7ec7fe94bffae456067c5788e5823b6b0b5613dec01134ef4b47122e40f1995f",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "mount-cgroup",
                         "ready": true,
@@ -854,7 +854,7 @@
                     {
                         "containerID": "containerd://9b5467f3d3c2aec73c2706536babf079fe262d8944a349fe25061fe274ec4ef2",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "apply-sysctl-overwrites",
                         "ready": true,
@@ -889,7 +889,7 @@
                     {
                         "containerID": "containerd://bb29fa500b5e552b853685d2d45e1c48784b1b528d04821f4cd8bffaf585736c",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "clean-cilium-state",
                         "ready": true,
@@ -928,7 +928,7 @@
                     {
                         "containerID": "containerd://b5407eecd9cb090e34aefaf17a20123a65694c34ab6e6e050af7e26164e554a7",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "install-cni-binaries",
                         "ready": true,
@@ -1064,7 +1064,7 @@
                                 "value": "/var/lib/cilium/clustermesh/"
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "lifecycle": {
                             "postStart": {
@@ -1245,7 +1245,7 @@
                                 }
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "config",
                         "resources": {},
@@ -1279,7 +1279,7 @@
                                 "value": "/opt/cni/bin"
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "mount-cgroup",
                         "resources": {},
@@ -1316,7 +1316,7 @@
                                 "value": "/opt/cni/bin"
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "apply-sysctl-overwrites",
                         "resources": {},
@@ -1367,7 +1367,7 @@
                                 }
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "clean-cilium-state",
                         "resources": {},
@@ -1401,7 +1401,7 @@
                         "command": [
                             "/install-plugin.sh"
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "install-cni-binaries",
                         "resources": {
@@ -1686,7 +1686,7 @@
                     {
                         "containerID": "containerd://c5b75f8e375c6120f795b53658fb6d1c2e302dd3b6499575e6b847af3773dae0",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "cilium-agent",
                         "ready": true,
@@ -1755,7 +1755,7 @@
                     {
                         "containerID": "containerd://6e4d7d5364d0413f01799574e7cf3ba8178dc05ba122d5427bb95c0718dfa83e",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "config",
                         "ready": true,
@@ -1786,7 +1786,7 @@
                     {
                         "containerID": "containerd://9d3340bf2575cabd05e6db40819e50c1f285e8e0050fcfe313adbf3d14ee4027",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "mount-cgroup",
                         "ready": true,
@@ -1821,7 +1821,7 @@
                     {
                         "containerID": "containerd://c2f105d2a4eb7346a9895547e4ad93284cba989884829c9a73050af84d04302a",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "apply-sysctl-overwrites",
                         "ready": true,
@@ -1856,7 +1856,7 @@
                     {
                         "containerID": "containerd://6063eee971a6de79671eb247dd10bc67c17091bbdb062edf6c8bb2f90e6afb7c",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "clean-cilium-state",
                         "ready": true,
@@ -1895,7 +1895,7 @@
                     {
                         "containerID": "containerd://15cf8041b6e56f76ab93bcf249f51fd42935e7a240ec14d42ff8f385b5eaaa63",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "install-cni-binaries",
                         "ready": true,
@@ -2031,7 +2031,7 @@
                                 "value": "/var/lib/cilium/clustermesh/"
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "lifecycle": {
                             "postStart": {
@@ -2212,7 +2212,7 @@
                                 }
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "config",
                         "resources": {},
@@ -2246,7 +2246,7 @@
                                 "value": "/opt/cni/bin"
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "mount-cgroup",
                         "resources": {},
@@ -2283,7 +2283,7 @@
                                 "value": "/opt/cni/bin"
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "apply-sysctl-overwrites",
                         "resources": {},
@@ -2334,7 +2334,7 @@
                                 }
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "clean-cilium-state",
                         "resources": {},
@@ -2368,7 +2368,7 @@
                         "command": [
                             "/install-plugin.sh"
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "install-cni-binaries",
                         "resources": {
@@ -2653,7 +2653,7 @@
                     {
                         "containerID": "containerd://51d25b4cf46e4017df8b22acbabd4a40e2b7d9639e7ba856e968d91e3e666b00",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "cilium-agent",
                         "ready": true,
@@ -2722,7 +2722,7 @@
                     {
                         "containerID": "containerd://94436bac5c833571c83ce3885d84caa9dbe4b76925b4a8846026b685dfffa3fd",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "config",
                         "ready": true,
@@ -2753,7 +2753,7 @@
                     {
                         "containerID": "containerd://7b2fe7d17553c1efbbbc3ef434d2f637a6f864637b84c2081c42fd72fd96e4a8",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "mount-cgroup",
                         "ready": true,
@@ -2788,7 +2788,7 @@
                     {
                         "containerID": "containerd://2f7a90b0e6403fc1924834875ea9d1ded2b743dff27e169ac4452adb6a419721",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "apply-sysctl-overwrites",
                         "ready": true,
@@ -2823,7 +2823,7 @@
                     {
                         "containerID": "containerd://76abd21288e5239d69b3aa1b69f27cca0ee8b6bc805e52801ec146f07b79ff11",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "clean-cilium-state",
                         "ready": true,
@@ -2862,7 +2862,7 @@
                     {
                         "containerID": "containerd://774df922d5f3453db42ea0d782a7853797c87c4c910d0b3ba75330519ae566e5",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "install-cni-binaries",
                         "ready": true,
@@ -2998,7 +2998,7 @@
                                 "value": "/var/lib/cilium/clustermesh/"
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "lifecycle": {
                             "postStart": {
@@ -3179,7 +3179,7 @@
                                 }
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "config",
                         "resources": {},
@@ -3213,7 +3213,7 @@
                                 "value": "/opt/cni/bin"
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "mount-cgroup",
                         "resources": {},
@@ -3250,7 +3250,7 @@
                                 "value": "/opt/cni/bin"
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "apply-sysctl-overwrites",
                         "resources": {},
@@ -3301,7 +3301,7 @@
                                 }
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "clean-cilium-state",
                         "resources": {},
@@ -3335,7 +3335,7 @@
                         "command": [
                             "/install-plugin.sh"
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "install-cni-binaries",
                         "resources": {
@@ -3620,7 +3620,7 @@
                     {
                         "containerID": "containerd://a9b40a5dd689f08224f8e5a88e41eaa1b32a028030cbdf90c52f88bd406b6fbc",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "cilium-agent",
                         "ready": true,
@@ -3689,7 +3689,7 @@
                     {
                         "containerID": "containerd://a49859c57504a544169da2da86911207bdab8eeccbe67bbdaaf1449274187d07",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "config",
                         "ready": true,
@@ -3720,7 +3720,7 @@
                     {
                         "containerID": "containerd://154d0ee4a1541d95c88e9f44a18f40d9a64dcd22ead56fabe06ec9527d102aeb",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "mount-cgroup",
                         "ready": true,
@@ -3755,7 +3755,7 @@
                     {
                         "containerID": "containerd://5df5680509a2aff2fe5590f645400a087cb9aa92e0951080de692342ee13f382",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "apply-sysctl-overwrites",
                         "ready": true,
@@ -3790,7 +3790,7 @@
                     {
                         "containerID": "containerd://d827ad8278da5112f7e4406cee968d904e6eaaaeb072cccc320370877bbdaa4f",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "clean-cilium-state",
                         "ready": true,
@@ -3829,7 +3829,7 @@
                     {
                         "containerID": "containerd://0ce7169a44f15db02c53b8fe87fb0629cc3d87034dbd47f806e0462948067819",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "install-cni-binaries",
                         "ready": true,
@@ -3965,7 +3965,7 @@
                                 "value": "/var/lib/cilium/clustermesh/"
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "lifecycle": {
                             "postStart": {
@@ -4146,7 +4146,7 @@
                                 }
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "config",
                         "resources": {},
@@ -4180,7 +4180,7 @@
                                 "value": "/opt/cni/bin"
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "mount-cgroup",
                         "resources": {},
@@ -4217,7 +4217,7 @@
                                 "value": "/opt/cni/bin"
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "apply-sysctl-overwrites",
                         "resources": {},
@@ -4268,7 +4268,7 @@
                                 }
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "clean-cilium-state",
                         "resources": {},
@@ -4302,7 +4302,7 @@
                         "command": [
                             "/install-plugin.sh"
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "image": "ghcr.io/canonical/cdk/cilium/cilium:v1.14.11@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "install-cni-binaries",
                         "resources": {
@@ -4587,7 +4587,7 @@
                     {
                         "containerID": "containerd://cfb574aa08e161f3b37d8548907e5bee478e0a5b11d85d5dad221b766c09d9ad",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "cilium-agent",
                         "ready": true,
@@ -4656,7 +4656,7 @@
                     {
                         "containerID": "containerd://b55b50025fcd802b39a65eeca1d8e4d24baba2f554089be82779ddd99dda8e6c",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "config",
                         "ready": true,
@@ -4687,7 +4687,7 @@
                     {
                         "containerID": "containerd://3707a8d92714d1cba52e0bde2abc8de2816430589c35e3bb3167a4703447b4dd",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "mount-cgroup",
                         "ready": true,
@@ -4722,7 +4722,7 @@
                     {
                         "containerID": "containerd://2c27c5a47f1013dd34b4491c4c12a01899fe434d932dd5c0c3dae657ca8466ed",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "apply-sysctl-overwrites",
                         "ready": true,
@@ -4757,7 +4757,7 @@
                     {
                         "containerID": "containerd://719707b570fe1a0af97cbddf67b4e9e9ca85b7743ca1ebb0b7ffc7b010fdb59f",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "clean-cilium-state",
                         "ready": true,
@@ -4796,7 +4796,7 @@
                     {
                         "containerID": "containerd://94c7476e6c22a40a15d396a380cec05413f38d7f6c80a126681faaac98b733f1",
                         "image": "sha256:28f2114f67d9fe4c6b422678cfe9981a7cba4f7b657ad87a0fae124e9c6b4d74",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/cilium@sha256:2b2118042dc6efe88dbc40c78909b6afd72b369896782ce38d132435724ee269",
                         "lastState": {},
                         "name": "install-cni-binaries",
                         "ready": true,
@@ -4922,7 +4922,7 @@
                                 }
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/operator-generic:v1.14.11@sha256:df76f71a06f1c681848bfa86fdd99243af593d33034c9e2057c6af969bc25109",
+                        "image": "ghcr.io/canonical/cdk/cilium/operator-generic:v1.14.11@sha256:df76f71a06f1c681848bfa86fdd99243af593d33034c9e2057c6af969bc25109",
                         "imagePullPolicy": "IfNotPresent",
                         "livenessProbe": {
                             "failureThreshold": 3,
@@ -5081,7 +5081,7 @@
                     {
                         "containerID": "containerd://4c628568604ad1f0f04fea2dccb57e9215a3ead299e7e0fdd5fb8335aafbf1dd",
                         "image": "sha256:5b03903fffc9b23a972764d9739b2159ae71b4a76bf4f37a07007e6004427613",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/operator-generic@sha256:df76f71a06f1c681848bfa86fdd99243af593d33034c9e2057c6af969bc25109",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/operator-generic@sha256:df76f71a06f1c681848bfa86fdd99243af593d33034c9e2057c6af969bc25109",
                         "lastState": {},
                         "name": "cilium-operator",
                         "ready": true,
@@ -5211,7 +5211,7 @@
                                 }
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/cilium/operator-generic:v1.14.11@sha256:df76f71a06f1c681848bfa86fdd99243af593d33034c9e2057c6af969bc25109",
+                        "image": "ghcr.io/canonical/cdk/cilium/operator-generic:v1.14.11@sha256:df76f71a06f1c681848bfa86fdd99243af593d33034c9e2057c6af969bc25109",
                         "imagePullPolicy": "IfNotPresent",
                         "livenessProbe": {
                             "failureThreshold": 3,
@@ -5370,7 +5370,7 @@
                     {
                         "containerID": "containerd://62185c6e85c7825802f0d45f7f07dc4547d2bc9dc9a2315b1e86d4e65ba940c2",
                         "image": "sha256:5b03903fffc9b23a972764d9739b2159ae71b4a76bf4f37a07007e6004427613",
-                        "imageID": "rocks.canonical.com:443/cdk/cilium/operator-generic@sha256:df76f71a06f1c681848bfa86fdd99243af593d33034c9e2057c6af969bc25109",
+                        "imageID": "ghcr.io/canonical/cdk/cilium/operator-generic@sha256:df76f71a06f1c681848bfa86fdd99243af593d33034c9e2057c6af969bc25109",
                         "lastState": {},
                         "name": "cilium-operator",
                         "ready": true,
@@ -5467,7 +5467,7 @@
                             "-conf",
                             "/etc/coredns/Corefile"
                         ],
-                        "image": "rocks.canonical.com:443/cdk/coredns/coredns:1.9.4",
+                        "image": "ghcr.io/canonical/cdk/coredns/coredns:1.9.4",
                         "imagePullPolicy": "IfNotPresent",
                         "livenessProbe": {
                             "failureThreshold": 5,
@@ -5674,8 +5674,8 @@
                 "containerStatuses": [
                     {
                         "containerID": "containerd://1bb941676b1d81c1bb4eaf0d5e04e7333b4e04c0aef48f7c97a29bbfb7f674e4",
-                        "image": "rocks.canonical.com:443/cdk/coredns/coredns:1.9.4",
-                        "imageID": "rocks.canonical.com:443/cdk/coredns/coredns@sha256:b82e294de6be763f73ae71266c8f5466e7e03c69f3a1de96efd570284d35bb18",
+                        "image": "ghcr.io/canonical/cdk/coredns/coredns:1.9.4",
+                        "imageID": "ghcr.io/canonical/cdk/coredns/coredns@sha256:b82e294de6be763f73ae71266c8f5466e7e03c69f3a1de96efd570284d35bb18",
                         "lastState": {
                             "terminated": {
                                 "containerID": "containerd://190e1cf746202c762661116a57321c3c4856649ad3c59f65797d132cc0173f2c",
@@ -5758,7 +5758,7 @@
                 "automountServiceAccountToken": true,
                 "containers": [
                     {
-                        "image": "rocks.canonical.com:443/cdk/kube-state-metrics/kube-state-metrics:v2.10.1",
+                        "image": "ghcr.io/canonical/cdk/kube-state-metrics/kube-state-metrics:v2.10.1",
                         "imagePullPolicy": "IfNotPresent",
                         "livenessProbe": {
                             "failureThreshold": 3,
@@ -5932,8 +5932,8 @@
                 "containerStatuses": [
                     {
                         "containerID": "containerd://f323c556258b76d2573940bc17bca0a688be61e956f773b4b9db04a0a3c63651",
-                        "image": "rocks.canonical.com:443/cdk/kube-state-metrics/kube-state-metrics:v2.10.1",
-                        "imageID": "rocks.canonical.com:443/cdk/kube-state-metrics/kube-state-metrics@sha256:af8220f534938de121a694cb7314313a6195c9d494fc30bfa6885b08a276bb82",
+                        "image": "ghcr.io/canonical/cdk/kube-state-metrics/kube-state-metrics:v2.10.1",
+                        "imageID": "ghcr.io/canonical/cdk/kube-state-metrics/kube-state-metrics@sha256:af8220f534938de121a694cb7314313a6195c9d494fc30bfa6885b08a276bb82",
                         "lastState": {
                             "terminated": {
                                 "containerID": "containerd://f323c556258b76d2573940bc17bca0a688be61e956f773b4b9db04a0a3c63651",
@@ -6018,7 +6018,7 @@
                             "--cert-dir=/tmp",
                             "--secure-port=10250"
                         ],
-                        "image": "rocks.canonical.com:443/cdk/metrics-server/metrics-server:v0.7.1",
+                        "image": "ghcr.io/canonical/cdk/metrics-server/metrics-server:v0.7.1",
                         "imagePullPolicy": "IfNotPresent",
                         "livenessProbe": {
                             "failureThreshold": 3,
@@ -6101,7 +6101,7 @@
                                 }
                             }
                         ],
-                        "image": "rocks.canonical.com:443/cdk/addon-resizer-amd64:1.8.9",
+                        "image": "ghcr.io/canonical/cdk/addon-resizer-amd64:1.8.9",
                         "imagePullPolicy": "IfNotPresent",
                         "name": "metrics-server-nanny",
                         "resources": {
@@ -6258,8 +6258,8 @@
                 "containerStatuses": [
                     {
                         "containerID": "containerd://0a6bd0be52a309cc49971c81a883087c49febdc341092d33c29d054ef5f4e6be",
-                        "image": "rocks.canonical.com:443/cdk/metrics-server/metrics-server:v0.7.1",
-                        "imageID": "rocks.canonical.com:443/cdk/metrics-server/metrics-server@sha256:db3800085a0957083930c3932b17580eec652cfb6156a05c0f79c7543e80d17a",
+                        "image": "ghcr.io/canonical/cdk/metrics-server/metrics-server:v0.7.1",
+                        "imageID": "ghcr.io/canonical/cdk/metrics-server/metrics-server@sha256:db3800085a0957083930c3932b17580eec652cfb6156a05c0f79c7543e80d17a",
                         "lastState": {
                             "terminated": {
                                 "containerID": "containerd://0a6bd0be52a309cc49971c81a883087c49febdc341092d33c29d054ef5f4e6be",
@@ -6294,8 +6294,8 @@
                     },
                     {
                         "containerID": "containerd://fc4907bdeb39e095ed69ff2ce88ff2f6fd8e9547fb7760b4a17db4196807aa5f",
-                        "image": "rocks.canonical.com:443/cdk/addon-resizer-amd64:1.8.9",
-                        "imageID": "rocks.canonical.com:443/cdk/addon-resizer-amd64@sha256:b560b2131195cadd1b92b0b54d972e64932e8fe3d4881254732f582474b02eba",
+                        "image": "ghcr.io/canonical/cdk/addon-resizer-amd64:1.8.9",
+                        "imageID": "ghcr.io/canonical/cdk/addon-resizer-amd64@sha256:b560b2131195cadd1b92b0b54d972e64932e8fe3d4881254732f582474b02eba",
                         "lastState": {},
                         "name": "metrics-server-nanny",
                         "ready": true,
