@@ -24,8 +24,8 @@ import yaml
 logging.basicConfig(level=logging.INFO)
 
 # NOTE: pick a kube-prometheus version that supports the Kubernetes version we deploy
-# As of 2025-09-01, v0.16.0 supports 1.31-1.34.
-VERSION = "v0.16.0"
+# As of 2026-08-17, v0.18.0 supports 1.33-1.36.
+VERSION = "v0.18.0"
 SOURCE = (
     f"https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/{VERSION}/manifests"
 )
@@ -38,7 +38,7 @@ ALERT_RULES_DIR = Path("src/prometheus_alert_rules")
 PATCHES_DIR = Path("scripts/rules-patches")
 
 # NOTE: (mateoflorido): This record is duplicated across the rules. As of
-# 2025-09-01 (v0.16.0), Prometheus does not support duplicated records. Patch
+# 2026-08-17 (v0.18.0), Prometheus does not support duplicated records. Patch
 # 006 merges the duplicates into one recording rule.
 DROP_RECORDS: List[Tuple[str, str]] = [
     # ("kube-apiserver-availability.rules", "code_verb:apiserver_request_total:increase1h")
@@ -168,8 +168,11 @@ def main():
     with TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         download_and_process_rule_files(temp_path)
-        shutil.rmtree(ALERT_RULES_DIR, ignore_errors=True)
-        ALERT_RULES_DIR.mkdir(parents=True)
+        ALERT_RULES_DIR.mkdir(parents=True, exist_ok=True)
+        # Only replace the files this script manages; the directory may also
+        # contain hand-written rules.
+        for rule_file in RULE_FILES:
+            (ALERT_RULES_DIR / rule_file).unlink(missing_ok=True)
         move_processed_files(temp_path)
         apply_patches()
 
