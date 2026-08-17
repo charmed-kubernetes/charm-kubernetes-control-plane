@@ -21,7 +21,7 @@ import yaml
 
 logging.basicConfig(level=logging.INFO)
 
-KUBE_PROM_VER = "v0.16.0"
+KUBE_PROM_VER = "v0.18.0"
 KUBE_PROM_SRC = (
     "https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/"
     f"{KUBE_PROM_VER}/manifests/grafana-dashboardDefinitions.yaml"
