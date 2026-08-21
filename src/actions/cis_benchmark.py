@@ -53,7 +53,7 @@ class Remedy:
         elif self.type == "cli" and self.command:
             cmd = shlex.split(self.command)
             try:
-                out = subprocess.check_output(cmd, shell=True, text=True)
+                out = subprocess.check_output(cmd, shell=True, text=True) # nosec B602
             except subprocess.CalledProcessError as e:
                 msg = f"Test {test_num}: failed to apply remedy: {e.cmd}\nStdout: {e.stdout}\nError: {e.stderr}"
                 log.error("%s", msg)

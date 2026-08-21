@@ -110,7 +110,7 @@ def test_get_vault_config_fails_get_secret_id(mock_retrieve_secret_id, vault_kv)
 def test_vault_app_kv(mock_client, vault_kv, backend_format):
     mock_client().read.side_effect = [
         {"data": {"gettable": "static"}},
-        {"data": {"gettable": hashlib.md5(b'"static"').hexdigest()}},  # hash
+        {"data": {"gettable": hashlib.md5(b'"static"').hexdigest()}},  # hash # nosec B324
         {"data": {"gettable": "static"}},
     ]
     kv = vault_kv.app_kv

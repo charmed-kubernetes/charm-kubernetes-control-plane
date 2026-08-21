@@ -31,7 +31,7 @@ class VaultInvalidAccessError(VaultNotReadyError):
 def _hash_value(value: str) -> str:
     """Hash the value -- a hash can be used in comparison to determine changes."""
     serialized = json.dumps(value, sort_keys=True).encode("utf8")
-    return hashlib.md5(serialized).hexdigest()
+    return hashlib.md5(serialized).hexdigest() # nosec B324
 
 
 class _VaultBaseKV(dict):
