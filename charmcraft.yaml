@@ -221,7 +221,7 @@ config:
         If ignore-missing-cni is set to false, and a CNI has not been configured/provided via relation, then the charm will enter a blocked state with the message: "Missing CNI relation or config".
     image-registry:
       type: string
-      default: "rocks.canonical.com:443/cdk"
+      default: "ghcr.io/canonical/cdk"
       description: |
         Container image registry to use for CDK. This includes addons like the Kubernetes dashboard,
         metrics server, ingress, and dns along with non-addon images including the pause
