@@ -449,47 +449,62 @@ provides:
     scope: container
   cos-agent:
     interface: cos_agent
+    optional: true
   kube-control:
     interface: kube-control
+    optional: true
   tokens:
     interface: tokens
+    optional: true
 
 requires:
   ceph-client:
     # Remains for upgrade compatibility with a warning to remove after upgrade
     interface: ceph-client
+    optional: true
   aws:
     interface: aws-integration
+    optional: true
   gcp:
     interface: gcp-integration
+    optional: true
   azure:
     interface: azure-integration
+    optional: true
   openstack:
     # Remains for upgrade compatibility with a warning to remove after upgrade
     interface: openstack-integration
+    optional: true
   keystone-credentials:
     # Remains for upgrade compatibility with a warning to remove after upgrade
     interface: keystone-credentials
+    optional: true
   certificates:
     interface: tls-certificates
   dns-provider:
     interface: kube-dns
+    optional: true
   etcd:
     interface: etcd
   ha:
     interface: hacluster
+    optional: true
   loadbalancer-external:
     # Indicates that the LB should be public facing. Intended for clients which
     # must reach the API server via external networks.
     interface: loadbalancer
+    optional: true
   loadbalancer-internal:
     # Indicates that the LB should not be public and should use internal
     # networks if available. Intended for control plane and other internal use.
     interface: loadbalancer
+    optional: true
   external-cloud-provider:
     interface: external_cloud_provider
+    optional: true
   vault-kv:
     interface: vault-kv
+    optional: true
 
 resources:
   cni-plugins:
