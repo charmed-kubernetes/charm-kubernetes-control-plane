@@ -5,6 +5,7 @@
 """Charmed Machine Operator for Kubernetes Control Plane."""
 
 import functools
+import hashlib
 import logging
 import os
 import re
@@ -49,10 +50,12 @@ from hacluster import HACluster
 from k8s_api_endpoints import K8sApiEndpoints
 from k8s_kube_system import get_kube_system_pods_not_running
 from kubectl import ROOT_KUBECONFIG, kubectl
+from service_restarts import ServiceRestarts
 
 log = logging.getLogger(__name__)
 
 OBSERVABILITY_ROLE = "system:cos"
+KUBELET_CERT_FILES = ["/root/cdk/ca.crt", "/root/cdk/server.crt", "/root/cdk/server.key"]
 
 
 class RefreshCosAgent(ops.EventBase):
@@ -107,6 +110,7 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
     """Charmed Operator for Kubernetes Control Plane."""
 
     observability_refresh = ops.EventSource(RefreshCosAgent)
+    _stored = ops.StoredState()
 
     APISERVER_PORT = 6443
 
@@ -147,6 +151,8 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.tokens = TokensProvider(self, endpoint="tokens")
         self.encryption_at_rest = EncryptionAtRest(self)
         self.cis_benchmark = actions.cis_benchmark.CISBenchmark(self)
+        self.service_restarts = ServiceRestarts(self)
+        self._stored.set_default(installed_channel=None, cni_plugins_hash=None)
 
         # register charm actions
         action_events = [
@@ -235,20 +241,21 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def configure_apiserver(self):
         status.add(ops.MaintenanceStatus("Configuring API Server"))
-        kubernetes_snaps.configure_apiserver(
-            advertise_address=self._get_node_ips()[0],
-            audit_policy=self.model.config["audit-policy"],
-            audit_webhook_conf=self.model.config["audit-webhook-config"],
-            auth_webhook_conf=auth_webhook.auth_webhook_conf,
-            authorization_mode=self.model.config["authorization-mode"],
-            cluster_cidr=self.cni.cidr,
-            etcd_connection_string=self.etcd.get_connection_string(),
-            extra_args_config=self.service_extra_args("kube-apiserver", "api-extra-args"),
-            privileged=self.allows_privileged,
-            service_cidr=self.model.config["service-cidr"],
-            external_cloud_provider=self.external_cloud_provider,
-            authz_webhook_conf_file=auth_webhook.authz_webhook_conf,
-        )
+        with self.service_restarts.restart_on_change("kube-apiserver"):
+            kubernetes_snaps.configure_apiserver(
+                advertise_address=self._get_node_ips()[0],
+                audit_policy=self.model.config["audit-policy"],
+                audit_webhook_conf=self.model.config["audit-webhook-config"],
+                auth_webhook_conf=auth_webhook.auth_webhook_conf,
+                authorization_mode=self.model.config["authorization-mode"],
+                cluster_cidr=self.cni.cidr,
+                etcd_connection_string=self.etcd.get_connection_string(),
+                extra_args_config=self.service_extra_args("kube-apiserver", "api-extra-args"),
+                privileged=self.allows_privileged,
+                service_cidr=self.model.config["service-cidr"],
+                external_cloud_provider=self.external_cloud_provider,
+                authz_webhook_conf_file=auth_webhook.authz_webhook_conf,
+            )
 
     def configure_apiserver_kubelet_api_admin(self):
         status.add(ops.MaintenanceStatus("Configuring API Server kubelet admin"))
@@ -352,16 +359,17 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def configure_controller_manager(self):
         status.add(ops.MaintenanceStatus("Configuring Controller Manager"))
-        kubernetes_snaps.configure_controller_manager(
-            cluster_cidr=self.cni.cidr,
-            cluster_name=self.get_cluster_name(),
-            extra_args_config=self.service_extra_args(
-                "kube-controller-manager", "controller-manager-extra-args"
-            ),
-            kubeconfig="/root/cdk/kubecontrollermanagerconfig",
-            service_cidr=self.model.config["service-cidr"],
-            external_cloud_provider=self.external_cloud_provider,
-        )
+        with self.service_restarts.restart_on_change("kube-controller-manager"):
+            kubernetes_snaps.configure_controller_manager(
+                cluster_cidr=self.cni.cidr,
+                cluster_name=self.get_cluster_name(),
+                extra_args_config=self.service_extra_args(
+                    "kube-controller-manager", "controller-manager-extra-args"
+                ),
+                kubeconfig="/root/cdk/kubecontrollermanagerconfig",
+                service_cidr=self.model.config["service-cidr"],
+                external_cloud_provider=self.external_cloud_provider,
+            )
 
     def configure_hacluster(self):
         if self.hacluster.is_ready:
@@ -423,28 +431,31 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def configure_kube_proxy(self):
         status.add(ops.MaintenanceStatus("Configuring Kube Proxy"))
-        kubernetes_snaps.configure_kube_proxy(
-            cluster_cidr=self.cni.cidr,
-            extra_args_config=self.service_extra_args("kube-proxy", "proxy-extra-args"),
-            extra_config=yaml.safe_load(self.model.config["proxy-extra-config"]),
-            kubeconfig="/root/cdk/kubeproxyconfig",
-            external_cloud_provider=self.external_cloud_provider,
-        )
+        kubeconfig = "/root/cdk/kubeproxyconfig"
+        with self.service_restarts.restart_on_change("kube-proxy", extra_files=[kubeconfig]):
+            kubernetes_snaps.configure_kube_proxy(
+                cluster_cidr=self.cni.cidr,
+                extra_args_config=self.service_extra_args("kube-proxy", "proxy-extra-args"),
+                extra_config=yaml.safe_load(self.model.config["proxy-extra-config"]),
+                kubeconfig=kubeconfig,
+                external_cloud_provider=self.external_cloud_provider,
+            )
 
     def configure_kubelet(self):
         status.add(ops.MaintenanceStatus("Configuring Kubelet"))
-        kubernetes_snaps.configure_kubelet(
-            container_runtime_endpoint=self.container_runtime.socket,
-            dns_domain=self.get_dns_domain(),
-            dns_ip=self.get_dns_address(),
-            extra_args_config=self.service_extra_args("kubelet", "kubelet-extra-args"),
-            extra_config=yaml.safe_load(self.model.config["kubelet-extra-config"]),
-            external_cloud_provider=self.external_cloud_provider,
-            kubeconfig="/root/cdk/kubeconfig",
-            node_ip=",".join(self._get_node_ips()),
-            registry=self.model.config["image-registry"],
-            taints=self.model.config["register-with-taints"].split(),
-        )
+        with self.service_restarts.restart_on_change("kubelet", extra_files=KUBELET_CERT_FILES):
+            kubernetes_snaps.configure_kubelet(
+                container_runtime_endpoint=self.container_runtime.socket,
+                dns_domain=self.get_dns_domain(),
+                dns_ip=self.get_dns_address(),
+                extra_args_config=self.service_extra_args("kubelet", "kubelet-extra-args"),
+                extra_config=yaml.safe_load(self.model.config["kubelet-extra-config"]),
+                external_cloud_provider=self.external_cloud_provider,
+                kubeconfig="/root/cdk/kubeconfig",
+                node_ip=",".join(self._get_node_ips()),
+                registry=self.model.config["image-registry"],
+                taints=self.model.config["register-with-taints"].split(),
+            )
 
     def configure_loadbalancers(self):
         if not self.unit.is_leader():
@@ -485,10 +496,13 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
 
     def configure_scheduler(self):
         status.add(ops.MaintenanceStatus("Configuring Scheduler"))
-        kubernetes_snaps.configure_scheduler(
-            extra_args_config=self.service_extra_args("kube-scheduler", "scheduler-extra-args"),
-            kubeconfig="/root/cdk/kubeschedulerconfig",
-        )
+        with self.service_restarts.restart_on_change("kube-scheduler"):
+            kubernetes_snaps.configure_scheduler(
+                extra_args_config=self.service_extra_args(
+                    "kube-scheduler", "scheduler-extra-args"
+                ),
+                kubeconfig="/root/cdk/kubeschedulerconfig",
+            )
 
     @status.on_error(ops.WaitingStatus("Waiting for Auth Tokens"), CalledProcessError)
     def create_kubeconfigs(self):
@@ -670,6 +684,11 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             log.error("Something went wrong when claiming 'cni-plugins' resource.")
             raise
 
+        resource_hash = hashlib.sha256(Path(resource_path).read_bytes()).hexdigest()
+        if resource_hash == self._stored.cni_plugins_hash:
+            log.info("'cni-plugins' resource unchanged, skipping extraction")
+            return
+
         unpack_path = Path("/opt/cni/bin")
         unpack_path.mkdir(parents=True, exist_ok=True)
 
@@ -681,15 +700,37 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             raise
 
         log.info(f"Extracted 'cni-plugins' to {unpack_path}")
+        self._stored.cni_plugins_hash = resource_hash
+
+    def install_snaps(self, event):
+        """Install the Kubernetes snaps unless they already track the configured channel.
+
+        Checking and refreshing every snap against the store on every hook is slow,
+        and snapd's auto-refresh already picks up new revisions within a channel.
+        """
+        channel = self.model.config["channel"]
+        snaps = [
+            *kubernetes_snaps.BASIC_SNAPS,
+            *kubernetes_snaps.CONTROL_PLANE_SNAPS,
+            "cdk-addons",
+        ]
+        if (
+            not isinstance(event, (ops.InstallEvent, ops.UpgradeCharmEvent))
+            and self._stored.installed_channel == channel
+            and all(kubernetes_snaps.is_snap_installed(snap) for snap in snaps)
+        ):
+            log.info("Kubernetes snaps already installed from channel %s", channel)
+            return
+        kubernetes_snaps.install(channel=channel, control_plane=True)
+        kubernetes_snaps.install_snap("cdk-addons", channel=cdk_addons_channel(channel))
+        self._stored.installed_channel = channel
 
     def reconcile(self, event):
         """Reconcile state change events."""
+        auth_webhook.clear_cache()
         self.install_cni_binaries()
-        kubernetes_snaps.install(channel=self.model.config["channel"], control_plane=True)
-        kubernetes_snaps.install_snap(
-            "cdk-addons", channel=cdk_addons_channel(self.model.config["channel"])
-        )
-        kubernetes_snaps.configure_services_restart_always(control_plane=True)
+        self.install_snaps(event)
+        self.service_restarts.ensure_restart_always(control_plane=True)
         self.request_certificates()
         self.write_certificates()
         self.write_etcd_client_credentials()
@@ -779,47 +820,21 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
         self.certificates.request_client_cert("system:kube-apiserver")
         self.certificates.request_server_cert(cn=common_name, sans=sans)
 
-    def _service_has_failed(self, service):
-        try:
-            output = subprocess.check_output(
-                ["systemctl", "show", "--no-pager", service], stderr=subprocess.STDOUT
-            ).decode("utf-8")
-
-            fields = dict(
-                line.split("=", 1) for line in output.strip().splitlines() if "=" in line
-            )
-
-            active_state = fields.get("ActiveState")
-            result = fields.get("Result")
-            exec_main_status = fields.get("ExecMainStatus")
-            n_restarts = int(fields.get("NRestarts") or -1)
-
-            if active_state == "failed" or result == "exit-code":
-                return (
-                    True,
-                    f"{service} has failed: ActiveState={active_state}, Result={result}",
-                )
-            elif exec_main_status and exec_main_status != "0":
-                return True, f"{service} Non-zero exit: ExecMainStatus={exec_main_status}"
-            elif n_restarts and n_restarts > 10:
-                subprocess.run(["systemctl", "restart", service])
-                return True, f"{service} is restarting repeatedly"
-            return False, ""
-        except subprocess.CalledProcessError as e:
-            return True, f"Failed to check {service} status: {e.output.decode('utf-8')}"
-
     def _check_core_services(self, services):
         if not self.reconciler.stored.reconciled:
             # Bail, the unit isn't reconciled
             log.info("Skipping core services check: unit is not yet reconciled.")
             return
         with status.context(self.unit):
+            # Check every service so each one's restart count stays current
+            failures = []
             for service in services:
                 log.info(f"checking the status of {service}")
-                has_failed, reason = self._service_has_failed(service)
+                has_failed, reason = self.service_restarts.service_has_failed(service)
                 if has_failed:
-                    status.add(ops.BlockedStatus(f"{service} has failed: {reason}"))
-                    return
+                    failures.append(f"{service} has failed: {reason}")
+            if failures:
+                status.add(ops.BlockedStatus(failures[0]))
 
     def update_status(self, event):
         if self.hacluster.is_ready:

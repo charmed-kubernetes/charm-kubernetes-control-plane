@@ -27,6 +27,11 @@ def harness():
         harness.cleanup()
 
 
+@patch("charms.kubernetes_snaps.service_restart")
+@patch("service_restarts.is_active", MagicMock(return_value=True))
+@patch("service_restarts.fingerprint", MagicMock(return_value="fingerprint"))
+@patch("charms.kubernetes_snaps.is_channel_available", MagicMock(return_value=True))
+@patch("charms.kubernetes_snaps.is_channel_swap", MagicMock(return_value=False))
 @patch("auth_webhook.configure")
 @patch("auth_webhook.get_token")
 @patch("cdk_addons.CdkAddons.get_dns_address")
@@ -81,6 +86,7 @@ def test_active(
     get_dns_address,
     auth_webhook_get_token,
     auth_webhook_configure,
+    service_restart,
     harness,
 ):
     get_cloud_name.return_value = None
@@ -215,6 +221,17 @@ def test_active(
         extra_args_config="", kubeconfig="/root/cdk/kubeschedulerconfig"
     )
     configure_services_restart_always.assert_called_once_with(control_plane=True)
+    # First reconcile has no stored fingerprints, so each service restarts once
+    service_restart.assert_has_calls(
+        [
+            call("snap.kube-apiserver.daemon"),
+            call("snap.kube-controller-manager.daemon"),
+            call("snap.kube-scheduler.daemon"),
+            call("snap.kubelet.daemon"),
+            call("snap.kube-proxy.daemon"),
+        ]
+    )
+    assert service_restart.call_count == 5
     update_kubeconfig.assert_called()
     install_snap.assert_called()
     install_cni_binaries.assert_called()
@@ -242,6 +259,15 @@ def test_active(
         any_order=False,
     )
     remove_label.assert_called_once_with("juju.io/cloud")
+
+    # A reconcile with no configuration change restarts nothing
+    service_restart.reset_mock()
+    install_snap.reset_mock()
+    is_snap_installed.return_value = True
+    harness.charm.on.config_changed.emit()
+    assert harness.model.unit.status == ActiveStatus("Ready")
+    service_restart.assert_not_called()
+    install_snap.assert_not_called()
 
 
 @patch("ops.Unit.close_port")

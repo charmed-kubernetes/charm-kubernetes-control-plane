@@ -1,7 +1,9 @@
+import hashlib
 import json
 import logging
 import os
 import shutil
+from pathlib import Path
 from subprocess import CalledProcessError, check_call, check_output
 
 import charms.contextual_status as status
@@ -12,6 +14,8 @@ from kubectl import ROOT_KUBECONFIG, get_service_ip, kubectl, kubectl_get
 
 kubeconfig_dir = "/root/snap/cdk-addons/common"
 kubeconfig_path = f"{kubeconfig_dir}/kubeconfig"
+# Digest of the inputs of the last successful apply
+applied_digest_path = Path(kubeconfig_dir) / ".applied-digest"
 log = logging.getLogger(__name__)
 
 
@@ -59,10 +63,27 @@ class CdkAddons:
             "kubeconfig=" + kubeconfig_path,
             "registry=" + registry,
         ]
-        check_call(["snap", "set", "cdk-addons"] + args)
-        self.copy_kubeconfig()
-        self.apply()
+        digest = self.inputs_digest(args)
+        if applied_digest_path.exists() and applied_digest_path.read_text() == digest:
+            log.info("cdk-addons inputs unchanged, skipping apply")
+        else:
+            check_call(["snap", "set", "cdk-addons"] + args)
+            self.copy_kubeconfig()
+            self.apply()
+            applied_digest_path.write_text(digest)
         self.set_default_storage_class()
+
+    @staticmethod
+    def inputs_digest(args) -> str:
+        """Digest of everything cdk-addons.apply depends on.
+
+        Covers the snap args, the admin kubeconfig and the installed cdk-addons
+        revision, since a snap refresh can ship new addon manifests.
+        """
+        digest = hashlib.sha256("\n".join(args).encode("utf-8"))
+        digest.update(ROOT_KUBECONFIG.read_bytes() if ROOT_KUBECONFIG.exists() else b"")
+        digest.update(os.path.realpath("/snap/cdk-addons/current").encode("utf-8"))
+        return digest.hexdigest()
 
     def copy_kubeconfig(self):
         """Copy the admin kubeconfig to a location where cdk-addons can read it."""

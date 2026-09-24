@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import random
@@ -7,15 +8,15 @@ import tempfile
 from base64 import b64decode, b64encode
 from dataclasses import dataclass
 from pathlib import Path
-from subprocess import CalledProcessError, check_call, check_output
-from typing import List, Mapping
+from subprocess import CalledProcessError, call, check_call, check_output
+from typing import Dict, List, Optional
 
 import charms.contextual_status as status
 import yaml
 from jinja2 import Environment, FileSystemLoader
 from ops import MaintenanceStatus
 
-from kubectl import kubectl, kubectl_get
+from kubectl import ROOT_KUBECONFIG, kubectl, kubectl_get
 
 auth_secret_ns = "kube-system"
 auth_secret_type = "juju.is/token-auth"
@@ -26,9 +27,15 @@ auth_webhook_exe = os.path.join(auth_webhook_root, "auth-webhook.py")
 # wokeignore:rule=master
 auth_webhook_svc_name = "cdk.master.auth-webhook"
 auth_webhook_svc = "/etc/systemd/system/{}.service".format(auth_webhook_svc_name)
+# gunicorn loads the serving cert at startup, so the service restarts when it changes
+auth_webhook_certs = ["/root/cdk/server.crt", "/root/cdk/server.key"]
+auth_webhook_certs_digest = Path(auth_webhook_root) / ".certs-digest"
 log_dir = "/var/log/kubernetes"
 
 log = logging.getLogger(__name__)
+
+# Auth secrets by username, cached for the duration of one reconcile
+_secrets_cache: Optional[Dict[str, "Secret"]] = None
 
 
 @dataclass
@@ -70,7 +77,8 @@ def _uplift_aws_iam_endpoint() -> str:
 def configure(charm_dir, custom_authn_endpoint=None, custom_authz_config_file=None):
     """Render auth webhook templates and start the related service."""
     status.add(MaintenanceStatus("Configuring auth webhook"))
-    keystone_endpoint = _uplift_keystone_endpoint()
+    # Before bootstrap there's no API to query; skip rather than wait on kubectl retries
+    keystone_endpoint = _uplift_keystone_endpoint() if ROOT_KUBECONFIG.exists() else None
     aws_iam_endpoint = _uplift_aws_iam_endpoint()
 
     # Set the number of gunicorn workers based on our core count. (2*cores)+1 is
@@ -105,17 +113,51 @@ def configure(charm_dir, custom_authn_endpoint=None, custom_authz_config_file=No
     os.makedirs(auth_webhook_root, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
 
-    render("auth-webhook-conf.yaml", auth_webhook_conf, context)
-    render("auth-webhook.py", auth_webhook_exe, context)
+    changed = render("auth-webhook-conf.yaml", auth_webhook_conf, context)
+    changed |= render("auth-webhook.py", auth_webhook_exe, context)
     render("auth-webhook.logrotate", "/etc/logrotate.d/auth-webhook", context)
-    render("auth-webhook.service", auth_webhook_svc, context)
-    restart()
+    unit_changed = render("auth-webhook.service", auth_webhook_svc, context)
+    changed |= unit_changed
+    changed |= _certs_changed()
+
+    if unit_changed:
+        check_call(["systemctl", "daemon-reload"])
+    if changed or not is_active():
+        restart()
+        _save_certs_digest()
+    else:
+        log.info("No auth-webhook configuration change, skipping restart")
 
     authz_webhook_conf.write_text(custom_authz_config_file or "")
 
 
+def _certs_digest() -> str:
+    digest = hashlib.sha256()
+    for cert in auth_webhook_certs:
+        path = Path(cert)
+        digest.update(path.read_bytes() if path.exists() else b"")
+    return digest.hexdigest()
+
+
+def _certs_changed() -> bool:
+    if not auth_webhook_certs_digest.exists():
+        return True
+    return auth_webhook_certs_digest.read_text() != _certs_digest()
+
+
+def _save_certs_digest():
+    auth_webhook_certs_digest.write_text(_certs_digest())
+
+
+def clear_cache():
+    """Forget cached auth secrets so the next lookup reads them from the cluster."""
+    global _secrets_cache
+    _secrets_cache = None
+
+
 def delete_token(secret_id: str):
     kubectl("delete", "secret", "-n", auth_secret_ns, secret_id, "--ignore-not-found=true")
+    clear_cache()
 
 
 def create_token(uid: str, username: str, groups: List[str]):
@@ -156,6 +198,8 @@ def create_token(uid: str, username: str, groups: List[str]):
             yaml.safe_dump(secret, f)
         kubectl("apply", "-f", tmp_manifest.name)
 
+    if _secrets_cache is not None:
+        _secrets_cache[username] = Secret(secret_id, token)
     return token
 
 
@@ -172,8 +216,15 @@ def generate_rfc1123(length=10):
     return rand_str
 
 
-def get_secrets():
-    """Get all the secrets that CK created."""
+def get_secrets() -> Dict[str, Secret]:
+    """Get all the secrets that CK created.
+
+    The result is cached until clear_cache() is called, so a reconcile creating
+    or looking up many tokens only lists the secrets once.
+    """
+    global _secrets_cache
+    if _secrets_cache is not None:
+        return _secrets_cache
     output = kubectl_get(
         "secrets",
         "-n",
@@ -181,7 +232,7 @@ def get_secrets():
         "--field-selector",
         "type={}".format(auth_secret_type),
     )
-    secrets: Mapping[str, Secret] = {}
+    secrets: Dict[str, Secret] = {}
     for secret in output.get("items", []):
         try:
             data_b64 = secret["data"]
@@ -194,30 +245,40 @@ def get_secrets():
         password = b64decode(password_b64).decode("utf-8")
         secret_user = b64decode(username_b64).decode("utf-8")
         secrets[secret_user] = Secret(secret["metadata"]["name"], password)
+    _secrets_cache = secrets
     return secrets
 
 
 def get_token(username):
     """Get the password for the given user from the secret that CK created."""
-    for secret_user, properties in get_secrets().items():
-        if username == secret_user:
-            return properties.password
-    return None
+    secret = get_secrets().get(username)
+    return secret.password if secret else None
 
 
-def render(src, dest, context):
-    """Read a template file, render it, and write to dest."""
+def render(src, dest, context) -> bool:
+    """Read a template file, render it, and write to dest.
+
+    Returns:
+        bool: True if dest was written because its content changed.
+    """
     env = Environment(loader=FileSystemLoader("templates"))
     template = env.get_template(src)
     output = template.render(context)
 
-    with open(dest, "w") as f:
-        f.write(output)
+    dest = Path(dest)
+    if dest.exists() and dest.read_text() == output:
+        return False
+    dest.write_text(output)
+    return True
+
+
+def is_active() -> bool:
+    """Whether the auth-webhook service is running."""
+    return call(["systemctl", "is-active", "--quiet", auth_webhook_svc_name]) == 0
 
 
 def restart():
     """Restart the auth-webhook service."""
-    check_call(["systemctl", "daemon-reload"])
     check_call(["systemctl", "restart", auth_webhook_svc_name])
 
 
