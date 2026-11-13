@@ -27,6 +27,9 @@ def harness():
         harness.cleanup()
 
 
+@patch("charms.kubernetes_snaps._snap_tracking", return_value=None)
+@patch("charms.kubernetes_snaps.is_channel_swap", return_value=False)
+@patch("charms.kubernetes_snaps.is_channel_available", return_value=True)
 @patch("auth_webhook.configure")
 @patch("auth_webhook.get_token")
 @patch("cdk_addons.CdkAddons.get_dns_address")
@@ -81,6 +84,9 @@ def test_active(
     get_dns_address,
     auth_webhook_get_token,
     auth_webhook_configure,
+    is_channel_available,
+    is_channel_swap,
+    snap_tracking,
     harness,
 ):
     get_cloud_name.return_value = None

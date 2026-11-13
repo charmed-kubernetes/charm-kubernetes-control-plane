@@ -12,8 +12,9 @@ from typing import List, Mapping
 
 import charms.contextual_status as status
 import yaml
+from charms import kubernetes_snaps
 from jinja2 import Environment, FileSystemLoader
-from ops import MaintenanceStatus
+from ops import BlockedStatus, MaintenanceStatus
 
 from kubectl import kubectl, kubectl_get
 
@@ -27,6 +28,9 @@ auth_webhook_exe = os.path.join(auth_webhook_root, "auth-webhook.py")
 auth_webhook_svc_name = "cdk.master.auth-webhook"
 auth_webhook_svc = "/etc/systemd/system/{}.service".format(auth_webhook_svc_name)
 log_dir = "/var/log/kubernetes"
+auth_webhook_logrotate = "/etc/logrotate.d/auth-webhook"
+# The serving certificate and key the auth-webhook loads at start.
+auth_webhook_certs = ("/root/cdk/server.crt", "/root/cdk/server.key")
 
 log = logging.getLogger(__name__)
 
@@ -107,11 +111,24 @@ def configure(charm_dir, custom_authn_endpoint=None, custom_authz_config_file=No
 
     render("auth-webhook-conf.yaml", auth_webhook_conf, context)
     render("auth-webhook.py", auth_webhook_exe, context)
-    render("auth-webhook.logrotate", "/etc/logrotate.d/auth-webhook", context)
-    render("auth-webhook.service", auth_webhook_svc, context)
-    restart()
+    render("auth-webhook.logrotate", auth_webhook_logrotate, context)
+    unit_changed = render("auth-webhook.service", auth_webhook_svc, context)
+    if unit_changed:
+        check_call(["systemctl", "daemon-reload"])
 
-    authz_webhook_conf.write_text(custom_authz_config_file or "")
+    # What the process loads at start: auth-webhook.py (holds the authn endpoints),
+    # the unit file, and the serving certificate and key. It reads the token file
+    # and the admin kubeconfig on each request, so those are not inputs.
+    inputs = [auth_webhook_exe, auth_webhook_svc, *auth_webhook_certs]
+    if kubernetes_snaps.restart_reason(auth_webhook_svc_name, inputs):
+        with status.on_error(BlockedStatus("Failed to restart Kubernetes services")):
+            try:
+                check_call(["systemctl", "restart", auth_webhook_svc_name])
+            except CalledProcessError:
+                log.error("%s: restart failed", auth_webhook_svc_name)
+                raise
+
+    kubernetes_snaps.write_if_changed(authz_webhook_conf, custom_authz_config_file or "")
 
 
 def delete_token(secret_id: str):
@@ -205,20 +222,16 @@ def get_token(username):
     return None
 
 
-def render(src, dest, context):
-    """Read a template file, render it, and write to dest."""
+def render(src, dest, context) -> bool:
+    """Render a template and write it to dest only if the content changed.
+
+    Returns True if the file was written.
+    """
     env = Environment(loader=FileSystemLoader("templates"))
     template = env.get_template(src)
     output = template.render(context)
 
-    with open(dest, "w") as f:
-        f.write(output)
-
-
-def restart():
-    """Restart the auth-webhook service."""
-    check_call(["systemctl", "daemon-reload"])
-    check_call(["systemctl", "restart", auth_webhook_svc_name])
+    return kubernetes_snaps.write_if_changed(dest, output)
 
 
 def token_generator(length=32):
