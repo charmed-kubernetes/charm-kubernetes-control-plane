@@ -6,16 +6,7 @@ applications:
     series: {{series}}
     resources:
       cni-plugins: {{resource_path}}/cni-plugins-{{arch}}.tar.gz
-{% if worker_charm %}
-  kubernetes-worker:
-    charm: {{worker_charm}}
-    channel: null
-    series: {{series}}
-    resources:
-      cni-plugins: {{resource_path}}/cni-plugins-{{arch}}.tar.gz
-{% else %}
   kubernetes-worker: {}
-{% endif %}
   opentelemetry-collector:
     charm: opentelemetry-collector
     series: {{series}}

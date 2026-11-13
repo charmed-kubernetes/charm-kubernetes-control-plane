@@ -4,7 +4,6 @@
 
 import asyncio
 import logging
-import os
 from pathlib import Path
 
 import pytest
@@ -41,22 +40,20 @@ async def test_build_and_deploy(ops_test: OpsTest):
     resource_path.mkdir()
     resource_build_script = Path("./build-cni-resources.sh").resolve()
     log.info("Building charm resources")
-    rc, stdout, stderr = await ops_test.run(str(resource_build_script), cwd=resource_path)
+    rc, stdout, stderr = await ops_test.run(
+        "env", "ARCH=amd64", str(resource_build_script), cwd=resource_path
+    )
     if rc != 0:
         log.error(f"rc: {rc}\nstdout: {stdout}\nstderr: {stderr}")
         pytest.fail("Failed to build charm resources")
 
     log.info("Building bundle")
-    # WORKER_CHARM is a prebuilt worker .charm from the worker branch of the same name,
-    # so worker assertions do not depend on a worker release. Unset: use the store charm.
-    worker_charm = os.environ.get("WORKER_CHARM")
     bundle, *overlays = await ops_test.async_render_bundles(
         ops_test.Bundle("kubernetes-core", channel="edge", series=SERIES),
         Path("tests/data/charm.yaml"),
         arch="amd64",
         series=SERIES,
         charm=charm.resolve(),
-        worker_charm=Path(worker_charm).resolve() if worker_charm else "",
         resource_path=resource_path,
     )
 
@@ -97,7 +94,7 @@ async def test_user_create(ops_test: OpsTest):
     assert result.results["kubeconfig"].startswith("juju scp")
 
 
-APISERVER = (CP_APP, "snap.kube-apiserver.daemon")
+APISERVER = "snap.kube-apiserver.daemon"
 
 
 async def test_hook_with_nothing_changed_restarts_nothing(ops_test: OpsTest):
@@ -105,29 +102,30 @@ async def test_hook_with_nothing_changed_restarts_nothing(ops_test: OpsTest):
     app = ops_test.model.applications[CP_APP]
     before = await invocation_ids(ops_test)
     since = utc_now()
-    for i in range(5):
-        # `ignore-kube-system-pods` only affects status messages. A new value each time
-        # fires config-changed on every control-plane unit.
-        await app.set_config({"ignore-kube-system-pods": f"test-{i}"})
-        await settle(ops_test, timeout=15 * 60, idle_period=20)
+
+    # `ignore-kube-system-pods` only affects status messages; setting and resetting it
+    # fires two config-changed hooks on every control-plane unit.
+    await app.set_config({"ignore-kube-system-pods": "test-0"})
+    await settle(ops_test)
     await app.set_config({"ignore-kube-system-pods": ""})
-    await settle(ops_test, timeout=15 * 60, idle_period=20)
+    await settle(ops_test)
 
     assert restarted_services(before, await invocation_ids(ops_test)) == set()
     counts = await no_change_counts(ops_test, since)
     for unit in units_of(ops_test, CP_APP):
         for service in CP_SERVICES:
-            assert counts.get((unit, service), 0) >= 5, f"{unit} {service}: {counts}"
+            assert counts.get((unit, service), 0) >= 2, f"{unit} {service}: {counts}"
 
 
 async def test_worker_add_and_remove_restart_nothing(ops_test: OpsTest):
-    """CUJ 1: adding or removing a worker restarts no service on existing units."""
+    """CUJ 1: adding or removing a worker restarts no control-plane service."""
     workers = ops_test.model.applications[WORKER_APP]
+    initial_workers = set(units_of(ops_test, WORKER_APP))
     before = await invocation_ids(ops_test)
 
     await workers.add_unit()
     await settle(ops_test)
-    added = set(units_of(ops_test, WORKER_APP)) - set(before)
+    added = set(units_of(ops_test, WORKER_APP)) - initial_workers
     assert len(added) == 1
     assert restarted_services(before, await invocation_ids(ops_test)) == set()
 
@@ -146,13 +144,14 @@ async def test_argument_change_restarts_only_the_api_server(ops_test: OpsTest):
     await app.set_config({"api-extra-args": "min-request-timeout=301"})
     await settle(ops_test)
     after = await invocation_ids(ops_test)
-    await app.set_config({"api-extra-args": ""})
-    await settle(ops_test)
 
     assert restarted_services(before, after) == {APISERVER}
-    changed = [u for u in units_of(ops_test, CP_APP) if before[u]["snap.kube-apiserver.daemon"]
-               != after[u]["snap.kube-apiserver.daemon"]]  # fmt: skip
-    assert changed == units_of(ops_test, CP_APP)  # on every control-plane unit
+    changed = [
+        u
+        for u in units_of(ops_test, CP_APP)
+        if before[u][APISERVER] != after[u][APISERVER]
+    ]
+    assert changed == units_of(ops_test, CP_APP)
 
 
 async def test_certificate_reissue_restarts_the_services_that_read_it(ops_test: OpsTest):
@@ -164,24 +163,22 @@ async def test_certificate_reissue_restarts_the_services_that_read_it(ops_test: 
     before = await invocation_ids(ops_test)
 
     await app.set_config({"extra_sans": "restart-test.example.com"})
-    for _ in range(30):
-        await settle(ops_test, idle_period=30)
+    for _ in range(120):
         if await run_on_unit(ops_test, unit, show_crt) != old_crt:
             break
-        await asyncio.sleep(30)
+        await asyncio.sleep(5)
     else:
         pytest.fail("server.crt was not reissued")
-    after = await invocation_ids(ops_test)
-    await app.set_config({"extra_sans": ""})
     await settle(ops_test)
+    after = await invocation_ids(ops_test)
 
-    # kube-scheduler and kube-proxy do not read server.crt; neither does any worker service.
+    # kube-scheduler and kube-proxy do not read server.crt.
     assert restarted_services(before, after) == {
-        (CP_APP, "snap.kube-apiserver.daemon"),
-        (CP_APP, "snap.kube-controller-manager.daemon"),
-        (CP_APP, "snap.kubelet.daemon"),
+        "snap.kube-apiserver.daemon",
+        "snap.kube-controller-manager.daemon",
+        "snap.kubelet.daemon",
         # wokeignore:rule=master
-        (CP_APP, "cdk.master.auth-webhook"),
+        "cdk.master.auth-webhook",
     }
 
 

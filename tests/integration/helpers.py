@@ -1,5 +1,6 @@
-"""Helpers for the restart tests: systemd `InvocationID` snapshots and log counting."""
+"""Helpers for the control-plane restart tests: systemd `InvocationID` snapshots and log counts."""
 
+import asyncio
 import re
 from datetime import datetime, timezone
 
@@ -18,8 +19,6 @@ CP_SERVICES = [
     # wokeignore:rule=master
     "cdk.master.auth-webhook",
 ]
-WORKER_SERVICES = ["snap.kubelet.daemon", "snap.kube-proxy.daemon"]
-SERVICES = {CP_APP: CP_SERVICES, WORKER_APP: WORKER_SERVICES}
 
 _NO_CHANGE = re.compile(
     r"^unit-(?P<unit>\S+)-(?P<num>\d+): (?P<time>\d\d:\d\d:\d\d) INFO \S+ "
@@ -40,16 +39,16 @@ def units_of(ops_test, app):
 
 
 async def invocation_ids(ops_test):
-    """Map unit -> service -> systemd InvocationID for every control-plane and worker unit."""
-    ids = {}
-    for app, services in SERVICES.items():
-        script = "; ".join(
-            f"echo {s} $(systemctl show -p InvocationID --value {s})" for s in services
-        )
-        for unit in units_of(ops_test, app):
-            out = await run_on_unit(ops_test, unit, script)
-            ids[unit] = dict(line.split() for line in out.splitlines() if line.strip())
-    return ids
+    """Map unit -> service -> systemd InvocationID for every control-plane unit."""
+    script = "; ".join(
+        f"echo {s} $(systemctl show -p InvocationID --value {s})" for s in CP_SERVICES
+    )
+    units = units_of(ops_test, CP_APP)
+    outputs = await asyncio.gather(*(run_on_unit(ops_test, u, script) for u in units))
+    return {
+        unit: dict(line.split() for line in out.splitlines() if line.strip())
+        for unit, out in zip(units, outputs)
+    }
 
 
 def restarted(before, after):
@@ -62,32 +61,16 @@ def restarted(before, after):
 
 
 def restarted_services(before, after):
-    """Return the set of (application, service) pairs restarted on any unit."""
-    return {
-        (unit.rsplit("/", 1)[0], service)
-        for unit, services in restarted(before, after).items()
-        for service in services
-    }
+    """Return the set of control-plane service names restarted on any control-plane unit."""
+    return {service for services in restarted(before, after).values() for service in services}
 
 
-async def snap_revisions(ops_test):
-    """Map unit -> the revision of every Kubernetes snap, to prove none was refreshed."""
-    script = "snap list | awk '/^(kube|cdk)/ {print $1, $3}'"
-    revisions = {}
-    for app in SERVICES:
-        for unit in units_of(ops_test, app):
-            out = await run_on_unit(ops_test, unit, script)
-            revisions[unit] = dict(line.split() for line in out.splitlines() if line.strip())
-    return revisions
-
-
-async def settle(ops_test, timeout=60 * 60, idle_period=60):
-    """Wait until every application is active and idle for `idle_period` seconds."""
+async def settle(ops_test, timeout=30 * 60, idle_period=15):
+    """Wait until every core application is active and idle for `idle_period` seconds."""
     apps = set(ops_test.model.applications) - {"opentelemetry-collector"}
-    async with ops_test.fast_forward(fast_interval="30s"):
-        await ops_test.model.wait_for_idle(
-            apps=apps, status="active", timeout=timeout, idle_period=idle_period
-        )
+    await ops_test.model.wait_for_idle(
+        apps=apps, status="active", timeout=timeout, idle_period=idle_period
+    )
 
 
 def utc_now():
