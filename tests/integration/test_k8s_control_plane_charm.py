@@ -11,11 +11,14 @@ from helpers import (
     CP_APP,
     CP_SERVICES,
     ETCD_APP,
+    LEASE_HOLDERS,
     WORKER_APP,
+    charm_restarted_services,
     invocation_ids,
     no_change_counts,
     restarted_services,
     run_on_unit,
+    service_decisions,
     settle,
     units_of,
     utc_now,
@@ -140,12 +143,15 @@ async def test_worker_add_and_remove_restart_nothing(ops_test: OpsTest):
 async def test_argument_change_restarts_only_the_api_server(ops_test: OpsTest):
     app = ops_test.model.applications[CP_APP]
     before = await invocation_ids(ops_test)
+    since = utc_now()
 
     await app.set_config({"api-extra-args": "min-request-timeout=301"})
     await settle(ops_test)
     after = await invocation_ids(ops_test)
+    decisions = await service_decisions(ops_test, since)
 
-    assert restarted_services(before, after) == {APISERVER}
+    assert charm_restarted_services(decisions) == {APISERVER}
+    assert restarted_services(before, after) - LEASE_HOLDERS == {APISERVER}
     changed = [
         u
         for u in units_of(ops_test, CP_APP)
@@ -157,33 +163,57 @@ async def test_argument_change_restarts_only_the_api_server(ops_test: OpsTest):
 async def test_certificate_reissue_restarts_the_services_that_read_it(ops_test: OpsTest):
     """A new server certificate restarts what loads `server.crt`, and nothing else."""
     app = ops_test.model.applications[CP_APP]
-    unit = units_of(ops_test, CP_APP)[0]
+    units = units_of(ops_test, CP_APP)
     show_crt = "sha256sum /root/cdk/server.crt"
-    old_crt = await run_on_unit(ops_test, unit, show_crt)
+    old_crts = dict(
+        zip(units, await asyncio.gather(*(run_on_unit(ops_test, u, show_crt) for u in units)))
+    )
     before = await invocation_ids(ops_test)
+    since = utc_now()
 
     await app.set_config({"extra_sans": "restart-test.example.com"})
     for _ in range(120):
-        if await run_on_unit(ops_test, unit, show_crt) != old_crt:
+        cur_crts = dict(
+            zip(units, await asyncio.gather(*(run_on_unit(ops_test, u, show_crt) for u in units)))
+        )
+        if all(cur_crts[u] != old_crts[u] for u in units):
             break
         await asyncio.sleep(5)
     else:
-        pytest.fail("server.crt was not reissued")
+        pytest.fail("server.crt was not reissued on all control-plane units")
     await settle(ops_test)
     after = await invocation_ids(ops_test)
+    decisions = await service_decisions(ops_test, since)
 
-    # kube-scheduler and kube-proxy do not read server.crt.
-    assert restarted_services(before, after) == {
+    # kube-scheduler and kube-proxy do not read server.crt. While kube-apiserver is
+    # restarting (~30s), systemd may already restart kube-controller-manager on lease
+    # loss before `configure_controller_manager` runs, so controller-manager's
+    # InvocationID must advance while the charm must never restart kube-scheduler or
+    # kube-proxy.
+    expected_non_lease = {
         "snap.kube-apiserver.daemon",
-        "snap.kube-controller-manager.daemon",
         "snap.kubelet.daemon",
         # wokeignore:rule=master
         "cdk.master.auth-webhook",
     }
+    assert restarted_services(before, after) - LEASE_HOLDERS == expected_non_lease
+    assert "snap.kube-controller-manager.daemon" in restarted_services(before, after)
+    assert charm_restarted_services(decisions) <= expected_non_lease | {
+        "snap.kube-controller-manager.daemon"
+    }
+    assert not (
+        charm_restarted_services(decisions)
+        & {"snap.kube-scheduler.daemon", "snap.kube-proxy.daemon"}
+    )
 
 
 async def test_etcd_unit_added_restarts_only_the_api_server(ops_test: OpsTest):
     before = await invocation_ids(ops_test)
+    since = utc_now()
     await ops_test.model.applications[ETCD_APP].add_unit()
     await settle(ops_test)
-    assert restarted_services(before, await invocation_ids(ops_test)) == {APISERVER}
+    after = await invocation_ids(ops_test)
+    decisions = await service_decisions(ops_test, since)
+
+    assert charm_restarted_services(decisions) == {APISERVER}
+    assert restarted_services(before, after) - LEASE_HOLDERS == {APISERVER}
