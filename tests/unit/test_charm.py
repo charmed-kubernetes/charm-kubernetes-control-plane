@@ -27,6 +27,9 @@ def harness():
         harness.cleanup()
 
 
+@patch("charms.kubernetes_snaps._snap_tracking", return_value=None)
+@patch("charms.kubernetes_snaps.is_channel_swap", return_value=False)
+@patch("charms.kubernetes_snaps.is_channel_available", return_value=True)
 @patch("auth_webhook.configure")
 @patch("auth_webhook.get_token")
 @patch("cdk_addons.CdkAddons.get_dns_address")
@@ -81,6 +84,9 @@ def test_active(
     get_dns_address,
     auth_webhook_get_token,
     auth_webhook_configure,
+    is_channel_available,
+    is_channel_swap,
+    snap_tracking,
     harness,
 ):
     get_cloud_name.return_value = None
@@ -282,3 +288,45 @@ def test_ignore_missing_cni(set_default_cni_conf_file, harness, caplog):
         assert len(infos) == 1, "There should be only one info level log"
         assert ["Ignoring missing CNI configuration as per user request."] == infos
         set_default_cni_conf_file.assert_called_once_with(None)
+
+
+def test_service_has_failed_ignores_lifetime_restarts_when_active_running(harness):
+    """A running service whose lifetime NRestarts crossed 10 is not marked failed."""
+    harness.disable_hooks()
+    harness.begin()
+    running_output = (
+        b"ActiveState=active\nSubState=running\nResult=success\n"
+        b"ExecMainStatus=0\nNRestarts=12\n"
+    )
+    transient_backoff_output = (
+        b"ActiveState=activating\nSubState=auto-restart\nResult=exit-code\n"
+        b"ExecMainStatus=1\nNRestarts=2\n"
+    )
+    crashloop_output = (
+        b"ActiveState=activating\nSubState=auto-restart\nResult=success\n"
+        b"ExecMainStatus=0\nNRestarts=12\n"
+    )
+    with patch("subprocess.check_output", return_value=running_output), patch(
+        "subprocess.run"
+    ) as mock_run:
+        assert harness.charm._service_has_failed("snap.kube-controller-manager.daemon.service") == (
+            False,
+            "",
+        )
+        mock_run.assert_not_called()
+
+    with patch("subprocess.check_output", return_value=transient_backoff_output):
+        assert harness.charm._service_has_failed("snap.kube-controller-manager.daemon.service") == (
+            False,
+            "",
+        )
+
+    with patch("subprocess.check_output", return_value=crashloop_output), patch(
+        "subprocess.run"
+    ) as mock_run:
+        failed, reason = harness.charm._service_has_failed(
+            "snap.kube-controller-manager.daemon.service"
+        )
+        assert failed is True
+        assert "restarting repeatedly" in reason
+        mock_run.assert_called_once()

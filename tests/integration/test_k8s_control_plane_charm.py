@@ -2,10 +2,27 @@
 # Copyright 2023 Canonical
 # See LICENSE file for licensing details.
 
+import asyncio
 import logging
 from pathlib import Path
 
 import pytest
+from helpers import (
+    CP_APP,
+    CP_SERVICES,
+    ETCD_APP,
+    LEASE_HOLDERS,
+    WORKER_APP,
+    charm_restarted_services,
+    invocation_ids,
+    no_change_counts,
+    restarted_services,
+    run_on_unit,
+    service_decisions,
+    settle,
+    units_of,
+    utc_now,
+)
 from pytest_operator.plugin import OpsTest
 
 log = logging.getLogger(__name__)
@@ -26,7 +43,9 @@ async def test_build_and_deploy(ops_test: OpsTest):
     resource_path.mkdir()
     resource_build_script = Path("./build-cni-resources.sh").resolve()
     log.info("Building charm resources")
-    rc, stdout, stderr = await ops_test.run(str(resource_build_script), cwd=resource_path)
+    rc, stdout, stderr = await ops_test.run(
+        "env", "ARCH=amd64", str(resource_build_script), cwd=resource_path
+    )
     if rc != 0:
         log.error(f"rc: {rc}\nstdout: {stdout}\nstderr: {stderr}")
         pytest.fail("Failed to build charm resources")
@@ -76,3 +95,125 @@ async def test_user_create(ops_test: OpsTest):
     action = await cp.units[0].run_action("user-create", name="testuser", groups="system:masters")
     result = await action.wait()
     assert result.results["kubeconfig"].startswith("juju scp")
+
+
+APISERVER = "snap.kube-apiserver.daemon"
+
+
+async def test_hook_with_nothing_changed_restarts_nothing(ops_test: OpsTest):
+    """CUJ 2: hooks that change no argument and no input file restart no service."""
+    app = ops_test.model.applications[CP_APP]
+    before = await invocation_ids(ops_test)
+    since = utc_now()
+
+    # `ignore-kube-system-pods` only affects status messages; setting and resetting it
+    # fires two config-changed hooks on every control-plane unit.
+    await app.set_config({"ignore-kube-system-pods": "test-0"})
+    await settle(ops_test)
+    await app.set_config({"ignore-kube-system-pods": ""})
+    await settle(ops_test)
+
+    assert restarted_services(before, await invocation_ids(ops_test)) == set()
+    counts = await no_change_counts(ops_test, since)
+    for unit in units_of(ops_test, CP_APP):
+        for service in CP_SERVICES:
+            assert counts.get((unit, service), 0) >= 2, f"{unit} {service}: {counts}"
+
+
+async def test_worker_add_and_remove_restart_nothing(ops_test: OpsTest):
+    """CUJ 1: adding or removing a worker restarts no control-plane service."""
+    workers = ops_test.model.applications[WORKER_APP]
+    initial_workers = set(units_of(ops_test, WORKER_APP))
+    before = await invocation_ids(ops_test)
+
+    await workers.add_unit()
+    await settle(ops_test)
+    added = set(units_of(ops_test, WORKER_APP)) - initial_workers
+    assert len(added) == 1
+    assert restarted_services(before, await invocation_ids(ops_test)) == set()
+
+    await workers.destroy_units(*added)
+    await ops_test.model.block_until(
+        lambda: not added & set(units_of(ops_test, WORKER_APP)), timeout=15 * 60
+    )
+    await settle(ops_test)
+    assert restarted_services(before, await invocation_ids(ops_test)) == set()
+
+
+async def test_argument_change_restarts_only_the_api_server(ops_test: OpsTest):
+    app = ops_test.model.applications[CP_APP]
+    before = await invocation_ids(ops_test)
+    since = utc_now()
+
+    await app.set_config({"api-extra-args": "min-request-timeout=301"})
+    await settle(ops_test)
+    after = await invocation_ids(ops_test)
+    decisions = await service_decisions(ops_test, since)
+
+    assert charm_restarted_services(decisions) == {APISERVER}
+    assert restarted_services(before, after) - LEASE_HOLDERS == {APISERVER}
+    changed = [
+        u
+        for u in units_of(ops_test, CP_APP)
+        if before[u][APISERVER] != after[u][APISERVER]
+    ]
+    assert changed == units_of(ops_test, CP_APP)
+
+
+async def test_certificate_reissue_restarts_the_services_that_read_it(ops_test: OpsTest):
+    """A new server certificate restarts what loads `server.crt`, and nothing else."""
+    app = ops_test.model.applications[CP_APP]
+    units = units_of(ops_test, CP_APP)
+    show_crt = "sha256sum /root/cdk/server.crt"
+    old_crts = dict(
+        zip(units, await asyncio.gather(*(run_on_unit(ops_test, u, show_crt) for u in units)))
+    )
+    before = await invocation_ids(ops_test)
+    since = utc_now()
+
+    await app.set_config({"extra_sans": "restart-test.example.com"})
+    for _ in range(120):
+        cur_crts = dict(
+            zip(units, await asyncio.gather(*(run_on_unit(ops_test, u, show_crt) for u in units)))
+        )
+        if all(cur_crts[u] != old_crts[u] for u in units):
+            break
+        await asyncio.sleep(5)
+    else:
+        pytest.fail("server.crt was not reissued on all control-plane units")
+    await settle(ops_test)
+    after = await invocation_ids(ops_test)
+    decisions = await service_decisions(ops_test, since)
+
+    # kube-scheduler and kube-proxy do not read server.crt. While kube-apiserver is
+    # restarting (~30s), systemd may already restart kube-controller-manager on lease
+    # loss before `configure_controller_manager` runs, so controller-manager's
+    # InvocationID must advance while the charm must never restart kube-scheduler or
+    # kube-proxy.
+    expected_non_lease = {
+        "snap.kube-apiserver.daemon",
+        "snap.kubelet.daemon",
+        # wokeignore:rule=master
+        "cdk.master.auth-webhook",
+    }
+    assert restarted_services(before, after) - LEASE_HOLDERS == expected_non_lease
+    assert "snap.kube-controller-manager.daemon" in restarted_services(before, after)
+    assert charm_restarted_services(decisions) <= expected_non_lease | {
+        "snap.kube-controller-manager.daemon"
+    }
+    assert not (
+        charm_restarted_services(decisions)
+        & {"snap.kube-scheduler.daemon", "snap.kube-proxy.daemon"}
+    )
+
+
+async def test_etcd_unit_added_restarts_only_the_api_server(ops_test: OpsTest):
+    before = await invocation_ids(ops_test)
+    since = utc_now()
+    await ops_test.model.applications[ETCD_APP].add_unit()
+    await settle(ops_test)
+    after = await invocation_ids(ops_test)
+    decisions = await service_decisions(ops_test, since)
+
+    assert charm_restarted_services(decisions) == {APISERVER}
+    assert restarted_services(before, after) - LEASE_HOLDERS == {APISERVER}

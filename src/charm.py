@@ -790,20 +790,25 @@ class KubernetesControlPlaneCharm(ops.CharmBase):
             )
 
             active_state = fields.get("ActiveState")
+            sub_state = fields.get("SubState")
             result = fields.get("Result")
             exec_main_status = fields.get("ExecMainStatus")
             n_restarts = int(fields.get("NRestarts") or -1)
 
+            if active_state == "active" and sub_state == "running":
+                return False, ""
+            if n_restarts > 10:
+                subprocess.run(["systemctl", "restart", service])
+                return True, f"{service} is restarting repeatedly"
+            if active_state == "activating" and sub_state == "auto-restart":
+                return False, ""
             if active_state == "failed" or result == "exit-code":
                 return (
                     True,
                     f"{service} has failed: ActiveState={active_state}, Result={result}",
                 )
-            elif exec_main_status and exec_main_status != "0":
+            if exec_main_status and exec_main_status != "0":
                 return True, f"{service} Non-zero exit: ExecMainStatus={exec_main_status}"
-            elif n_restarts and n_restarts > 10:
-                subprocess.run(["systemctl", "restart", service])
-                return True, f"{service} is restarting repeatedly"
             return False, ""
         except subprocess.CalledProcessError as e:
             return True, f"Failed to check {service} status: {e.output.decode('utf-8')}"
