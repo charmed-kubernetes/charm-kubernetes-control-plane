@@ -372,7 +372,9 @@ actions:
   get-kubeconfig:
     description: Retrieve Kubernetes cluster config, including credentials
   upgrade:
-    description: Upgrade the Kubernetes snaps
+    description: >-
+      Upgrade the Kubernetes snaps to the latest revision in the configured
+      channel, applying a minor-version change. Run it on one unit at a time.
   user-create:
     description: Create a new user
     params:
