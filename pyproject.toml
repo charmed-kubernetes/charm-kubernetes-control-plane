@@ -44,3 +44,6 @@ max-complexity = 10
 
 [tool.codespell]
 skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"
+
+[tool.bandit]
+exclude_dirs = [".tox", ".venv", "venv"]
